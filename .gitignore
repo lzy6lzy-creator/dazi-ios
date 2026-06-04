@@ -1,0 +1,16 @@
+.DS_Store
+
+# Xcode local state and build products
+build/
+DerivedData/
+*.xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+*.moved-aside
+*.hmap
+
+# Archives and distribution artifacts
+*.ipa
+*.xcarchive/
+*.dSYM
+*.dSYM.zip
