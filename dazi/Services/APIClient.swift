@@ -3,8 +3,8 @@ import Foundation
 // MARK: - API Configuration
 
 enum APIConfig {
-    // 云服务器地址
-    static let baseURL = "http://47.103.127.95:8000"
+    // 内部 TestFlight 临时入口；ICP备案完成后切回 https://idabuda.com。
+    static let baseURL = "http://47.103.127.95"
 }
 
 // MARK: - API Errors
@@ -51,6 +51,7 @@ struct APIUserResponse: Codable {
     let phone: String?
     let gender: String?
     let birthYear: Int?
+    let birthDate: String?
     let bio: String?
     let avatarUrl: String?
     let interests: [String]?
@@ -63,6 +64,7 @@ struct APIUserResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case id, name, phone, gender, bio, interests, city, occupation
         case birthYear = "birth_year"
+        case birthDate = "birth_date"
         case avatarUrl = "avatar_url"
         case customInterests = "custom_interests"
         case welcomeDisturb = "welcome_disturb"
@@ -90,12 +92,18 @@ struct APIAgentChatResponse: Codable {
     let eventReady: Bool
     let eventId: String?
     let eventDraftPending: Bool?
+    let clarificationPending: Bool?
+    let clarificationSessionId: String?
+    let clarificationQuestions: [ClarificationQuestion]?
 
     enum CodingKeys: String, CodingKey {
         case reply
         case eventReady = "event_ready"
         case eventId = "event_id"
         case eventDraftPending = "event_draft_pending"
+        case clarificationPending = "clarification_pending"
+        case clarificationSessionId = "clarification_session_id"
+        case clarificationQuestions = "clarification_questions"
     }
 }
 
@@ -421,6 +429,47 @@ final class APIClient {
             method: "POST",
             path: "/api/v1/agent/chat",
             body: ["message": message]
+        )
+    }
+
+    func fetchPendingClarification() async throws -> APIAgentChatResponse {
+        try await request(method: "GET", path: "/api/v1/agent/clarification/pending")
+    }
+
+    func submitClarificationAnswers(
+        sessionId: String,
+        answers: [ClarificationAnswerInput],
+        freeText: String?
+    ) async throws -> APIAgentChatResponse {
+        var bodyAnswers: [[String: Any]] = []
+        for answer in answers {
+            var item: [String: Any] = ["question_id": answer.questionId]
+            if !answer.optionIds.isEmpty {
+                item["option_ids"] = answer.optionIds
+            }
+            if let minAge = answer.minAge, let maxAge = answer.maxAge {
+                item["custom_value"] = ["min_age": minAge, "max_age": maxAge]
+            } else if let customText = answer.customText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !customText.isEmpty {
+                item["custom_value"] = customText
+            }
+            if item.count > 1 {
+                bodyAnswers.append(item)
+            }
+        }
+
+        var body: [String: Any] = [
+            "clarification_session_id": sessionId,
+            "answers": bodyAnswers,
+        ]
+        if let freeText = freeText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !freeText.isEmpty {
+            body["free_text"] = freeText
+        }
+        return try await request(
+            method: "POST",
+            path: "/api/v1/agent/clarification/answer",
+            body: body
         )
     }
 

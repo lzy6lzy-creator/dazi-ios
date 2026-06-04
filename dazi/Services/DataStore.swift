@@ -71,6 +71,7 @@ class DataStore {
                         bio: apiUser.bio ?? "",
                         gender: apiUser.gender ?? "",
                         birthYear: apiUser.birthYear ?? 0,
+                        birthDate: apiUser.birthDate ?? "",
                         interests: apiUser.interests ?? [],
                         occupation: apiUser.occupation ?? "",
                         customInterests: apiUser.customInterests ?? "",
@@ -99,6 +100,7 @@ class DataStore {
     // MARK: - Agent Chat (用户对话模式)
 
     func sendMessageToAgent(_ text: String) {
+        let pendingMessageId = pendingClarificationMessageId
         let userMsg = Message.userMessage(text)
         agentMessages.append(userMsg)
 
@@ -106,7 +108,15 @@ class DataStore {
         agentMessages.append(typing)
 
         Task {
-            await sendMessageViaBackend(text)
+            if let pendingMessageId {
+                await submitClarificationViaBackend(
+                    messageId: pendingMessageId,
+                    answers: [],
+                    freeText: text
+                )
+            } else {
+                await sendMessageViaBackend(text)
+            }
         }
     }
 
@@ -116,12 +126,7 @@ class DataStore {
             let chatResponse = try await api.chatWithAgent(message: text)
 
             removeTypingIndicator()
-
-            var agentMsg = Message.agentMessage(chatResponse.reply)
-            if chatResponse.eventDraftPending == true {
-                agentMsg.showConfirmButtons = true
-            }
-            agentMessages.append(agentMsg)
+            appendAgentResponse(chatResponse)
 
             // 后端已创建或更新事件
             if chatResponse.eventReady, let eventId = chatResponse.eventId {
@@ -169,6 +174,63 @@ class DataStore {
             print("Backend chat error: \(error)")
             let errorMsg = Message.agentMessage("抱歉，暂时无法连接服务器，请检查网络后重试~")
             agentMessages.append(errorMsg)
+        }
+    }
+
+    func submitClarification(
+        messageId: String,
+        answers: [ClarificationAnswerInput],
+        freeText: String?
+    ) {
+        guard let idx = agentMessages.firstIndex(where: { $0.id == messageId }) else { return }
+
+        agentMessages[idx].clarificationSubmitted = true
+
+        let typing = Message.typingIndicator()
+        agentMessages.append(typing)
+
+        Task {
+            await submitClarificationViaBackend(
+                messageId: messageId,
+                answers: answers,
+                freeText: freeText
+            )
+        }
+    }
+
+    private func submitClarificationViaBackend(
+        messageId: String,
+        answers: [ClarificationAnswerInput],
+        freeText: String?
+    ) async {
+        guard let idx = agentMessages.firstIndex(where: { $0.id == messageId }),
+              let sessionId = agentMessages[idx].clarificationSessionId
+        else {
+            removeTypingIndicator()
+            return
+        }
+
+        agentMessages[idx].clarificationSubmitted = true
+
+        do {
+            let response = try await api.submitClarificationAnswers(
+                sessionId: sessionId,
+                answers: answers,
+                freeText: freeText
+            )
+
+            await MainActor.run {
+                removeTypingIndicator()
+                appendAgentResponse(response)
+            }
+        } catch {
+            await MainActor.run {
+                removeTypingIndicator()
+                if let currentIndex = agentMessages.firstIndex(where: { $0.id == messageId }) {
+                    agentMessages[currentIndex].clarificationSubmitted = false
+                }
+                showToast(userFriendlyError(error), type: .error)
+            }
         }
     }
 
@@ -433,6 +495,7 @@ class DataStore {
         // 从服务器拉取数据
         Task {
             await fetchAllFromServer()
+            await restorePendingClarificationFromServer()
         }
 
         // 启动 WebSocket 实时连接
@@ -440,6 +503,52 @@ class DataStore {
 
         // 启动低频轮询作为 fallback（WebSocket 断连时仍可同步）
         startPolling()
+    }
+
+    private var pendingClarificationMessageId: String? {
+        agentMessages.last(where: {
+            !$0.clarificationSubmitted
+            && $0.clarificationSessionId != nil
+            && !$0.clarificationQuestions.isEmpty
+        })?.id
+    }
+
+    private func appendAgentResponse(_ response: APIAgentChatResponse) {
+        var agentMsg = Message.agentMessage(
+            response.reply,
+            clarificationSessionId: response.clarificationSessionId,
+            clarificationQuestions: response.clarificationQuestions ?? []
+        )
+        if response.eventDraftPending == true && response.clarificationPending != true {
+            agentMsg.showConfirmButtons = true
+        }
+        agentMessages.append(agentMsg)
+    }
+
+    private func restorePendingClarificationFromServer() async {
+        do {
+            let response = try await api.fetchPendingClarification()
+            guard response.clarificationPending == true,
+                  let sessionId = response.clarificationSessionId,
+                  let questions = response.clarificationQuestions,
+                  !questions.isEmpty
+            else { return }
+
+            await MainActor.run {
+                guard !agentMessages.contains(where: { $0.clarificationSessionId == sessionId }) else { return }
+                let reply = response.reply.isEmpty
+                    ? "我先帮你确认几个会影响匹配的小问题。"
+                    : response.reply
+                let message = Message.agentMessage(
+                    reply,
+                    clarificationSessionId: sessionId,
+                    clarificationQuestions: questions
+                )
+                agentMessages.append(message)
+            }
+        } catch {
+            print("Fetch pending clarification error: \(error)")
+        }
     }
 
     // MARK: - WebSocket
