@@ -213,10 +213,15 @@ struct APIMemoryResponse: Codable {
     let content: String
     let confidence: Double
     let source: String
+    let key: String?
+    let category: String?
+    let status: String?
+    let occurrenceCount: Int?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
-        case id, type, content, confidence, source
+        case id, type, content, confidence, source, key, category, status
+        case occurrenceCount = "occurrence_count"
         case createdAt = "created_at"
     }
 }
@@ -420,6 +425,21 @@ final class APIClient {
 
     func getMyMemories() async throws -> [APIMemoryResponse] {
         try await request(method: "GET", path: "/api/v1/agents/me/memories")
+    }
+
+    func updateMemory(id: String, content: String) async throws -> APIMemoryResponse {
+        try await request(
+            method: "PATCH",
+            path: "/api/v1/agents/me/memories/\(id)",
+            body: ["content": content]
+        )
+    }
+
+    func deleteMemory(id: String) async throws {
+        let _: [String: Bool] = try await request(
+            method: "DELETE",
+            path: "/api/v1/agents/me/memories/\(id)"
+        )
     }
 
     // MARK: - Agent Chat

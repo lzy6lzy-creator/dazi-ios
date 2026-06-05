@@ -5,6 +5,8 @@ struct ProfileView: View {
     @Environment(DataStore.self) private var dataStore
     @State private var showEditProfile = false
     @State private var showEditAgent = false
+    @State private var editingMemory: AgentMemory?
+    @State private var editMemoryText = ""
 
     var body: some View {
         NavigationStack {
@@ -28,6 +30,16 @@ struct ProfileView: View {
             .sheet(isPresented: $showEditAgent) {
                 EditAgentView()
                     .environment(dataStore)
+            }
+            .sheet(item: $editingMemory) { memory in
+                EditMemoryView(
+                    memory: memory,
+                    text: $editMemoryText,
+                    onSave: {
+                        dataStore.updateMemory(memory, content: editMemoryText)
+                        editingMemory = nil
+                    }
+                )
             }
         }
     }
@@ -213,21 +225,7 @@ struct ProfileView: View {
                 .padding(.vertical, AppTheme.spacingXL)
             } else {
                 ForEach(dataStore.memories) { memory in
-                    HStack(spacing: 8) {
-                        Image(systemName: memoryIcon(for: memory.type))
-                            .font(.caption)
-                            .foregroundStyle(memoryColor(for: memory.type))
-                            .frame(width: 24)
-
-                        Text(memory.content)
-                            .font(.subheadline)
-                            .lineLimit(2)
-
-                        Spacer()
-
-                        ConfidenceBar(value: memory.confidence)
-                    }
-                    .padding(.vertical, 4)
+                    memoryRow(memory)
                 }
             }
         }
@@ -235,6 +233,65 @@ struct ProfileView: View {
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+    }
+
+    private func memoryRow(_ memory: AgentMemory) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: memoryIcon(for: memory.type))
+                .font(.caption)
+                .foregroundStyle(memoryColor(for: memory.type))
+                .frame(width: 24, height: 28)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text(memoryTypeLabel(for: memory.type))
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(memoryColor(for: memory.type))
+                    if let category = memory.category, !category.isEmpty {
+                        Text(category)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+
+                Text(memory.content)
+                    .font(.subheadline)
+                    .lineLimit(3)
+
+                HStack(spacing: 8) {
+                    ConfidenceBar(value: memory.confidence)
+                    if memory.occurrenceCount > 1 {
+                        Text("x\(memory.occurrenceCount)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            HStack(spacing: 2) {
+                Button {
+                    editMemoryText = memory.content
+                    editingMemory = memory
+                } label: {
+                    Image(systemName: "pencil")
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+
+                Button(role: .destructive) {
+                    dataStore.deleteMemory(memory)
+                } label: {
+                    Image(systemName: "trash")
+                        .frame(width: 30, height: 30)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red.opacity(0.8))
+            }
+        }
+        .padding(.vertical, 6)
     }
 
     private var aboutSection: some View {
@@ -305,6 +362,7 @@ struct ProfileView: View {
         case .preference: return "heart.fill"
         case .constraint: return "xmark.circle.fill"
         case .behavior: return "figure.walk"
+        case .style: return "text.bubble.fill"
         case .feedback: return "star.fill"
         }
     }
@@ -314,7 +372,49 @@ struct ProfileView: View {
         case .preference: return .pink
         case .constraint: return .orange
         case .behavior: return .blue
+        case .style: return .purple
         case .feedback: return .yellow
+        }
+    }
+
+    private func memoryTypeLabel(for type: MemoryType) -> String {
+        switch type {
+        case .preference: return "偏好"
+        case .constraint: return "限制"
+        case .behavior: return "习惯"
+        case .style: return "风格"
+        case .feedback: return "反馈"
+        }
+    }
+}
+
+private struct EditMemoryView: View {
+    let memory: AgentMemory
+    @Binding var text: String
+    let onSave: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("记忆内容", text: $text, axis: .vertical)
+                        .lineLimit(3...6)
+                }
+            }
+            .navigationTitle("编辑记忆")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        onSave()
+                        dismiss()
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
         }
     }
 }

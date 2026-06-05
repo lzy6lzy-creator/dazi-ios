@@ -711,6 +711,40 @@ class DataStore {
         }
     }
 
+    func updateMemory(_ memory: AgentMemory, content: String) {
+        Task {
+            do {
+                let updated = try await api.updateMemory(id: memory.id, content: content)
+                await MainActor.run {
+                    if let index = memories.firstIndex(where: { $0.id == memory.id }) {
+                        memories[index] = AgentMemory(from: updated)
+                    }
+                    showToast("记忆已更新", type: .info)
+                }
+            } catch {
+                await MainActor.run {
+                    showToast(userFriendlyError(error), type: .error)
+                }
+            }
+        }
+    }
+
+    func deleteMemory(_ memory: AgentMemory) {
+        Task {
+            do {
+                try await api.deleteMemory(id: memory.id)
+                await MainActor.run {
+                    memories.removeAll { $0.id == memory.id }
+                    showToast("记忆已删除", type: .info)
+                }
+            } catch {
+                await MainActor.run {
+                    showToast(userFriendlyError(error), type: .error)
+                }
+            }
+        }
+    }
+
     // MARK: - Polling
 
     private func startPolling() {
