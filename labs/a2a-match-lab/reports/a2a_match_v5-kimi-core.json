@@ -1,0 +1,111 @@
+{
+  "prompt": "a2a_match_v5",
+  "scenario_set": "core",
+  "model": "kimi-k2.5",
+  "passed": false,
+  "reports": [
+    {
+      "scenario_id": "coffee_uncertain_place",
+      "title": "咖啡地点不清，信息不足不自动匹配",
+      "passed": false,
+      "score": 0.82,
+      "should_match": true,
+      "failures": [
+        "should_match expected False got True",
+        "score 0.82 above max 0.69"
+      ]
+    }
+  ],
+  "transcripts": [
+    {
+      "scenario_id": "coffee_uncertain_place",
+      "title": "咖啡地点不清，信息不足不自动匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "我这边周六下午2-4点浦东，想找个安静点的咖啡馆。你那边时间方便吗？"
+        },
+        {
+          "speaker": "B",
+          "content": "周六下午2-4点可以，浦东也没问题。我这边偏好随意聊聊，安静环境正合适。"
+        },
+        {
+          "speaker": "A",
+          "content": "那周六下午2-4点浦东见？有推荐的咖啡馆吗，还是到了再定？"
+        },
+        {
+          "speaker": "B",
+          "content": "周六下午2-4点浦东可以。具体地点我这边没定，你方便推荐吗？"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "我这边周六下午2-4点浦东，想找个安静点的咖啡馆。你那边时间方便吗？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "time",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "周六下午2-4点可以，浦东也没问题。我这边偏好随意聊聊，安静环境正合适。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "profile"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "那周六下午2-4点浦东见？有推荐的咖啡馆吗，还是到了再定？",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "question_focus": "place",
+            "private_used": [
+              "none"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "周六下午2-4点浦东可以。具体地点我这边没定，你方便推荐吗？",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "place",
+            "private_used": [
+              "none"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": true,
+        "compatibility": 0.82,
+        "has_blocking_conflict": false,
+        "conflicts": [],
+        "match_reasons": [
+          "时间完全吻合：周六下午2-4点",
+          "地点一致：上海浦东",
+          "活动类型匹配：咖啡",
+          "偏好兼容：A要安静，B随意聊聊，环境需求不冲突",
+          "双方已确认时间地点可行"
+        ],
+        "uncertainties": [
+          "具体咖啡馆未确定，需进聊天室协商"
+        ],
+        "chatroom_carryover": "已确认周六6月6日下午2-4点，上海浦东，安静咖啡馆，随意聊聊。具体地点待两人协商。",
+        "summary": "核心条件高度一致，时间地点活动均已确认，可自动匹配，仅缺具体咖啡馆细节。"
+      }
+    }
+  ]
+}

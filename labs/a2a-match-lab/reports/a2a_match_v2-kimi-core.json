@@ -1,0 +1,297 @@
+{
+  "prompt": "a2a_match_v2",
+  "scenario_set": "core",
+  "model": "kimi-k2.5",
+  "passed": true,
+  "reports": [
+    {
+      "scenario_id": "tennis_newbie_aa_match",
+      "title": "网球新手局，场地费 AA，可匹配",
+      "passed": true,
+      "score": 0.92,
+      "should_match": true,
+      "failures": []
+    },
+    {
+      "scenario_id": "tennis_skill_conflict",
+      "title": "网球水平目标冲突，不匹配",
+      "passed": true,
+      "score": 0.15,
+      "should_match": false,
+      "failures": []
+    },
+    {
+      "scenario_id": "hotpot_spice_conflict",
+      "title": "火锅饮食硬限制冲突，不匹配",
+      "passed": true,
+      "score": 0.15,
+      "should_match": false,
+      "failures": []
+    }
+  ],
+  "transcripts": [
+    {
+      "scenario_id": "tennis_newbie_aa_match",
+      "title": "网球新手局，场地费 AA，可匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "周六下午3-5点徐汇网球新手局，场地费AA。你刚入门水平如何？对强度有要求吗？"
+        },
+        {
+          "speaker": "B",
+          "content": "我也刚入门，想轻松打养生球，拒绝高强度。15:30-17:30徐汇或静安，时间地点你OK吗？"
+        },
+        {
+          "speaker": "A",
+          "content": "时间地点都OK，3-5点徐汇见。养生球正好，我也怕高强度。打完附近喝咖啡？"
+        },
+        {
+          "speaker": "B",
+          "content": "OK，徐汇3-5点养生球定下来了。咖啡我就不去了，打完直接撤。"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "周六下午3-5点徐汇网球新手局，场地费AA。你刚入门水平如何？对强度有要求吗？",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "skill",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "我也刚入门，想轻松打养生球，拒绝高强度。15:30-17:30徐汇或静安，时间地点你OK吗？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "time",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "时间地点都OK，3-5点徐汇见。养生球正好，我也怕高强度。打完附近喝咖啡？",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "OK，徐汇3-5点养生球定下来了。咖啡我就不去了，打完直接撤。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "memory"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": true,
+        "compatibility": 0.92,
+        "has_blocking_conflict": false,
+        "conflicts": [],
+        "match_reasons": [
+          "活动类型一致：均为网球",
+          "时间高度重叠：A 15:00-17:00 与 B 15:30-17:30，有效重合 15:30-17:00，双方确认OK",
+          "地点一致：徐汇，双方确认",
+          "水平匹配：均为新手/刚入门，明确拒绝高强度，偏好养生球一致",
+          "费用方式一致：均接受 AA 场地费"
+        ],
+        "uncertainties": [],
+        "chatroom_carryover": "双方已确认：周六6月6日15:30-17:00徐汇网球新手养生局，AA场地费。B打完即离开不参加咖啡。",
+        "summary": "时间地点水平费用全匹配，可直接自动匹配"
+      }
+    },
+    {
+      "scenario_id": "tennis_skill_conflict",
+      "title": "网球水平目标冲突，不匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "我是新手，想找耐心球友练习基础动作，时间地点都OK。请问你这边能接受带新手练球，还是只打高水平对局？"
+        },
+        {
+          "speaker": "B",
+          "content": "我这边只接受高水平对打，不教学也不练基础。你目前水平如何？有比赛经验或评级吗？"
+        },
+        {
+          "speaker": "A",
+          "content": "我是纯新手，刚开始学，没有评级和比赛经验。看起来我们需求不太匹配，祝你找到合适球友！"
+        },
+        {
+          "speaker": "B",
+          "content": "理解，需求确实不匹配。祝找到合适球友！"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "我是新手，想找耐心球友练习基础动作，时间地点都OK。请问你这边能接受带新手练球，还是只打高水平对局？",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "question_focus": "skill",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "我这边只接受高水平对打，不教学也不练基础。你目前水平如何？有比赛经验或评级吗？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "skill",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "我是纯新手，刚开始学，没有评级和比赛经验。看起来我们需求不太匹配，祝你找到合适球友！",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "none"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "理解，需求确实不匹配。祝找到合适球友！",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "none"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": false,
+        "compatibility": 0.15,
+        "has_blocking_conflict": true,
+        "conflicts": [
+          "活动目标冲突：A明确为新手练习/需要耐心带练，B明确只接受高水平对打、拒绝教学",
+          "技能水平不匹配：A纯新手无评级，B要求高水平对打",
+          "双方已互相确认需求不匹配并主动结束对话"
+        ],
+        "match_reasons": [],
+        "uncertainties": [],
+        "chatroom_carryover": "",
+        "summary": "核心需求冲突：新手练习 vs 只打高水平，双方已确认不匹配"
+      }
+    },
+    {
+      "scenario_id": "hotpot_spice_conflict",
+      "title": "火锅饮食硬限制冲突，不匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "我这边今晚7点静安火锅，人均80，但完全不能吃辣。你们一定要重辣锅吗？有没有可能选鸳鸯或微辣？"
+        },
+        {
+          "speaker": "B",
+          "content": "抱歉，我们用户只吃重辣锅，鸳鸯或微辣都无法接受。时间地点都OK，但口味是硬限制，无法妥协。"
+        },
+        {
+          "speaker": "A",
+          "content": "理解，口味确实合不来。祝你们找到合适的饭搭子！"
+        },
+        {
+          "speaker": "B",
+          "content": "口味确实无法调和，祝你们找到不辣火锅搭子！"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "我这边今晚7点静安火锅，人均80，但完全不能吃辣。你们一定要重辣锅吗？有没有可能选鸳鸯或微辣？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "constraint",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "抱歉，我们用户只吃重辣锅，鸳鸯或微辣都无法接受。时间地点都OK，但口味是硬限制，无法妥协。",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "question_focus": "constraint",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "理解，口味确实合不来。祝你们找到合适的饭搭子！",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "口味确实无法调和，祝你们找到不辣火锅搭子！",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "none"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": false,
+        "compatibility": 0.15,
+        "has_blocking_conflict": true,
+        "conflicts": [
+          "饮食禁忌硬冲突：A明确不能吃辣，B只吃重辣锅，双方均确认无法妥协",
+          "锅底类型不可调和：A提议鸳鸯/微辣被B明确拒绝"
+        ],
+        "match_reasons": [
+          "时间范围有重叠（19:00-21:00 vs 19:30-21:30）",
+          "地点一致（上海静安）",
+          "活动类型相同（火锅）"
+        ],
+        "uncertainties": [],
+        "chatroom_carryover": "",
+        "summary": "核心硬限制冲突：一方完全不能吃辣，另一方只吃重辣锅，双方已确认无法调和，无法匹配。"
+      }
+    }
+  ]
+}
