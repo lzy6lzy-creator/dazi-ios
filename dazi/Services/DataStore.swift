@@ -172,7 +172,7 @@ class DataStore {
         } catch {
             removeTypingIndicator()
             print("Backend chat error: \(error)")
-            let errorMsg = Message.agentMessage("抱歉，暂时无法连接服务器，请检查网络后重试~")
+            let errorMsg = Message.agentMessage("抱歉，\(userFriendlyError(error))，请稍后重试~")
             agentMessages.append(errorMsg)
         }
     }

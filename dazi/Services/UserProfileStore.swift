@@ -13,6 +13,7 @@ class UserProfileStore {
         static let userBio = "dazi_user_bio"
         static let userGender = "dazi_user_gender"
         static let userBirthYear = "dazi_user_birth_year"
+        static let userBirthDate = "dazi_user_birth_date"
         static let userInterests = "dazi_user_interests"
         static let agentName = "dazi_agent_name"
         static let agentEmoji = "dazi_agent_emoji"
@@ -39,6 +40,7 @@ class UserProfileStore {
             bio: defaults.string(forKey: Keys.userBio) ?? "",
             gender: defaults.string(forKey: Keys.userGender) ?? "",
             birthYear: defaults.integer(forKey: Keys.userBirthYear),
+            birthDate: defaults.string(forKey: Keys.userBirthDate) ?? "",
             interests: defaults.stringArray(forKey: Keys.userInterests) ?? [],
             agentName: defaults.string(forKey: Keys.agentName) ?? "点点",
             agentEmoji: defaults.string(forKey: Keys.agentEmoji) ?? "🤖",
@@ -57,6 +59,7 @@ class UserProfileStore {
         defaults.set(user.bio, forKey: Keys.userBio)
         defaults.set(user.gender, forKey: Keys.userGender)
         defaults.set(user.birthYear, forKey: Keys.userBirthYear)
+        defaults.set(user.birthDate, forKey: Keys.userBirthDate)
         defaults.set(user.interests, forKey: Keys.userInterests)
         defaults.set(user.agentName, forKey: Keys.agentName)
         defaults.set(user.agentEmoji, forKey: Keys.agentEmoji)
@@ -68,7 +71,7 @@ class UserProfileStore {
         let allKeys = [
             Keys.isRegistered, Keys.userId, Keys.userName, Keys.userAvatarEmoji,
             Keys.userAvatarImageData,
-            Keys.userCity, Keys.userBio, Keys.userGender, Keys.userBirthYear,
+            Keys.userCity, Keys.userBio, Keys.userGender, Keys.userBirthYear, Keys.userBirthDate,
             Keys.userInterests, Keys.agentName, Keys.agentEmoji,
             Keys.agentAvatarImageData, Keys.agentPersonality,
         ]

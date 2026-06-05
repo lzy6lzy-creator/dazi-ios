@@ -59,9 +59,19 @@ struct AgentChatView: View {
                         if index == 0 || !Calendar.current.isDate(message.timestamp, inSameDayAs: dataStore.agentMessages[index - 1].timestamp) {
                             DateSeparator(date: message.timestamp)
                         }
-                        MessageBubbleView(message: message, onConfirm: message.showConfirmButtons ? {
-                            confirmDraft(messageId: message.id)
-                        } : nil)
+                        MessageBubbleView(
+                            message: message,
+                            onConfirm: message.showConfirmButtons ? {
+                                confirmDraft(messageId: message.id)
+                            } : nil,
+                            onSubmitClarification: { messageId, answers, freeText in
+                                dataStore.submitClarification(
+                                    messageId: messageId,
+                                    answers: answers,
+                                    freeText: freeText
+                                )
+                            }
+                        )
                             .id(message.id)
                     }
                 }

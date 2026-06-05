@@ -11,6 +11,7 @@ struct OnboardingView: View {
     @State private var avatarImageData: Data?
     @State private var gender = ""
     @State private var birthYear = 2000
+    @State private var birthDate = OnboardingView.defaultBirthDate
     @State private var selectedInterests: Set<String> = []
     @State private var customInterests = ""
     @State private var occupation = ""
@@ -41,6 +42,33 @@ struct OnboardingView: View {
         "贴心、有趣", "理性、高效", "幽默、搞怪",
         "温柔、细心", "直爽、干脆", "可爱、活泼",
     ]
+
+    private static let defaultBirthDate: Date = {
+        Calendar.current.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? .now
+    }()
+
+    private static let birthDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private var birthDateRange: ClosedRange<Date> {
+        let calendar = Calendar.current
+        let start = calendar.date(from: DateComponents(year: 1970, month: 1, day: 1)) ?? .distantPast
+        let end = calendar.date(from: DateComponents(year: 2010, month: 12, day: 31)) ?? .now
+        return start...end
+    }
+
+    private var selectedBirthYear: Int {
+        Calendar.current.component(.year, from: birthDate)
+    }
+
+    private var birthDateString: String {
+        Self.birthDateFormatter.string(from: birthDate)
+    }
 
     var body: some View {
         ZStack {
@@ -171,15 +199,15 @@ struct OnboardingView: View {
 
     private var birthYearStep: some View {
         VStack(spacing: 16) {
-            stepHeader(title: "出生年份", subtitle: "我们不会公开显示你的年龄", icon: "calendar.badge.clock")
+            stepHeader(title: "出生日期", subtitle: "用于年龄匹配，不会公开显示", icon: "calendar.badge.clock")
 
-            Picker("出生年份", selection: $birthYear) {
-                ForEach(1970...2010, id: \.self) { year in
-                    Text("\(String(year))年").tag(year)
-                }
-            }
-            .pickerStyle(.wheel)
+            DatePicker("出生日期", selection: $birthDate, in: birthDateRange, displayedComponents: .date)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
             .frame(height: 150)
+            .onChange(of: birthDate) {
+                birthYear = selectedBirthYear
+            }
         }
     }
 
@@ -367,7 +395,7 @@ struct OnboardingView: View {
                     profileRow(label: "头像", value: avatarEmoji)
                 }
                 if !gender.isEmpty { profileRow(label: "性别", value: gender) }
-                profileRow(label: "出生年份", value: "\(birthYear)")
+                profileRow(label: "出生日期", value: birthDateString)
                 profileRow(label: "兴趣", value: Array(selectedInterests).joined(separator: "、"))
                 if !bio.isEmpty { profileRow(label: "简介", value: bio) }
                 Divider().padding(.vertical, 4)
@@ -487,6 +515,8 @@ struct OnboardingView: View {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let cityName = dataStore.locationManager.cityName
         let interestsArray = Array(selectedInterests)
+        let finalBirthYear = selectedBirthYear
+        let finalBirthDate = birthDateString
 
         // 使用服务器分配的 user ID（LoginView 已完成登录）
         let userId = APIClient.shared.serverUserId ?? UUID().uuidString
@@ -499,7 +529,8 @@ struct OnboardingView: View {
             city: cityName,
             bio: bio,
             gender: gender,
-            birthYear: birthYear,
+            birthYear: finalBirthYear,
+            birthDate: finalBirthDate,
             interests: interestsArray,
             occupation: occupation.trimmingCharacters(in: .whitespaces),
             customInterests: customInterests.trimmingCharacters(in: .whitespaces),
@@ -525,7 +556,8 @@ struct OnboardingView: View {
             await syncProfileToBackend(
                 name: trimmedName,
                 gender: gender,
-                birthYear: birthYear,
+                birthYear: finalBirthYear,
+                birthDate: finalBirthDate,
                 bio: bio,
                 interests: interestsArray,
                 city: cityName,
@@ -545,6 +577,7 @@ struct OnboardingView: View {
         name: String,
         gender: String,
         birthYear: Int,
+        birthDate: String,
         bio: String,
         interests: [String],
         city: String,
@@ -561,6 +594,7 @@ struct OnboardingView: View {
             var userData: [String: Any] = ["name": name]
             if !gender.isEmpty { userData["gender"] = gender }
             if birthYear > 0 { userData["birth_year"] = birthYear }
+            if !birthDate.isEmpty { userData["birth_date"] = birthDate }
             if !bio.isEmpty { userData["bio"] = bio }
             if !interests.isEmpty { userData["interests"] = interests }
             if !city.isEmpty { userData["city"] = city }

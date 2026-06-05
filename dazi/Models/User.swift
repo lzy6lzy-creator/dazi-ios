@@ -11,6 +11,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
     var isAgent: Bool
     var gender: String
     var birthYear: Int
+    var birthDate: String
     var interests: [String]
     var occupation: String
     var customInterests: String
@@ -32,6 +33,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         isAgent: Bool = false,
         gender: String = "",
         birthYear: Int = 0,
+        birthDate: String = "",
         interests: [String] = [],
         occupation: String = "",
         customInterests: String = "",
@@ -51,6 +53,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         self.isAgent = isAgent
         self.gender = gender
         self.birthYear = birthYear
+        self.birthDate = birthDate
         self.interests = interests
         self.occupation = occupation
         self.customInterests = customInterests
@@ -79,6 +82,35 @@ struct User: Identifiable, Codable, Hashable, Sendable {
             bio: agentPersonality,
             isAgent: true
         )
+    }
+
+    var age: Int? {
+        if let date = Self.parseBirthDate(birthDate) {
+            var value = Calendar.current.component(.year, from: .now) - Calendar.current.component(.year, from: date)
+            let birthComponents = Calendar.current.dateComponents([.month, .day], from: date)
+            let todayComponents = Calendar.current.dateComponents([.month, .day], from: .now)
+            if let birthMonth = birthComponents.month,
+               let birthDay = birthComponents.day,
+               let todayMonth = todayComponents.month,
+               let todayDay = todayComponents.day,
+               todayMonth < birthMonth || (todayMonth == birthMonth && todayDay < birthDay) {
+                value -= 1
+            }
+            return max(value, 0)
+        }
+        if birthYear > 0 {
+            return max(Calendar.current.component(.year, from: .now) - birthYear, 0)
+        }
+        return nil
+    }
+
+    private static func parseBirthDate(_ value: String) -> Date? {
+        guard !value.isEmpty else { return nil }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: value)
     }
 
 }

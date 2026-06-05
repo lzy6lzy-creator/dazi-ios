@@ -64,8 +64,8 @@ struct ProfileView: View {
                         .clipShape(Capsule())
                 }
 
-                if dataStore.currentUser.birthYear > 0 {
-                    Text("\(Calendar.current.component(.year, from: .now) - dataStore.currentUser.birthYear)岁")
+                if let age = dataStore.currentUser.age {
+                    Text("\(age)岁")
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
