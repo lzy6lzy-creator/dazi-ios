@@ -710,6 +710,7 @@ class DataStore {
                 let oldRooms = chatRooms
                 chatRooms = apiRooms.map { apiRoom in
                     var room = ChatRoom(from: apiRoom)
+                    applyLocalAvatars(to: &room)
                     // 保留已加载的本地消息
                     if let old = oldRooms.first(where: { $0.id == room.id }) {
                         room.messages = old.messages
@@ -721,6 +722,19 @@ class DataStore {
             }
         } catch {
             print("Fetch chat rooms error: \(error)")
+        }
+    }
+
+    private func applyLocalAvatars(to room: inout ChatRoom) {
+        for index in room.participants.indices {
+            if room.participants[index].id == currentUser.id {
+                room.participants[index].avatarEmoji = currentUser.avatarEmoji
+                room.participants[index].avatarImageData = currentUser.avatarImageData
+            } else if room.participants[index].id == "agent_\(currentUser.id)" {
+                room.participants[index].name = currentUser.agentName
+                room.participants[index].avatarEmoji = currentUser.agentEmoji
+                room.participants[index].avatarImageData = currentUser.agentAvatarImageData
+            }
         }
     }
 

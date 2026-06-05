@@ -152,9 +152,11 @@ struct APIChatRoomMemberResponse: Codable {
     let name: String
     let role: String
     let emoji: String?
+    let avatarUrl: String?
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
+        case avatarUrl = "avatar_url"
         case name, role, emoji
     }
 }
