@@ -278,7 +278,8 @@ final class APIClient {
         method: String,
         path: String,
         body: [String: Any]? = nil,
-        authenticated: Bool = true
+        authenticated: Bool = true,
+        timeout: TimeInterval = 30
     ) async throws -> T {
         guard let url = URL(string: "\(APIConfig.baseURL)\(path)") else {
             throw APIError.invalidURL
@@ -287,7 +288,7 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 30
+        req.timeoutInterval = timeout
 
         if authenticated {
             guard let token = accessToken else { throw APIError.noToken }
@@ -337,7 +338,8 @@ final class APIClient {
         method: String,
         path: String,
         body: [String: Any]? = nil,
-        authenticated: Bool = true
+        authenticated: Bool = true,
+        timeout: TimeInterval = 30
     ) async throws -> [String: Any] {
         guard let url = URL(string: "\(APIConfig.baseURL)\(path)") else {
             throw APIError.invalidURL
@@ -346,7 +348,7 @@ final class APIClient {
         var req = URLRequest(url: url)
         req.httpMethod = method
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.timeoutInterval = 30
+        req.timeoutInterval = timeout
 
         if authenticated {
             guard let token = accessToken else { throw APIError.noToken }
@@ -448,7 +450,8 @@ final class APIClient {
         try await request(
             method: "POST",
             path: "/api/v1/agent/chat",
-            body: ["message": message]
+            body: ["message": message],
+            timeout: 120
         )
     }
 
@@ -489,7 +492,8 @@ final class APIClient {
         return try await request(
             method: "POST",
             path: "/api/v1/agent/clarification/answer",
-            body: body
+            body: body,
+            timeout: 120
         )
     }
 
