@@ -107,6 +107,18 @@ struct APIAgentChatResponse: Codable {
     }
 }
 
+struct APIAgentHistoryMessage: Codable {
+    let id: String
+    let role: String
+    let content: String
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, content
+        case createdAt = "created_at"
+    }
+}
+
 struct APIEventResponse: Codable {
     let id: String
     let userId: String
@@ -453,6 +465,10 @@ final class APIClient {
             body: ["message": message],
             timeout: 120
         )
+    }
+
+    func getAgentHistory(limit: Int = 50) async throws -> [APIAgentHistoryMessage] {
+        try await request(method: "GET", path: "/api/v1/agent/history?limit=\(limit)")
     }
 
     func fetchPendingClarification() async throws -> APIAgentChatResponse {

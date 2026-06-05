@@ -477,23 +477,11 @@ class DataStore {
     // MARK: - Initial Data
 
     func loadInitialData() {
-        let userName = currentUser.name
-        let agName = currentUser.agentName
-        let interestsHint = currentUser.interests.isEmpty
-            ? "比如周末想看电影、找人一起徒步、想吃顿好的~"
-            : "比如\(currentUser.interests.prefix(3).joined(separator: "、"))？"
-
-        let greeting = Message(
-            content: "你好\(userName)！我是\(agName)，你的专属搭子经纪人。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
-            role: .agent,
-            senderName: agName,
-            senderAvatar: currentUser.agentEmoji,
-            senderAvatarImageData: currentUser.agentAvatarImageData
-        )
-        agentMessages = [greeting]
+        agentMessages = [agentGreetingMessage()]
 
         // 从服务器拉取数据
         Task {
+            await fetchAgentHistoryFromServer()
             await fetchAllFromServer()
             await restorePendingClarificationFromServer()
         }
@@ -503,6 +491,75 @@ class DataStore {
 
         // 启动低频轮询作为 fallback（WebSocket 断连时仍可同步）
         startPolling()
+    }
+
+    private func agentGreetingMessage() -> Message {
+        let interestsHint = currentUser.interests.isEmpty
+            ? "比如周末想看电影、找人一起徒步、想吃顿好的~"
+            : "比如\(currentUser.interests.prefix(3).joined(separator: "、"))？"
+        return Message(
+            content: "你好\(currentUser.name)！我是\(currentUser.agentName)，你的专属搭子经纪人。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
+            role: .agent,
+            senderName: currentUser.agentName,
+            senderAvatar: currentUser.agentEmoji,
+            senderAvatarImageData: currentUser.agentAvatarImageData
+        )
+    }
+
+    private func fetchAgentHistoryFromServer() async {
+        do {
+            let history = try await api.getAgentHistory()
+            let restored = history.compactMap { makeAgentHistoryMessage(from: $0) }
+            guard !restored.isEmpty else { return }
+            await MainActor.run {
+                agentMessages = restored
+            }
+        } catch {
+            print("Fetch agent history error: \(error)")
+        }
+    }
+
+    private func makeAgentHistoryMessage(from apiMessage: APIAgentHistoryMessage) -> Message? {
+        let content = apiMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return nil }
+        let role: MessageRole
+        let senderName: String
+        let senderAvatar: String
+        let senderAvatarImageData: Data?
+        switch apiMessage.role.lowercased() {
+        case "user":
+            role = .user
+            senderName = currentUser.name
+            senderAvatar = currentUser.avatarEmoji
+            senderAvatarImageData = currentUser.avatarImageData
+        case "assistant", "agent":
+            role = .agent
+            senderName = currentUser.agentName
+            senderAvatar = currentUser.agentEmoji
+            senderAvatarImageData = currentUser.agentAvatarImageData
+        default:
+            role = .system
+            senderName = "系统"
+            senderAvatar = "ℹ️"
+            senderAvatarImageData = nil
+        }
+        return Message(
+            id: apiMessage.id,
+            content: content,
+            role: role,
+            senderName: senderName,
+            senderAvatar: senderAvatar,
+            senderAvatarImageData: senderAvatarImageData,
+            timestamp: parseAgentHistoryDate(apiMessage.createdAt)
+        )
+    }
+
+    private func parseAgentHistoryDate(_ value: String) -> Date {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value) ?? .now
     }
 
     private var pendingClarificationMessageId: String? {
