@@ -23,6 +23,8 @@ class DataStore {
     private let profileStore = UserProfileStore()
     private let api = APIClient.shared
     private let ws = WebSocketService.shared
+    private let notifications = NotificationService.shared
+    private var notifiedRoomCreationIds: Set<String> = []
 
     init() {
         if let savedUser = profileStore.loadUser() {
@@ -41,6 +43,7 @@ class DataStore {
         pollingTask = nil
         ws.disconnect()
         profileStore.clearUser()
+        notifications.unregisterStoredRemoteDeviceTokenBeforeLogout()
         api.clearTokens()
         isRegistered = false
         currentUser = .placeholder
@@ -52,6 +55,9 @@ class DataStore {
         memories = []
         selectedTab = 0
         unreadChatCount = 0
+        pendingChatRoomId = nil
+        notifiedRoomCreationIds = []
+        notifications.updateBadge(0)
     }
 
     // MARK: - Returning User Login
@@ -101,6 +107,9 @@ class DataStore {
 
     func sendMessageToAgent(_ text: String) {
         let pendingMessageId = pendingClarificationMessageId
+        let initialAgentContent = shouldShowPublishingIndicator(for: text)
+            ? Message.publishingContent
+            : ""
         let userMsg = Message.userMessage(text)
         agentMessages.append(userMsg)
 
@@ -115,65 +124,40 @@ class DataStore {
                     freeText: text
                 )
             } else {
-                await sendMessageViaBackend(text)
+                await sendMessageViaBackend(text, initialAgentContent: initialAgentContent)
             }
         }
     }
 
     /// Agent chat via backend API (protects API key)
-    private func sendMessageViaBackend(_ text: String) async {
-        do {
-            let chatResponse = try await api.chatWithAgent(message: text)
-
+    private func sendMessageViaBackend(_ text: String, initialAgentContent: String = "") async {
+        let agentMessage = Message.agentMessage(initialAgentContent)
+        await MainActor.run {
             removeTypingIndicator()
-            appendAgentResponse(chatResponse)
+            agentMessages.append(agentMessage)
+        }
 
-            // 后端已创建或更新事件
-            if chatResponse.eventReady, let eventId = chatResponse.eventId {
-                let isEditing = events.contains(where: { $0.id == eventId })
-
-                if isEditing {
-                    // 编辑模式：刷新已有事件
-                    Task {
-                        await refreshEventFromServer(eventId: eventId)
-                    }
-                    let updateMsg = Message.agentMessage("活动已更新！继续为你寻找合适的搭子~")
-                    agentMessages.append(updateMsg)
-                } else {
-                    // 新建模式：创建本地记录
-                    let event = Event(
-                        id: eventId,
-                        userId: currentUser.id,
-                        activityType: "其他",
-                        title: "新活动",
-                        description: "",
-                        startTime: .now,
-                        endTime: .now,
-                        location: "",
-                        preferences: [],
-                        constraints: [],
-                        status: .pending,
-                        matchedUserId: nil,
-                        chatRoomId: nil,
-                        createdAt: .now
-                    )
-                    events.insert(event, at: 0)
-
-                    // 从服务器拉取完整事件信息
-                    Task {
-                        await refreshEventFromServer(eventId: eventId)
-                    }
-
-                    let publishMsg = Message.agentMessage("活动已发布，正在为你寻找合适的搭子，请耐心等待！")
-                    agentMessages.append(publishMsg)
+        do {
+            let currentLocation = locationManager.hasLocation ? locationManager.promptLocationDescription : nil
+            try await api.streamAgentChat(
+                message: text,
+                currentLocation: currentLocation
+            ) { [weak self] event in
+                await MainActor.run {
+                    self?.applyAgentStreamEvent(event, to: agentMessage.id)
                 }
             }
 
         } catch {
-            removeTypingIndicator()
             print("Backend chat error: \(error)")
-            let errorMsg = Message.agentMessage("抱歉，\(userFriendlyError(error))，请稍后重试~")
-            agentMessages.append(errorMsg)
+            await MainActor.run {
+                if let idx = agentMessages.firstIndex(where: { $0.id == agentMessage.id }),
+                   shouldReplaceFailedStreamMessage(agentMessages[idx]) {
+                    agentMessages[idx].content = "抱歉，\(userFriendlyError(error))，请稍后重试~"
+                } else {
+                    showToast(userFriendlyError(error), type: .error)
+                }
+            }
         }
     }
 
@@ -212,22 +196,30 @@ class DataStore {
 
         agentMessages[idx].clarificationSubmitted = true
 
+        let agentMessage = Message.agentMessage("")
+        await MainActor.run {
+            removeTypingIndicator()
+            agentMessages.append(agentMessage)
+        }
+
         do {
-            let response = try await api.submitClarificationAnswers(
+            try await api.streamClarificationAnswers(
                 sessionId: sessionId,
                 answers: answers,
                 freeText: freeText
-            )
-
-            await MainActor.run {
-                removeTypingIndicator()
-                appendAgentResponse(response)
+            ) { [weak self] event in
+                await MainActor.run {
+                    self?.applyAgentStreamEvent(event, to: agentMessage.id)
+                }
             }
         } catch {
             await MainActor.run {
-                removeTypingIndicator()
                 if let currentIndex = agentMessages.firstIndex(where: { $0.id == messageId }) {
                     agentMessages[currentIndex].clarificationSubmitted = false
+                }
+                if let idx = agentMessages.firstIndex(where: { $0.id == agentMessage.id }),
+                   agentMessages[idx].content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    agentMessages.remove(at: idx)
                 }
                 showToast(userFriendlyError(error), type: .error)
             }
@@ -238,12 +230,13 @@ class DataStore {
     private func refreshEventFromServer(eventId: String) async {
         do {
             let apiEvent = try await api.getEvent(id: eventId)
-            if let idx = events.firstIndex(where: { $0.id == eventId }) {
-                events[idx].title = apiEvent.title
-                events[idx].activityType = apiEvent.activityType
-                events[idx].location = apiEvent.location ?? ""
-                events[idx].preferences = apiEvent.preferences ?? []
-                events[idx].constraints = apiEvent.constraints ?? []
+            let event = Event(from: apiEvent)
+            await MainActor.run {
+                if let idx = events.firstIndex(where: { $0.id == eventId }) {
+                    events[idx] = event
+                } else {
+                    events.insert(event, at: 0)
+                }
             }
         } catch {
             print("Failed to refresh event from server: \(error)")
@@ -257,6 +250,7 @@ class DataStore {
 
         // 乐观地先在本地显示用户消息
         let msg = Message.userMessage(text)
+        let optimisticMessageId = msg.id
         chatRooms[idx].messages.append(msg)
 
         // 检测 @agent
@@ -268,17 +262,24 @@ class DataStore {
         Task {
             do {
                 // 通过后端 API 发送消息
-                let _ = try await api.sendRoomMessage(
+                let apiMessage = try await api.sendRoomMessage(
                     roomId: roomId,
                     content: text,
                     mentions: mentionedAgentNames.isEmpty ? nil : mentionedAgentNames
                 )
 
-                // Agent 回复会通过 WebSocket 实时推送，无需轮询
+                await MainActor.run {
+                    replaceOptimisticRoomMessage(
+                        roomId: roomId,
+                        optimisticMessageId: optimisticMessageId,
+                        with: apiMessage
+                    )
+                }
             } catch {
                 print("Send room message error: \(error)")
                 await MainActor.run {
                     if let i = chatRooms.firstIndex(where: { $0.id == roomId }) {
+                        chatRooms[i].messages.removeAll { $0.id == optimisticMessageId }
                         let errorMsg = Message.systemMessage("消息发送失败，请重试")
                         chatRooms[i].messages.append(errorMsg)
                     }
@@ -293,32 +294,59 @@ class DataStore {
             let apiMessages = try await api.getRoomMessages(roomId: roomId)
             await MainActor.run {
                 guard let idx = chatRooms.firstIndex(where: { $0.id == roomId }) else { return }
-                let existingIds = Set(chatRooms[idx].messages.map(\.id))
                 for apiMsg in apiMessages {
-                    if !existingIds.contains(apiMsg.id) {
-                        let role: MessageRole = switch apiMsg.senderType {
-                        case "agent": .agent
-                        case "system": .system
-                        default: apiMsg.senderId == currentUser.id ? .user : .partner
-                        }
-                        // 查找发送者信息（agent 消息用 "agent_" 前缀匹配）
-                        let senderId = apiMsg.senderType == "agent" ? "agent_\(apiMsg.senderId)" : apiMsg.senderId
-                        let sender = chatRooms[idx].participants.first(where: { $0.id == senderId })
-                        let message = Message(
-                            id: apiMsg.id,
-                            content: apiMsg.content,
-                            role: role,
-                            senderName: sender?.name ?? (role == .system ? "系统" : "用户"),
-                            senderAvatar: sender?.avatarEmoji ?? "😊",
-                            senderAvatarImageData: sender?.avatarImageData
-                        )
-                        chatRooms[idx].messages.append(message)
-                    }
+                    let message = makeRoomMessage(from: apiMsg, roomIndex: idx)
+                    mergeRoomMessage(message, inRoomAt: idx)
                 }
             }
         } catch {
             print("Fetch room messages error: \(error)")
         }
+    }
+
+    private func replaceOptimisticRoomMessage(
+        roomId: String,
+        optimisticMessageId: String,
+        with apiMessage: APIChatMessageResponse
+    ) {
+        guard let idx = chatRooms.firstIndex(where: { $0.id == roomId }) else { return }
+        let message = makeRoomMessage(from: apiMessage, roomIndex: idx)
+        mergeRoomMessage(message, inRoomAt: idx, replacingLocalId: optimisticMessageId)
+    }
+
+    private func mergeRoomMessage(
+        _ message: Message,
+        inRoomAt roomIndex: Int,
+        replacingLocalId localId: String? = nil
+    ) {
+        if let localId, localId != message.id {
+            chatRooms[roomIndex].messages.removeAll { $0.id == localId }
+        }
+
+        if let existingIndex = chatRooms[roomIndex].messages.firstIndex(where: { $0.id == message.id }) {
+            chatRooms[roomIndex].messages[existingIndex] = message
+        } else {
+            chatRooms[roomIndex].messages.append(message)
+        }
+    }
+
+    private func makeRoomMessage(from apiMsg: APIChatMessageResponse, roomIndex: Int) -> Message {
+        let role: MessageRole = switch apiMsg.senderType {
+        case "agent": .agent
+        case "system": .system
+        default: apiMsg.senderId == currentUser.id ? .user : .partner
+        }
+        let senderId = apiMsg.senderType == "agent" ? "agent_\(apiMsg.senderId)" : apiMsg.senderId
+        let sender = chatRooms[roomIndex].participants.first(where: { $0.id == senderId })
+        return Message(
+            id: apiMsg.id,
+            content: apiMsg.content,
+            role: role,
+            senderName: sender?.name ?? (role == .system ? "系统" : "用户"),
+            senderAvatar: sender?.avatarEmoji ?? "😊",
+            senderAvatarImageData: sender?.avatarImageData,
+            timestamp: parseAgentHistoryDate(apiMsg.createdAt)
+        )
     }
 
     // MARK: - Event Feedback
@@ -411,6 +439,7 @@ class DataStore {
             if chatRooms[idx].hasUnread {
                 chatRooms[idx].hasUnread = false
                 unreadChatCount = max(0, unreadChatCount - 1)
+                notifications.updateBadge(unreadChatCount)
             }
         }
     }
@@ -478,6 +507,8 @@ class DataStore {
 
     func loadInitialData() {
         agentMessages = [agentGreetingMessage()]
+        notifications.requestAuthorizationIfNeeded()
+        notifications.registerStoredRemoteDeviceTokenIfAvailable()
 
         // 从服务器拉取数据
         Task {
@@ -570,6 +601,16 @@ class DataStore {
         })?.id
     }
 
+    private func shouldShowPublishingIndicator(for text: String) -> Bool {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard ["确认", "确认发布", "ok", "okay"].contains(normalized) else {
+            return false
+        }
+        return agentMessages.contains {
+            $0.showConfirmButtons && ($0.confirmButtonsTapped || !$0.clarificationSubmitted)
+        }
+    }
+
     private func appendAgentResponse(_ response: APIAgentChatResponse) {
         var agentMsg = Message.agentMessage(
             response.reply,
@@ -580,6 +621,114 @@ class DataStore {
             agentMsg.showConfirmButtons = true
         }
         agentMessages.append(agentMsg)
+    }
+
+    private func applyAgentStreamEvent(_ event: AgentStreamEvent, to messageId: String) {
+        let decoder = JSONDecoder()
+        switch event.event {
+        case "reply_delta", "draft_delta":
+            guard let payload = try? decoder.decode(AgentDeltaPayload.self, from: event.data),
+                  let idx = agentMessages.firstIndex(where: { $0.id == messageId })
+            else { return }
+            if agentMessages[idx].content == Message.publishingContent {
+                agentMessages[idx].content = payload.text
+            } else {
+                agentMessages[idx].content += payload.text
+            }
+
+        case "clarify":
+            guard let payload = try? decoder.decode(AgentClarifyPayload.self, from: event.data),
+                  let idx = agentMessages.firstIndex(where: { $0.id == messageId })
+            else { return }
+            agentMessages[idx].clarificationSessionId = payload.sessionId
+            agentMessages[idx].clarificationQuestions = payload.questions
+            agentMessages[idx].showConfirmButtons = false
+
+        case "clarify_question_delta":
+            guard let payload = try? decoder.decode(AgentClarifyQuestionDeltaPayload.self, from: event.data),
+                  let idx = agentMessages.firstIndex(where: { $0.id == messageId })
+            else { return }
+            agentMessages[idx].clarificationSessionId = payload.sessionId
+            if let existingIndex = agentMessages[idx].clarificationQuestions.firstIndex(where: { $0.id == payload.question.id }) {
+                agentMessages[idx].clarificationQuestions[existingIndex] = payload.question
+            } else {
+                agentMessages[idx].clarificationQuestions.append(payload.question)
+            }
+            agentMessages[idx].showConfirmButtons = false
+
+        case "draft_ready":
+            guard let payload = try? decoder.decode(AgentDraftReadyPayload.self, from: event.data),
+                  payload.eventDraftPending,
+                  let idx = agentMessages.firstIndex(where: { $0.id == messageId })
+            else { return }
+            agentMessages[idx].showConfirmButtons = true
+
+        case "event_ready":
+            guard let payload = try? decoder.decode(AgentEventReadyPayload.self, from: event.data),
+                  payload.eventReady,
+                  let eventId = payload.eventId
+            else { return }
+            handleAgentEventReady(eventId: eventId, messageId: messageId)
+
+        case "error":
+            if let payload = try? decoder.decode(AgentErrorPayload.self, from: event.data) {
+                if let idx = agentMessages.firstIndex(where: { $0.id == messageId }),
+                   shouldReplaceFailedStreamMessage(agentMessages[idx]) {
+                    agentMessages[idx].content = payload.message
+                } else {
+                    showToast(payload.message, type: .error)
+                }
+            }
+
+        default:
+            break
+        }
+    }
+
+    private func handleAgentEventReady(eventId: String, messageId: String) {
+        clearDraftConfirmationState()
+        let isEditing = events.contains(where: { $0.id == eventId })
+        if isEditing {
+            Task {
+                await refreshEventFromServer(eventId: eventId)
+            }
+            updateAgentMessage(messageId, fallback: "活动已更新！继续为你寻找合适的搭子~")
+            return
+        }
+
+        Task {
+            await refreshEventFromServer(eventId: eventId)
+        }
+        updateAgentMessage(messageId, fallback: "活动已发布，正在为你寻找合适的搭子，请耐心等待！")
+        appendAgentSessionDividerIfNeeded()
+    }
+
+    private func updateAgentMessage(_ messageId: String, fallback: String) {
+        if let idx = agentMessages.firstIndex(where: { $0.id == messageId }) {
+            agentMessages[idx].content = fallback
+        } else {
+            agentMessages.append(Message.agentMessage(fallback))
+        }
+    }
+
+    private func appendAgentSessionDividerIfNeeded() {
+        let text = "活动已发布。下面为你开启新的对话。"
+        if agentMessages.last?.role == .system && agentMessages.last?.content == text {
+            return
+        }
+        agentMessages.append(Message.systemMessage(text))
+    }
+
+    private func clearDraftConfirmationState() {
+        for idx in agentMessages.indices where agentMessages[idx].showConfirmButtons {
+            agentMessages[idx].showConfirmButtons = false
+            agentMessages[idx].confirmButtonsTapped = true
+        }
+    }
+
+    private func shouldReplaceFailedStreamMessage(_ message: Message) -> Bool {
+        message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || message.content == Message.publishingContent
     }
 
     private func restorePendingClarificationFromServer() async {
@@ -617,11 +766,8 @@ class DataStore {
         ws.onEventUpdate = { [weak self] eventId, status in
             self?.handleWSEventUpdate(eventId: eventId, status: status)
         }
-        ws.onRoomCreated = { [weak self] _ in
-            // 新聊天室创建，拉取最新列表
-            Task { [weak self] in
-                await self?.fetchChatRoomsFromServer()
-            }
+        ws.onRoomCreated = { [weak self] roomData in
+            self?.handleWSRoomCreated(roomData: roomData)
         }
         ws.onMatchRequestCreated = { [weak self] _ in
             Task { [weak self] in
@@ -634,7 +780,13 @@ class DataStore {
     private func handleWSNewMessage(roomId: String, payload: WSMessagePayload) {
         guard let idx = chatRooms.firstIndex(where: { $0.id == roomId }) else {
             // 未知聊天室，拉取列表
-            Task { await fetchChatRoomsFromServer() }
+            Task {
+                await fetchChatRoomsFromServer()
+                await MainActor.run {
+                    guard let roomIndex = chatRooms.firstIndex(where: { $0.id == roomId }) else { return }
+                    notifyNewRoomMessage(roomIndex: roomIndex, payload: payload)
+                }
+            }
             return
         }
 
@@ -663,11 +815,60 @@ class DataStore {
         )
         chatRooms[idx].messages.append(message)
 
-        // 标记未读（如果不在当前聊天室）
-        if selectedTab != 2 || pendingChatRoomId != roomId {
+        let shouldNotify = selectedTab != 2 || pendingChatRoomId != roomId
+        if shouldNotify {
             chatRooms[idx].hasUnread = true
             unreadChatCount = chatRooms.filter(\.hasUnread).count
+            notifications.updateBadge(unreadChatCount)
+            notifyNewRoomMessage(roomIndex: idx, payload: payload)
         }
+    }
+
+    private func handleWSRoomCreated(roomData: [String: Any]) {
+        let roomId = roomData["id"] as? String ?? roomData["room_id"] as? String
+
+        Task {
+            await fetchChatRoomsFromServer()
+            await MainActor.run {
+                guard let roomId,
+                      !notifiedRoomCreationIds.contains(roomId),
+                      let idx = chatRooms.firstIndex(where: { $0.id == roomId })
+                else { return }
+
+                notifiedRoomCreationIds.insert(roomId)
+                chatRooms[idx].hasUnread = true
+                unreadChatCount = chatRooms.filter(\.hasUnread).count
+                notifications.updateBadge(unreadChatCount)
+                notifications.notifyRoomCreated(
+                    roomTitle: chatRooms[idx].displayTitle,
+                    roomId: roomId
+                )
+            }
+        }
+    }
+
+    private func notifyNewRoomMessage(roomIndex: Int, payload: WSMessagePayload) {
+        guard chatRooms.indices.contains(roomIndex) else { return }
+        let room = chatRooms[roomIndex]
+        let senderId = payload.senderType == "agent" ? "agent_\(payload.senderId)" : payload.senderId
+        let sender = room.participants.first(where: { $0.id == senderId })
+        let senderName: String
+        switch payload.senderType {
+        case "agent":
+            senderName = sender?.name ?? "AI"
+        case "system":
+            senderName = "系统"
+        default:
+            senderName = sender?.name ?? "搭子"
+        }
+
+        notifications.notifyNewMessage(
+            roomTitle: room.displayTitle,
+            senderName: senderName,
+            content: payload.content,
+            roomId: payload.roomId,
+            messageId: payload.id
+        )
     }
 
     private func handleWSEventUpdate(eventId: String, status: String) {
@@ -719,6 +920,7 @@ class DataStore {
                     return room
                 }
                 unreadChatCount = chatRooms.filter(\.hasUnread).count
+                notifications.updateBadge(unreadChatCount)
             }
         } catch {
             print("Fetch chat rooms error: \(error)")

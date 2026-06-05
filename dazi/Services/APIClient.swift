@@ -107,6 +107,92 @@ struct APIAgentChatResponse: Codable {
     }
 }
 
+struct AgentStreamEvent: Sendable {
+    let event: String
+    let data: Data
+}
+
+struct SSEParser {
+    private var currentEvent: String?
+    private var dataLines: [String] = []
+
+    mutating func feed(line: String) -> AgentStreamEvent? {
+        if line.isEmpty {
+            return flush()
+        }
+        if line.hasPrefix("event:") {
+            let pendingEvent = flush()
+            currentEvent = String(line.dropFirst("event:".count))
+                .trimmingCharacters(in: .whitespaces)
+            return pendingEvent
+        } else if line.hasPrefix("data:") {
+            dataLines.append(
+                String(line.dropFirst("data:".count))
+                    .trimmingCharacters(in: .whitespaces)
+            )
+        }
+        return nil
+    }
+
+    mutating func finish() -> AgentStreamEvent? {
+        flush()
+    }
+
+    private mutating func flush() -> AgentStreamEvent? {
+        guard let currentEvent else { return nil }
+        let dataText = dataLines.joined(separator: "\n")
+        self.currentEvent = nil
+        self.dataLines = []
+        return AgentStreamEvent(event: currentEvent, data: Data(dataText.utf8))
+    }
+}
+
+struct AgentDeltaPayload: Decodable {
+    let text: String
+}
+
+struct AgentClarifyPayload: Decodable {
+    let sessionId: String
+    let questions: [ClarificationQuestion]
+
+    enum CodingKeys: String, CodingKey {
+        case sessionId = "session_id"
+        case questions
+    }
+}
+
+struct AgentClarifyQuestionDeltaPayload: Decodable {
+    let sessionId: String
+    let question: ClarificationQuestion
+
+    enum CodingKeys: String, CodingKey {
+        case sessionId = "session_id"
+        case question
+    }
+}
+
+struct AgentDraftReadyPayload: Decodable {
+    let eventDraftPending: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case eventDraftPending = "event_draft_pending"
+    }
+}
+
+struct AgentEventReadyPayload: Decodable {
+    let eventReady: Bool
+    let eventId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case eventReady = "event_ready"
+        case eventId = "event_id"
+    }
+}
+
+struct AgentErrorPayload: Decodable {
+    let message: String
+}
+
 struct APIAgentHistoryMessage: Codable {
     let id: String
     let role: String
@@ -278,6 +364,7 @@ final class APIClient {
         accessToken = response.accessToken
         refreshToken = response.refreshToken
         serverUserId = response.userId
+        NotificationService.shared.registerStoredRemoteDeviceTokenIfAvailable()
     }
 
     func clearTokens() {
@@ -353,7 +440,8 @@ final class APIClient {
         path: String,
         body: [String: Any]? = nil,
         authenticated: Bool = true,
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 30,
+        authTokenOverride: String? = nil
     ) async throws -> [String: Any] {
         guard let url = URL(string: "\(APIConfig.baseURL)\(path)") else {
             throw APIError.invalidURL
@@ -365,7 +453,7 @@ final class APIClient {
         req.timeoutInterval = timeout
 
         if authenticated {
-            guard let token = accessToken else { throw APIError.noToken }
+            guard let token = authTokenOverride ?? accessToken else { throw APIError.noToken }
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
@@ -429,6 +517,48 @@ final class APIClient {
         try await request(method: "PUT", path: "/api/v1/users/me", body: data)
     }
 
+    // MARK: - Notifications
+
+    func registerPushDeviceToken(token: String, environment: String) async throws {
+        _ = try await requestDict(
+            method: "POST",
+            path: "/api/v1/notifications/device-token",
+            body: [
+                "token": token,
+                "platform": "ios",
+                "environment": environment,
+            ]
+        )
+    }
+
+    func unregisterPushDeviceToken(token: String, environment: String, authTokenOverride: String? = nil) async throws {
+        _ = try await requestDict(
+            method: "DELETE",
+            path: "/api/v1/notifications/device-token",
+            body: [
+                "token": token,
+                "platform": "ios",
+                "environment": environment,
+            ],
+            authTokenOverride: authTokenOverride
+        )
+    }
+
+    func unregisterPushDeviceTokenBeforeClearingAuth(token: String, environment: String) {
+        guard let capturedAccessToken = accessToken else { return }
+        Task {
+            do {
+                try await unregisterPushDeviceToken(
+                    token: token,
+                    environment: environment,
+                    authTokenOverride: capturedAccessToken
+                )
+            } catch {
+                print("[Notification] Unregister remote token error: \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Agent
 
     func getMyAgent() async throws -> APIAgentResponse {
@@ -460,11 +590,70 @@ final class APIClient {
 
     // MARK: - Agent Chat
 
-    func chatWithAgent(message: String) async throws -> APIAgentChatResponse {
-        try await request(
+    private func streamRequest(
+        path: String,
+        body: [String: Any],
+        onEvent: @escaping (AgentStreamEvent) async -> Void
+    ) async throws {
+        guard let url = URL(string: APIConfig.baseURL + path) else {
+            throw APIError.invalidURL
+        }
+        guard let token = accessToken else {
+            throw APIError.noToken
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 120
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.networkError("Invalid response")
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw APIError.serverError(http.statusCode, "Stream request failed")
+        }
+
+        var parser = SSEParser()
+        for try await line in bytes.lines {
+            if let event = parser.feed(line: line) {
+                await onEvent(event)
+            }
+        }
+        if let event = parser.finish() {
+            await onEvent(event)
+        }
+    }
+
+    func streamAgentChat(
+        message: String,
+        currentLocation: String? = nil,
+        onEvent: @escaping (AgentStreamEvent) async -> Void
+    ) async throws {
+        var body: [String: Any] = ["message": message]
+        if let currentLocation, !currentLocation.isEmpty {
+            body["current_location"] = currentLocation
+        }
+        try await streamRequest(
+            path: "/api/v1/agent/chat/stream",
+            body: body,
+            onEvent: onEvent
+        )
+    }
+
+    func chatWithAgent(message: String, currentLocation: String? = nil) async throws -> APIAgentChatResponse {
+        var body: [String: Any] = ["message": message]
+        if let currentLocation, !currentLocation.isEmpty {
+            body["current_location"] = currentLocation
+        }
+        return try await request(
             method: "POST",
             path: "/api/v1/agent/chat",
-            body: ["message": message],
+            body: body,
             timeout: 120
         )
     }
@@ -488,7 +677,9 @@ final class APIClient {
             if !answer.optionIds.isEmpty {
                 item["option_ids"] = answer.optionIds
             }
-            if let minAge = answer.minAge, let maxAge = answer.maxAge {
+            if let customValue = answer.customValue, !customValue.isEmpty {
+                item["custom_value"] = customValue
+            } else if let minAge = answer.minAge, let maxAge = answer.maxAge {
                 item["custom_value"] = ["min_age": minAge, "max_age": maxAge]
             } else if let customText = answer.customText?.trimmingCharacters(in: .whitespacesAndNewlines),
                       !customText.isEmpty {
@@ -512,6 +703,46 @@ final class APIClient {
             path: "/api/v1/agent/clarification/answer",
             body: body,
             timeout: 120
+        )
+    }
+
+    func streamClarificationAnswers(
+        sessionId: String,
+        answers: [ClarificationAnswerInput],
+        freeText: String?,
+        onEvent: @escaping (AgentStreamEvent) async -> Void
+    ) async throws {
+        var bodyAnswers: [[String: Any]] = []
+        for answer in answers {
+            var item: [String: Any] = ["question_id": answer.questionId]
+            if !answer.optionIds.isEmpty {
+                item["option_ids"] = answer.optionIds
+            }
+            if let customValue = answer.customValue, !customValue.isEmpty {
+                item["custom_value"] = customValue
+            } else if let minAge = answer.minAge, let maxAge = answer.maxAge {
+                item["custom_value"] = ["min_age": minAge, "max_age": maxAge]
+            } else if let customText = answer.customText?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !customText.isEmpty {
+                item["custom_value"] = customText
+            }
+            if item.count > 1 {
+                bodyAnswers.append(item)
+            }
+        }
+
+        var body: [String: Any] = [
+            "clarification_session_id": sessionId,
+            "answers": bodyAnswers,
+        ]
+        if let freeText = freeText?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !freeText.isEmpty {
+            body["free_text"] = freeText
+        }
+        try await streamRequest(
+            path: "/api/v1/agent/clarification/answer/stream",
+            body: body,
+            onEvent: onEvent
         )
     }
 
