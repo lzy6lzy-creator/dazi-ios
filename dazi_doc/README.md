@@ -37,5 +37,5 @@
 
 - iOS：`/Users/wuxing/Desktop/dazi/dazi`
 - Android：`/Users/wuxing/Desktop/dazi/dazi-android`
-- 后端：`/Users/wuxing/Desktop/dazi/dazi-server`
+- 后端：`/Users/wuxing/Desktop/dazi/dazi/dazi-server`
 

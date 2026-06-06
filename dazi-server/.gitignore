@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+AuthKey_*.p8
+internal_test_phones.txt
+.DS_Store
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+.venv311/
+venv/
+certbot/conf/
+certbot/www/

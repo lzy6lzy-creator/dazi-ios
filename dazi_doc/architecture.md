@@ -22,7 +22,7 @@ FastAPI Backend
 | --- | --- | --- |
 | iOS | `/Users/wuxing/Desktop/dazi/dazi` | SwiftUI 客户端，当前文档也放在此仓库 |
 | Android | `/Users/wuxing/Desktop/dazi/dazi-android` | Kotlin/Compose 客户端 |
-| 后端 | `/Users/wuxing/Desktop/dazi/dazi-server` | FastAPI、PostgreSQL、Redis、Docker 部署 |
+| 后端 | `/Users/wuxing/Desktop/dazi/dazi/dazi-server` | FastAPI、PostgreSQL、Redis、Docker 部署 |
 
 顶层 `/Users/wuxing/Desktop/dazi` 不是 git 仓库。
 

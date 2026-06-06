@@ -14,3 +14,26 @@ DerivedData/
 *.xcarchive/
 *.dSYM
 *.dSYM.zip
+
+# Secrets and local runtime state
+.env
+.env.*
+!.env.example
+AuthKey_*.p8
+internal_test_phones.txt
+
+# Backend local runtime state
+dazi-server/.git/
+dazi-server/.env
+dazi-server/.env.*
+!dazi-server/.env.example
+dazi-server/.venv*/
+dazi-server/venv/
+dazi-server/__pycache__/
+dazi-server/**/__pycache__/
+dazi-server/*.pyc
+dazi-server/**/*.pyc
+dazi-server/.pytest_cache/
+dazi-server/.mypy_cache/
+dazi-server/.ruff_cache/
+dazi-server/certbot/

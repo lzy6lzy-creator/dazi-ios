@@ -58,7 +58,7 @@ rsync -az --delete \
   --exclude '.pytest_cache' \
   --exclude '.mypy_cache' \
   --exclude 'certbot' \
-  /Users/wuxing/Desktop/dazi/dazi-server/ \
+  /Users/wuxing/Desktop/dazi/dazi/dazi-server/ \
   root@47.103.127.95:/opt/dazi-server/
 ```
 
