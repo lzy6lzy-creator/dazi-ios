@@ -247,7 +247,7 @@ struct OnboardingView: View {
 
             Toggle(isOn: $welcomeDisturb) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("欢迎打扰")
+                    Text("对未知惊喜保持开放")
                         .font(.subheadline)
                         .fontWeight(.medium)
                     Text("开启后，即使你没有发布活动，也可能被匹配到")
