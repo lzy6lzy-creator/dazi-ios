@@ -480,13 +480,13 @@ struct MessageBubbleView: View {
                         title: "下限",
                         valueText: "\(range.min) 岁",
                         selection: minAgeBinding(for: question),
-                        bounds: Double(Self.minimumAllowedAge)...Double(max(range.max, Self.minimumAllowedAge))
+                        bounds: Self.ageSliderBounds(lower: Self.minimumAllowedAge, upper: range.max - 1)
                     )
                     ageSliderRow(
                         title: "上限",
                         valueText: "\(range.max) 岁",
                         selection: maxAgeBinding(for: question),
-                        bounds: Double(min(range.min, Self.maximumAllowedAge))...Double(Self.maximumAllowedAge)
+                        bounds: Self.ageSliderBounds(lower: range.min + 1, upper: Self.maximumAllowedAge)
                     )
                 }
                 .padding(.horizontal, 12)
@@ -508,7 +508,7 @@ struct MessageBubbleView: View {
         title: String,
         valueText: String,
         selection: Binding<Double>,
-        bounds: ClosedRange<Double>
+        bounds: ClosedRange<Double>?
     ) -> some View {
         HStack(spacing: 10) {
             Text(title)
@@ -517,9 +517,15 @@ struct MessageBubbleView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 34, alignment: .leading)
 
-            Slider(value: selection, in: bounds, step: 1)
-                .tint(AppTheme.primaryColor)
-                .disabled(message.clarificationSubmitted)
+            if let bounds, bounds.upperBound > bounds.lowerBound {
+                Slider(value: selection, in: bounds, step: 1)
+                    .tint(AppTheme.primaryColor)
+                    .disabled(message.clarificationSubmitted)
+            } else {
+                Capsule()
+                    .fill(Color.secondary.opacity(0.20))
+                    .frame(height: 4)
+            }
 
             Text(valueText)
                 .font(.caption)
@@ -772,23 +778,15 @@ struct MessageBubbleView: View {
         let fallback = defaultAgeRange(for: question)
         let rawMin = Int(minAgeValues[question.id] ?? "") ?? fallback.min
         let rawMax = Int(maxAgeValues[question.id] ?? "") ?? fallback.max
-        let minAge = Self.clampedAge(rawMin)
-        let maxAge = Self.clampedAge(rawMax)
-        if minAge <= maxAge {
-            return (minAge, maxAge)
-        }
-        return (maxAge, minAge)
+        return Self.normalizedAgeRange(min: rawMin, max: rawMax)
     }
 
     private func defaultAgeRange(for question: ClarificationQuestion) -> (min: Int, max: Int) {
-        let radius = selectedAgeRadius(for: question) ?? 5
-        let baseAge = User.currentUser.age ?? 25
-        let minAge = Self.clampedAge(baseAge - radius)
-        let maxAge = Self.clampedAge(baseAge + radius)
-        if minAge <= maxAge {
-            return (minAge, maxAge)
-        }
-        return (maxAge, minAge)
+        let radius = max(selectedAgeRadius(for: question) ?? 5, 1)
+        let baseAge = Self.clampedAge(User.currentUser.age ?? 25)
+        let minAge = max(baseAge - radius, Self.minimumAllowedAge)
+        let maxAge = min(baseAge + radius, Self.maximumAllowedAge)
+        return Self.normalizedAgeRange(min: minAge, max: maxAge)
     }
 
     private func selectedAgeRadius(for question: ClarificationQuestion) -> Int? {
@@ -814,7 +812,8 @@ struct MessageBubbleView: View {
             Double(ageRange(for: question)?.min ?? defaultAgeRange(for: question).min)
         } set: { newValue in
             let currentMax = ageRange(for: question)?.max ?? defaultAgeRange(for: question).max
-            let value = min(Self.clampedAge(Int(newValue.rounded())), currentMax)
+            let upperBound = max(currentMax - 1, Self.minimumAllowedAge)
+            let value = min(Self.clampedAge(Int(newValue.rounded())), upperBound)
             minAgeValues[question.id] = "\(value)"
         }
     }
@@ -824,7 +823,8 @@ struct MessageBubbleView: View {
             Double(ageRange(for: question)?.max ?? defaultAgeRange(for: question).max)
         } set: { newValue in
             let currentMin = ageRange(for: question)?.min ?? defaultAgeRange(for: question).min
-            let value = max(Self.clampedAge(Int(newValue.rounded())), currentMin)
+            let lowerBound = min(currentMin + 1, Self.maximumAllowedAge)
+            let value = max(Self.clampedAge(Int(newValue.rounded())), lowerBound)
             maxAgeValues[question.id] = "\(value)"
         }
     }
@@ -943,6 +943,27 @@ struct MessageBubbleView: View {
 
     private static func clampedAge(_ value: Int) -> Int {
         min(max(value, minimumAllowedAge), maximumAllowedAge)
+    }
+
+    private static func normalizedAgeRange(min rawMin: Int, max rawMax: Int) -> (min: Int, max: Int) {
+        var minAge = clampedAge(rawMin)
+        var maxAge = clampedAge(rawMax)
+        if minAge > maxAge {
+            swap(&minAge, &maxAge)
+        }
+        if minAge == maxAge {
+            if maxAge < maximumAllowedAge {
+                maxAge += 1
+            } else if minAge > minimumAllowedAge {
+                minAge -= 1
+            }
+        }
+        return (minAge, maxAge)
+    }
+
+    private static func ageSliderBounds(lower: Int, upper: Int) -> ClosedRange<Double>? {
+        guard upper > lower else { return nil }
+        return Double(lower)...Double(upper)
     }
 
     private static func ageRadius(from label: String) -> Int? {
