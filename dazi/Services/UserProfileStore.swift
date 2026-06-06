@@ -15,6 +15,9 @@ class UserProfileStore {
         static let userBirthYear = "dazi_user_birth_year"
         static let userBirthDate = "dazi_user_birth_date"
         static let userInterests = "dazi_user_interests"
+        static let userOccupation = "dazi_user_occupation"
+        static let userCustomInterests = "dazi_user_custom_interests"
+        static let userWelcomeDisturb = "dazi_user_welcome_disturb"
         static let agentName = "dazi_agent_name"
         static let agentEmoji = "dazi_agent_emoji"
         static let agentAvatarImageData = "dazi_agent_avatar_image_data"
@@ -42,6 +45,9 @@ class UserProfileStore {
             birthYear: defaults.integer(forKey: Keys.userBirthYear),
             birthDate: defaults.string(forKey: Keys.userBirthDate) ?? "",
             interests: defaults.stringArray(forKey: Keys.userInterests) ?? [],
+            occupation: defaults.string(forKey: Keys.userOccupation) ?? "",
+            customInterests: defaults.string(forKey: Keys.userCustomInterests) ?? "",
+            welcomeDisturb: defaults.bool(forKey: Keys.userWelcomeDisturb),
             agentName: defaults.string(forKey: Keys.agentName) ?? "点点",
             agentEmoji: defaults.string(forKey: Keys.agentEmoji) ?? "🤖",
             agentAvatarImageData: defaults.data(forKey: Keys.agentAvatarImageData),
@@ -61,6 +67,9 @@ class UserProfileStore {
         defaults.set(user.birthYear, forKey: Keys.userBirthYear)
         defaults.set(user.birthDate, forKey: Keys.userBirthDate)
         defaults.set(user.interests, forKey: Keys.userInterests)
+        defaults.set(user.occupation, forKey: Keys.userOccupation)
+        defaults.set(user.customInterests, forKey: Keys.userCustomInterests)
+        defaults.set(user.welcomeDisturb, forKey: Keys.userWelcomeDisturb)
         defaults.set(user.agentName, forKey: Keys.agentName)
         defaults.set(user.agentEmoji, forKey: Keys.agentEmoji)
         defaults.set(user.agentAvatarImageData, forKey: Keys.agentAvatarImageData)
@@ -72,7 +81,8 @@ class UserProfileStore {
             Keys.isRegistered, Keys.userId, Keys.userName, Keys.userAvatarEmoji,
             Keys.userAvatarImageData,
             Keys.userCity, Keys.userBio, Keys.userGender, Keys.userBirthYear, Keys.userBirthDate,
-            Keys.userInterests, Keys.agentName, Keys.agentEmoji,
+            Keys.userInterests, Keys.userOccupation, Keys.userCustomInterests, Keys.userWelcomeDisturb,
+            Keys.agentName, Keys.agentEmoji,
             Keys.agentAvatarImageData, Keys.agentPersonality,
         ]
         for key in allKeys {

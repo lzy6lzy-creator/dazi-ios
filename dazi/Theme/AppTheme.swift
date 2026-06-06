@@ -83,6 +83,17 @@ enum AppTheme {
     }
 }
 
+enum AppLocale {
+    static let chinese = Locale(identifier: "zh_CN")
+
+    static var chineseCalendar: Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.locale = chinese
+        calendar.firstWeekday = 2
+        return calendar
+    }
+}
+
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

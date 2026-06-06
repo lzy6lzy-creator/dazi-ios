@@ -34,10 +34,12 @@ struct ClarificationOption: Identifiable, Codable, Sendable {
 struct ClarificationOptionValue: Codable, Sendable {
     let startTime: String?
     let endTime: String?
+    let range: Int?
 
     enum CodingKeys: String, CodingKey {
         case startTime = "start_time"
         case endTime = "end_time"
+        case range
     }
 }
 

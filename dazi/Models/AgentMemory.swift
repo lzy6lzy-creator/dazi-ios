@@ -61,6 +61,6 @@ struct AgentMemory: Identifiable, Codable, Sendable {
         self.occurrenceCount = api.occurrenceCount ?? 1
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        self.timestamp = formatter.date(from: api.createdAt) ?? .now
+        self.timestamp = api.createdAt.flatMap { formatter.date(from: $0) } ?? .now
     }
 }

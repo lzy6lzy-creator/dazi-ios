@@ -276,6 +276,10 @@ struct MessageBubbleView: View {
 
             if isTimeQuestion(question) {
                 timeRangeFields(question)
+            } else if isAgeQuestion(question) {
+                ageRangeSliderFields(question)
+            } else if isGenderQuestion(question) {
+                horizontalOptionScroller(question, showsCustomInput: false)
             } else {
                 FlowLayout(spacing: 8) {
                     ForEach(question.options) { option in
@@ -287,23 +291,22 @@ struct MessageBubbleView: View {
                 }
             }
 
-            if !isTimeQuestion(question), expandedCustomQuestionIds.contains(question.id) {
-                if question.type == "age_range" {
-                    ageCustomFields(question)
-                } else {
-                    TextField(customInputPlaceholder(for: question), text: binding(for: question.id, in: $customValues))
-                        .font(.subheadline)
-                        .textFieldStyle(.plain)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 10)
-                        .frame(minHeight: 44)
-                        .background(Color(.secondarySystemGroupedBackground))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: AppTheme.radiusSM)
-                                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
-                }
+            if !isTimeQuestion(question),
+               !isAgeQuestion(question),
+               !isGenderQuestion(question),
+               expandedCustomQuestionIds.contains(question.id) {
+                TextField(customInputPlaceholder(for: question), text: binding(for: question.id, in: $customValues))
+                    .font(.subheadline)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(minHeight: 44)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                            .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                    )
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
             }
         }
         .padding(.horizontal, 10)
@@ -343,6 +346,23 @@ struct MessageBubbleView: View {
         .disabled(message.clarificationSubmitted)
     }
 
+    private func horizontalOptionScroller(
+        _ question: ClarificationQuestion,
+        showsCustomInput: Bool = true
+    ) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(question.options) { option in
+                    clarificationOptionButton(question: question, option: option)
+                }
+                if showsCustomInput && question.allowCustom {
+                    customInputToggleButton(question)
+                }
+            }
+            .padding(.vertical, 1)
+        }
+    }
+
     private func timeRangeFields(_ question: ClarificationQuestion) -> some View {
         VStack(spacing: 8) {
             timePickerBox(
@@ -377,6 +397,8 @@ struct MessageBubbleView: View {
             )
             .labelsHidden()
             .datePickerStyle(.compact)
+            .environment(\.locale, AppLocale.chinese)
+            .environment(\.calendar, AppLocale.chineseCalendar)
             .disabled(message.clarificationSubmitted)
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -424,30 +446,87 @@ struct MessageBubbleView: View {
         .disabled(message.clarificationSubmitted)
     }
 
-    private func ageCustomFields(_ question: ClarificationQuestion) -> some View {
-        HStack(spacing: 8) {
-            TextField("最小", text: binding(for: question.id, in: $minAgeValues))
-                .keyboardType(.numberPad)
-            Text("到")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            TextField("最大", text: binding(for: question.id, in: $maxAgeValues))
-                .keyboardType(.numberPad)
-            Text("岁")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+    private func ageRangeSliderFields(_ question: ClarificationQuestion) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            horizontalOptionScroller(question, showsCustomInput: false)
+
+            if isAgeUnlimitedSelected(question) {
+                Text("不限年龄")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color(.secondarySystemGroupedBackground))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+            } else {
+                let range = ageRange(for: question) ?? defaultAgeRange(for: question)
+                HStack {
+                    Text("年龄范围")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(range.min)-\(range.max) 岁")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(AppTheme.primaryColor)
+                }
+                .padding(.horizontal, 2)
+
+                VStack(spacing: 10) {
+                    ageSliderRow(
+                        title: "下限",
+                        valueText: "\(range.min) 岁",
+                        selection: minAgeBinding(for: question),
+                        bounds: Double(Self.minimumAllowedAge)...Double(max(range.max, Self.minimumAllowedAge))
+                    )
+                    ageSliderRow(
+                        title: "上限",
+                        valueText: "\(range.max) 岁",
+                        selection: maxAgeBinding(for: question),
+                        bounds: Double(min(range.min, Self.maximumAllowedAge))...Double(Self.maximumAllowedAge)
+                    )
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Color(.secondarySystemGroupedBackground))
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                        .stroke(AppTheme.primaryColor.opacity(0.18), lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+            }
         }
-        .font(.subheadline)
-        .textFieldStyle(.plain)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 9)
-        .frame(minHeight: 44)
-        .background(Color(.secondarySystemGroupedBackground))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.radiusSM)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+        .onAppear {
+            seedDefaultAgeValues(for: question)
+        }
+    }
+
+    private func ageSliderRow(
+        title: String,
+        valueText: String,
+        selection: Binding<Double>,
+        bounds: ClosedRange<Double>
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: 34, alignment: .leading)
+
+            Slider(value: selection, in: bounds, step: 1)
+                .tint(AppTheme.primaryColor)
+                .disabled(message.clarificationSubmitted)
+
+            Text(valueText)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.primary)
+                .frame(width: 44, alignment: .trailing)
+        }
     }
 
     private func binding(
@@ -472,6 +551,9 @@ struct MessageBubbleView: View {
             }
             if isTimeQuestion(question) {
                 seedDefaultTimeValues(for: question)
+            }
+            if isAgeQuestion(question) {
+                seedDefaultAgeValues(for: question)
             }
         }
     }
@@ -514,6 +596,14 @@ struct MessageBubbleView: View {
         if isTimeQuestion(question) {
             seedDefaultTimeValues(for: question, force: true)
         }
+        if isAgeQuestion(question) {
+            if isAgeUnlimitedSelected(question) {
+                minAgeValues[question.id] = nil
+                maxAgeValues[question.id] = nil
+            } else {
+                seedDefaultAgeValues(for: question, force: true)
+            }
+        }
     }
 
     private var canSubmitClarification: Bool {
@@ -526,11 +616,11 @@ struct MessageBubbleView: View {
     }
 
     private func hasAnswer(for question: ClarificationQuestion) -> Bool {
+        if isAgeQuestion(question) {
+            return isAgeUnlimitedSelected(question) || ageRange(for: question) != nil
+        }
         if selectedOptionIds[question.id]?.isEmpty == false {
             return true
-        }
-        if question.type == "age_range" {
-            return Int(minAgeValues[question.id] ?? "") != nil && Int(maxAgeValues[question.id] ?? "") != nil
         }
         if isTimeQuestion(question) {
             return timeRange(for: question) != nil
@@ -543,9 +633,9 @@ struct MessageBubbleView: View {
         if ["event", "activity", "activity_type"].contains(id) { return "活动" }
         if id == "time" { return "时间" }
         if isLocationQuestion(question) { return "地点" }
-        if ["gender", "sex", "partner_gender"].contains(id) { return "搭子偏好" }
+        if isGenderQuestion(question) { return "搭子偏好" }
         if ["preferences", "preference"].contains(id) { return "特殊偏好" }
-        if id == "age" { return "年龄" }
+        if isAgeQuestion(question) { return "年龄" }
         if let category = question.category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return category
         }
@@ -554,6 +644,15 @@ struct MessageBubbleView: View {
 
     private func isTimeQuestion(_ question: ClarificationQuestion) -> Bool {
         question.id.lowercased() == "time"
+    }
+
+    private func isAgeQuestion(_ question: ClarificationQuestion) -> Bool {
+        let id = question.id.lowercased()
+        return question.type == "age_range" || ["age", "age_range", "partner_age"].contains(id)
+    }
+
+    private func isGenderQuestion(_ question: ClarificationQuestion) -> Bool {
+        ["gender", "sex", "partner_gender"].contains(question.id.lowercased())
     }
 
     private func shouldShowQuestionTitle(_ question: ClarificationQuestion) -> Bool {
@@ -568,6 +667,9 @@ struct MessageBubbleView: View {
             "gender",
             "sex",
             "partner_gender",
+            "age",
+            "age_range",
+            "partner_age",
             "preferences",
             "preference",
         ]
@@ -654,6 +756,91 @@ struct MessageBubbleView: View {
         return nil
     }
 
+    private func seedDefaultAgeValues(for question: ClarificationQuestion, force: Bool = false) {
+        guard isAgeQuestion(question), !isAgeUnlimitedSelected(question) else { return }
+        let range = defaultAgeRange(for: question)
+        if force || minAgeValues[question.id] == nil {
+            minAgeValues[question.id] = "\(range.min)"
+        }
+        if force || maxAgeValues[question.id] == nil {
+            maxAgeValues[question.id] = "\(range.max)"
+        }
+    }
+
+    private func ageRange(for question: ClarificationQuestion) -> (min: Int, max: Int)? {
+        guard isAgeQuestion(question), !isAgeUnlimitedSelected(question) else { return nil }
+        let fallback = defaultAgeRange(for: question)
+        let rawMin = Int(minAgeValues[question.id] ?? "") ?? fallback.min
+        let rawMax = Int(maxAgeValues[question.id] ?? "") ?? fallback.max
+        let minAge = Self.clampedAge(rawMin)
+        let maxAge = Self.clampedAge(rawMax)
+        if minAge <= maxAge {
+            return (minAge, maxAge)
+        }
+        return (maxAge, minAge)
+    }
+
+    private func defaultAgeRange(for question: ClarificationQuestion) -> (min: Int, max: Int) {
+        let radius = selectedAgeRadius(for: question) ?? 5
+        let baseAge = User.currentUser.age ?? 25
+        let minAge = Self.clampedAge(baseAge - radius)
+        let maxAge = Self.clampedAge(baseAge + radius)
+        if minAge <= maxAge {
+            return (minAge, maxAge)
+        }
+        return (maxAge, minAge)
+    }
+
+    private func selectedAgeRadius(for question: ClarificationQuestion) -> Int? {
+        let selectedIds = selectedOptionIds[question.id] ?? Set(question.defaultOptionIds)
+        let selectedOptions = question.options.filter { selectedIds.contains($0.id) }
+        let candidateOptions = selectedOptions.isEmpty ? question.options : selectedOptions
+        for option in candidateOptions {
+            if isUnlimitedAgeOption(option) {
+                continue
+            }
+            if let range = option.value?.range, range > 0 {
+                return range
+            }
+            if let range = Self.ageRadius(from: option.label) {
+                return range
+            }
+        }
+        return nil
+    }
+
+    private func minAgeBinding(for question: ClarificationQuestion) -> Binding<Double> {
+        Binding {
+            Double(ageRange(for: question)?.min ?? defaultAgeRange(for: question).min)
+        } set: { newValue in
+            let currentMax = ageRange(for: question)?.max ?? defaultAgeRange(for: question).max
+            let value = min(Self.clampedAge(Int(newValue.rounded())), currentMax)
+            minAgeValues[question.id] = "\(value)"
+        }
+    }
+
+    private func maxAgeBinding(for question: ClarificationQuestion) -> Binding<Double> {
+        Binding {
+            Double(ageRange(for: question)?.max ?? defaultAgeRange(for: question).max)
+        } set: { newValue in
+            let currentMin = ageRange(for: question)?.min ?? defaultAgeRange(for: question).min
+            let value = max(Self.clampedAge(Int(newValue.rounded())), currentMin)
+            maxAgeValues[question.id] = "\(value)"
+        }
+    }
+
+    private func isAgeUnlimitedSelected(_ question: ClarificationQuestion) -> Bool {
+        let selectedIds = selectedOptionIds[question.id] ?? Set(question.defaultOptionIds)
+        return question.options.contains { option in
+            selectedIds.contains(option.id) && isUnlimitedAgeOption(option)
+        }
+    }
+
+    private func isUnlimitedAgeOption(_ option: ClarificationOption) -> Bool {
+        let text = "\(option.id) \(option.label)".lowercased()
+        return text.contains("unlimited") || text.contains("any") || option.label.contains("不限")
+    }
+
     private func submitClarification() {
         let answers = message.clarificationQuestions.compactMap { answer(for: $0) }
         guard !answers.isEmpty else { return }
@@ -672,17 +859,18 @@ struct MessageBubbleView: View {
                 ]
             )
         }
-        if question.type == "age_range" {
-            let minAge = Int(minAgeValues[question.id] ?? "")
-            let maxAge = Int(maxAgeValues[question.id] ?? "")
-            if optionIds.isEmpty && (minAge == nil || maxAge == nil) {
+        if isAgeQuestion(question) {
+            if isAgeUnlimitedSelected(question) {
+                return ClarificationAnswerInput(questionId: question.id, optionIds: optionIds)
+            }
+            guard let range = ageRange(for: question) else {
                 return nil
             }
             return ClarificationAnswerInput(
                 questionId: question.id,
                 optionIds: optionIds,
-                minAge: minAge,
-                maxAge: maxAge
+                minAge: range.min,
+                maxAge: range.max
             )
         }
 
@@ -728,6 +916,9 @@ struct MessageBubbleView: View {
         )
     }
 
+    private static let minimumAllowedAge = 18
+    private static let maximumAllowedAge = 80
+
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
@@ -748,6 +939,15 @@ struct MessageBubbleView: View {
 
     private static func parseClarificationDate(_ value: String) -> Date? {
         isoFormatter.date(from: value) ?? fractionalIsoFormatter.date(from: value)
+    }
+
+    private static func clampedAge(_ value: Int) -> Int {
+        min(max(value, minimumAllowedAge), maximumAllowedAge)
+    }
+
+    private static func ageRadius(from label: String) -> Int? {
+        let parts = label.split { !$0.isNumber }
+        return parts.compactMap { Int($0) }.first
     }
 
     private var timeString: String {

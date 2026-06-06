@@ -774,6 +774,9 @@ class DataStore {
                 await self?.fetchPassiveMatchRequestsFromServer()
             }
         }
+        ws.onMemoryUpdated = { [weak self] action, memory in
+            self?.handleWSMemoryUpdated(action: action, memory: memory)
+        }
         ws.connect()
     }
 
@@ -881,6 +884,18 @@ class DataStore {
         if status == "matched" || status == "active" {
             Task { await fetchChatRoomsFromServer() }
         }
+    }
+
+    private func handleWSMemoryUpdated(action: String, memory apiMemory: APIMemoryResponse) {
+        let memory = AgentMemory(from: apiMemory)
+        if let index = memories.firstIndex(where: { $0.id == memory.id }) {
+            memories[index] = memory
+        } else {
+            memories.insert(memory, at: 0)
+        }
+        let countSuffix = memory.occurrenceCount > 1 ? " · 第 \(memory.occurrenceCount) 次" : ""
+        let verb = action == "create" ? "新增记忆" : "已更新记忆"
+        showToast("\(verb)：\(memory.content)\(countSuffix)", type: .info)
     }
 
     // MARK: - Server Data Sync

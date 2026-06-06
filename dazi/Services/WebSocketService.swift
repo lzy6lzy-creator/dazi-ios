@@ -18,6 +18,8 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
     var onRoomCreated: ((_ roomData: [String: Any]) -> Void)?
     /// 收到被动匹配邀请
     var onMatchRequestCreated: ((_ requestId: String) -> Void)?
+    /// 收到记忆更新
+    var onMemoryUpdated: ((_ action: String, _ memory: APIMemoryResponse) -> Void)?
 
     private override init() {
         super.init()
@@ -138,6 +140,16 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
             if let requestId = json["request_id"] as? String {
                 DispatchQueue.main.async {
                     self.onMatchRequestCreated?(requestId)
+                }
+            }
+        case "memory_updated":
+            if let action = json["action"] as? String,
+               let memoryDict = json["memory"] as? [String: Any],
+               let data = try? JSONSerialization.data(withJSONObject: memoryDict) {
+                Task { @MainActor in
+                    if let memory = try? JSONDecoder().decode(APIMemoryResponse.self, from: data) {
+                        self.onMemoryUpdated?(action, memory)
+                    }
                 }
             }
         default:

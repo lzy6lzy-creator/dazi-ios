@@ -204,10 +204,12 @@ struct OnboardingView: View {
             DatePicker("出生日期", selection: $birthDate, in: birthDateRange, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
-            .frame(height: 150)
-            .onChange(of: birthDate) {
-                birthYear = selectedBirthYear
-            }
+                .environment(\.locale, AppLocale.chinese)
+                .environment(\.calendar, AppLocale.chineseCalendar)
+                .frame(height: 150)
+                .onChange(of: birthDate) {
+                    birthYear = selectedBirthYear
+                }
         }
     }
 
