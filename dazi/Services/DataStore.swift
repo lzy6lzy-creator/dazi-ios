@@ -13,6 +13,7 @@ class DataStore {
     var selectedTab: Int = 0
     var unreadChatCount: Int = 0
     var pendingChatRoomId: String?
+    var galleryItems: [GalleryItem] = []
 
     // MARK: - Toast
     var currentToast: ToastItem?
@@ -21,6 +22,7 @@ class DataStore {
 
     let locationManager = LocationManager()
     private let profileStore = UserProfileStore()
+    private let galleryStore = GalleryStore()
     private let api = APIClient.shared
     private let ws = WebSocketService.shared
     private let notifications = NotificationService.shared
@@ -57,6 +59,8 @@ class DataStore {
         unreadChatCount = 0
         pendingChatRoomId = nil
         notifiedRoomCreationIds = []
+        galleryItems = []
+        galleryStore.clear()
         notifications.updateBadge(0)
     }
 
@@ -507,6 +511,7 @@ class DataStore {
 
     func loadInitialData() {
         agentMessages = [agentGreetingMessage()]
+        galleryItems = galleryStore.loadItems()
         notifications.requestAuthorizationIfNeeded()
         notifications.registerStoredRemoteDeviceTokenIfAvailable()
 
@@ -1031,6 +1036,29 @@ class DataStore {
                 }
             }
         }
+    }
+
+    // MARK: - Gallery
+
+    func addGalleryItem(_ item: GalleryItem) {
+        galleryItems.append(item)
+        galleryStore.saveItems(galleryItems)
+    }
+
+    func removeGalleryItem(id: String) {
+        galleryItems.removeAll { $0.id == id }
+        galleryStore.saveItems(galleryItems)
+    }
+
+    func updateGalleryItem(_ item: GalleryItem) {
+        if let idx = galleryItems.firstIndex(where: { $0.id == item.id }) {
+            galleryItems[idx] = item
+            galleryStore.saveItems(galleryItems)
+        }
+    }
+
+    func saveGalleryItems() {
+        galleryStore.saveItems(galleryItems)
     }
 
     // MARK: - Polling

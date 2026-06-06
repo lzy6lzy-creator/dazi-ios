@@ -5,6 +5,7 @@ struct ChatRoomDetailView: View {
     let roomId: String
     @State private var inputText = ""
     @State private var showMembers = false
+    @State private var showPartnerProfile = false
     @State private var showAgentDialogue = false
     @State private var pollingTask: Task<Void, Never>?
     @State private var voteStatus: VoteStatus?
@@ -49,6 +50,17 @@ struct ChatRoomDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
+                    if let partner = room?.participants.first(where: { !$0.isAgent && $0.id != dataStore.currentUser.id }) {
+                        Button { showPartnerProfile = true } label: {
+                            AvatarView(
+                                imageData: partner.avatarImageData,
+                                emoji: partner.avatarEmoji,
+                                size: 28,
+                                backgroundColor: AppTheme.primaryColor.opacity(0.1)
+                            )
+                        }
+                    }
+
                     Button {
                         showMembers = true
                     } label: {
@@ -56,6 +68,11 @@ struct ChatRoomDetailView: View {
                             .font(.subheadline)
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showPartnerProfile) {
+            if let partner = room?.participants.first(where: { !$0.isAgent && $0.id != dataStore.currentUser.id }) {
+                PartnerProfileView(partner: partner)
             }
         }
         .sheet(isPresented: $showMembers) {

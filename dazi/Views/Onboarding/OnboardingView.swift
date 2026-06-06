@@ -173,7 +173,7 @@ struct OnboardingView: View {
             HStack(spacing: 16) {
                 genderButton(label: "男", value: "男", icon: "figure.stand")
                 genderButton(label: "女", value: "女", icon: "figure.stand.dress")
-                genderButton(label: "保密", value: "保密", icon: "questionmark")
+                genderButton(label: "暂时保密", value: "暂时保密", icon: "questionmark")
             }
         }
     }

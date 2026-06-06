@@ -7,6 +7,7 @@ struct ProfileView: View {
     @State private var showEditAgent = false
     @State private var editingMemory: AgentMemory?
     @State private var editMemoryText = ""
+    @State private var showEditGallery = false
 
     var body: some View {
         NavigationStack {
@@ -15,6 +16,7 @@ struct ProfileView: View {
                     profileHeader
                     agentCard
                     statsCard
+                    gallerySection
                     memorySection
                     aboutSection
                     logoutSection
@@ -23,6 +25,18 @@ struct ProfileView: View {
             }
             .background(AppTheme.backgroundColor)
             .navigationTitle("我的")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showEditProfile = true } label: {
+                        Image(systemName: "pencil.line")
+                            .font(.subheadline)
+                    }
+                }
+            }
+            .sheet(isPresented: $showEditGallery) {
+                EditGalleryView()
+                    .environment(dataStore)
+            }
             .sheet(isPresented: $showEditProfile) {
                 EditProfileView()
                     .environment(dataStore)
@@ -46,21 +60,12 @@ struct ProfileView: View {
 
     private var profileHeader: some View {
         VStack(spacing: 12) {
-            Button { showEditProfile = true } label: {
-                ZStack(alignment: .bottomTrailing) {
-                    AvatarView(
-                        imageData: dataStore.currentUser.avatarImageData,
-                        emoji: dataStore.currentUser.avatarEmoji,
-                        size: 80,
-                        backgroundColor: AppTheme.primaryColor.opacity(0.1)
-                    )
-
-                    Image(systemName: "pencil.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundStyle(AppTheme.primaryColor)
-                        .background(Circle().fill(.white).frame(width: 20, height: 20))
-                }
-            }
+            AvatarView(
+                imageData: dataStore.currentUser.avatarImageData,
+                emoji: dataStore.currentUser.avatarEmoji,
+                size: 80,
+                backgroundColor: AppTheme.primaryColor.opacity(0.1)
+            )
 
             Text(dataStore.currentUser.name)
                 .font(.title2)
@@ -180,6 +185,94 @@ struct ProfileView: View {
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+    }
+
+    private var gallerySection: some View {
+        let displayedItems = dataStore.galleryItems.filter(\.isDisplayed)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .foregroundStyle(AppTheme.primaryColor)
+                Text("过往事件相册")
+                    .font(.headline)
+                Spacer()
+                Button { showEditGallery = true } label: {
+                    Text("编辑")
+                        .font(.caption)
+                        .foregroundStyle(AppTheme.primaryColor)
+                }
+            }
+
+            if displayedItems.isEmpty {
+                VStack(spacing: AppTheme.spacingMD) {
+                    Image(systemName: "photo.stack")
+                        .font(.system(size: 36))
+                        .foregroundStyle(AppTheme.primaryColor.opacity(0.4))
+                    Text("已完成的活动会放入记忆相册")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, AppTheme.spacingXL)
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(displayedItems) { item in
+                            galleryCard(item)
+                        }
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+    }
+
+    private func galleryCard(_ item: GalleryItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let photoData = item.photos.first, let uiImage = UIImage(data: photoData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 140, height: 90)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+            } else {
+                RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                    .fill(AppTheme.activityTypeColor(item.activityType).opacity(0.12))
+                    .frame(width: 140, height: 90)
+                    .overlay {
+                        Image(systemName: AppTheme.activityTypeIcon(item.activityType))
+                            .font(.title2)
+                            .foregroundStyle(AppTheme.activityTypeColor(item.activityType))
+                    }
+            }
+
+            Text(item.title)
+                .font(.caption)
+                .fontWeight(.medium)
+                .lineLimit(1)
+
+            if let startTime = item.startTime {
+                Text(startTime.formatted(.dateTime.month().day()))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !item.location.isEmpty {
+                HStack(spacing: 2) {
+                    Image(systemName: "mappin")
+                        .font(.system(size: 8))
+                    Text(item.location)
+                        .lineLimit(1)
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .frame(width: 140)
     }
 
     private func statItem(value: String, label: String, icon: String) -> some View {
@@ -386,6 +479,201 @@ struct ProfileView: View {
     }
 }
 
+// MARK: - Edit Gallery Sheet
+
+struct EditGalleryView: View {
+    @Environment(DataStore.self) private var dataStore
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                let completedEvents = dataStore.events.filter { $0.status == .completed }
+                if completedEvents.isEmpty {
+                    ContentUnavailableView(
+                        "暂无已完成活动",
+                        systemImage: "calendar.badge.checkmark",
+                        description: Text("完成活动后可在此管理相册")
+                    )
+                } else {
+                    ForEach(completedEvents) { event in
+                        GalleryEventRow(event: event)
+                            .environment(dataStore)
+                    }
+                }
+            }
+            .navigationTitle("管理相册")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
+        }
+    }
+}
+
+private struct GalleryEventRow: View {
+    let event: Event
+    @Environment(DataStore.self) private var dataStore
+    @State private var selectedPhotos: [PhotosPickerItem] = []
+
+    private var galleryItem: GalleryItem? {
+        dataStore.galleryItems.first(where: { $0.eventId == event.id })
+    }
+
+    private var isDisplayed: Bool {
+        galleryItem?.isDisplayed ?? false
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: AppTheme.activityTypeIcon(event.activityType))
+                    .font(.title3)
+                    .foregroundStyle(AppTheme.activityTypeColor(event.activityType))
+                    .frame(width: 32)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(event.title)
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                    if let startTime = event.startTime {
+                        Text(startTime.formatted(.dateTime.year().month().day()))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+
+                Toggle("", isOn: Binding(
+                    get: { isDisplayed },
+                    set: { newValue in toggleDisplay(newValue) }
+                ))
+                .labelsHidden()
+                .tint(AppTheme.primaryColor)
+            }
+
+            if isDisplayed, let item = galleryItem {
+                photoSection(item)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func photoSection(_ item: GalleryItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                ForEach(Array(item.photos.enumerated()), id: \.offset) { index, photoData in
+                    if let uiImage = UIImage(data: photoData) {
+                        ZStack(alignment: .topTrailing) {
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 70, height: 70)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+
+                            Button {
+                                removePhoto(at: index, from: item)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.white)
+                                    .shadow(radius: 2)
+                            }
+                            .offset(x: 4, y: -4)
+                        }
+                    }
+                }
+
+                if item.photos.count < 3 {
+                    PhotosPicker(
+                        selection: $selectedPhotos,
+                        maxSelectionCount: 3 - item.photos.count,
+                        matching: .images
+                    ) {
+                        VStack(spacing: 4) {
+                            Image(systemName: "plus")
+                                .font(.title3)
+                            Text("添加")
+                                .font(.caption2)
+                        }
+                        .foregroundStyle(AppTheme.primaryColor)
+                        .frame(width: 70, height: 70)
+                        .background(AppTheme.primaryColor.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .onChange(of: selectedPhotos) { _, newValue in
+                        Task { await loadPhotos(newValue, for: item) }
+                    }
+                }
+            }
+
+            Text("最多 3 张照片")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private func toggleDisplay(_ show: Bool) {
+        if show {
+            if galleryItem == nil {
+                let newItem = GalleryItem(from: event)
+                dataStore.addGalleryItem(newItem)
+            } else {
+                var updated = galleryItem!
+                updated.isDisplayed = true
+                dataStore.updateGalleryItem(updated)
+            }
+        } else if var existing = galleryItem {
+            existing.isDisplayed = false
+            dataStore.updateGalleryItem(existing)
+        }
+    }
+
+    private func removePhoto(at index: Int, from item: GalleryItem) {
+        var updated = item
+        updated.photos.remove(at: index)
+        dataStore.updateGalleryItem(updated)
+    }
+
+    private func loadPhotos(_ pickerItems: [PhotosPickerItem], for item: GalleryItem) async {
+        var updated = item
+        for pickerItem in pickerItems {
+            guard updated.photos.count < 3 else { break }
+            if let data = try? await pickerItem.loadTransferable(type: Data.self),
+               let uiImage = UIImage(data: data),
+               let compressed = compressImage(uiImage) {
+                updated.photos.append(compressed)
+            }
+        }
+        await MainActor.run {
+            dataStore.updateGalleryItem(updated)
+            selectedPhotos = []
+        }
+    }
+
+    private func compressImage(_ image: UIImage) -> Data? {
+        let maxDimension: CGFloat = 600
+        let size = image.size
+        let scale: CGFloat
+        if size.width > maxDimension || size.height > maxDimension {
+            scale = maxDimension / max(size.width, size.height)
+        } else {
+            scale = 1.0
+        }
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+        return resized.jpegData(compressionQuality: 0.6)
+    }
+}
+
 private struct EditMemoryView: View {
     let memory: AgentMemory
     @Binding var text: String
@@ -440,7 +728,7 @@ struct EditProfileView: View {
         "🌟", "🌈", "🔥", "💎", "🎵", "🎮",
     ]
 
-    private static let genderOptions = ["男", "女", "保密"]
+    private static let genderOptions = ["男", "女", "暂时保密"]
     private static let interestOptions = [
         "电影", "徒步", "美食", "看展", "咖啡",
         "桌游", "摄影", "演出", "运动", "阅读",
@@ -549,7 +837,7 @@ struct EditProfileView: View {
                 avatarEmoji = dataStore.currentUser.avatarEmoji
                 avatarImageData = dataStore.currentUser.avatarImageData
                 name = dataStore.currentUser.name
-                gender = dataStore.currentUser.gender.isEmpty ? "保密" : dataStore.currentUser.gender
+                gender = dataStore.currentUser.gender.isEmpty ? "暂时保密" : dataStore.currentUser.gender
                 birthDate = Self.parseBirthDate(dataStore.currentUser.birthDate) ?? Self.defaultBirthDate
                 city = dataStore.currentUser.city
                 occupation = dataStore.currentUser.occupation

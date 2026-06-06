@@ -812,6 +812,10 @@ final class APIClient {
     func fetchVoteStatus(roomId: String) async throws -> VoteStatus {
         try await request(method: "GET", path: "/api/v1/chat/rooms/\(roomId)/vote-status")
     }
+
+    func getUserProfile(userId: String) async throws -> APIUserResponse {
+        try await request(method: "GET", path: "/api/v1/users/\(userId)/profile")
+    }
 }
 
 // MARK: - Vote Status
