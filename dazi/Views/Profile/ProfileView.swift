@@ -302,8 +302,6 @@ struct ProfileView: View {
             VStack(spacing: 0) {
                 aboutRow(icon: "info.circle", title: "版本", value: "1.0 MVP")
                 Divider().padding(.leading, 40)
-                aboutRow(icon: "sparkles", title: "AI模型", value: "Kimi (kimi-k2.5)")
-                Divider().padding(.leading, 40)
                 aboutRow(icon: "shield", title: "隐私", value: "数据加密传输至服务器")
             }
         }
@@ -427,13 +425,52 @@ struct EditProfileView: View {
     @State private var avatarEmoji = ""
     @State private var avatarImageData: Data?
     @State private var name = ""
+    @State private var gender = ""
+    @State private var birthDate = EditProfileView.defaultBirthDate
+    @State private var city = ""
+    @State private var occupation = ""
+    @State private var selectedInterests: Set<String> = []
+    @State private var customInterests = ""
+    @State private var welcomeDisturb = false
     @State private var bio = ""
 
-    private let avatarOptions = [
+    private static let avatarOptions = [
         "😊", "😎", "🤗", "🥰", "😄", "🤓",
         "🦊", "🐱", "🐶", "🐼", "🦁", "🐨",
         "🌟", "🌈", "🔥", "💎", "🎵", "🎮",
     ]
+
+    private static let genderOptions = ["男", "女", "保密"]
+    private static let interestOptions = [
+        "电影", "徒步", "美食", "看展", "咖啡",
+        "桌游", "摄影", "演出", "运动", "阅读",
+        "旅行", "音乐", "烹饪", "骑行", "瑜伽",
+    ]
+    private static let defaultBirthDate: Date = {
+        AppLocale.chineseCalendar.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? .now
+    }()
+    private static let birthDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
+
+    private var birthDateRange: ClosedRange<Date> {
+        let calendar = AppLocale.chineseCalendar
+        let start = calendar.date(from: DateComponents(year: 1970, month: 1, day: 1)) ?? .distantPast
+        let end = calendar.date(from: DateComponents(year: 2010, month: 12, day: 31)) ?? .now
+        return start...end
+    }
+
+    private var birthDateString: String {
+        Self.birthDateFormatter.string(from: birthDate)
+    }
+
+    private var birthYear: Int {
+        AppLocale.chineseCalendar.component(.year, from: birthDate)
+    }
 
     var body: some View {
         NavigationStack {
@@ -442,7 +479,7 @@ struct EditProfileView: View {
                     AvatarPickerView(
                         imageData: $avatarImageData,
                         emoji: $avatarEmoji,
-                        emojiOptions: avatarOptions,
+                        emojiOptions: Self.avatarOptions,
                         size: 88,
                         accentColor: AppTheme.primaryColor
                     )
@@ -451,6 +488,46 @@ struct EditProfileView: View {
 
                 Section("昵称") {
                     TextField("昵称", text: $name)
+                }
+
+                Section("基础资料") {
+                    Picker("性别", selection: $gender) {
+                        ForEach(Self.genderOptions, id: \.self) { option in
+                            Text(option).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    DatePicker("出生日期", selection: $birthDate, in: birthDateRange, displayedComponents: .date)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .environment(\.locale, AppLocale.chinese)
+                        .environment(\.calendar, AppLocale.chineseCalendar)
+                        .frame(height: 150)
+
+                    TextField("城市或常驻地点", text: $city)
+                    TextField("职业", text: $occupation)
+                }
+
+                Section("兴趣") {
+                    FlowLayout(spacing: 8) {
+                        ForEach(Self.interestOptions, id: \.self) { interest in
+                            interestChip(interest)
+                        }
+                    }
+                    .listRowBackground(Color.clear)
+
+                    TextField("补充其他爱好", text: $customInterests)
+
+                    Toggle(isOn: $welcomeDisturb) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("欢迎打扰")
+                            Text("开启后，即使你没有发布活动，也可能被匹配到")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tint(AppTheme.primaryColor)
                 }
 
                 Section("简介") {
@@ -472,31 +549,90 @@ struct EditProfileView: View {
                 avatarEmoji = dataStore.currentUser.avatarEmoji
                 avatarImageData = dataStore.currentUser.avatarImageData
                 name = dataStore.currentUser.name
+                gender = dataStore.currentUser.gender.isEmpty ? "保密" : dataStore.currentUser.gender
+                birthDate = Self.parseBirthDate(dataStore.currentUser.birthDate) ?? Self.defaultBirthDate
+                city = dataStore.currentUser.city
+                occupation = dataStore.currentUser.occupation
+                selectedInterests = Set(dataStore.currentUser.interests)
+                customInterests = dataStore.currentUser.customInterests
+                welcomeDisturb = dataStore.currentUser.welcomeDisturb
                 bio = dataStore.currentUser.bio
             }
         }
     }
 
+    private func interestChip(_ interest: String) -> some View {
+        let isSelected = selectedInterests.contains(interest)
+        return Button {
+            if isSelected {
+                selectedInterests.remove(interest)
+            } else {
+                selectedInterests.insert(interest)
+            }
+        } label: {
+            Text(interest)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(isSelected ? .white : .primary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(isSelected ? AppTheme.primaryColor : Color(.systemGray6))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+    }
+
     private func save() {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
+        let trimmedCity = city.trimmingCharacters(in: .whitespaces)
+        let trimmedOccupation = occupation.trimmingCharacters(in: .whitespaces)
+        let trimmedCustomInterests = customInterests.trimmingCharacters(in: .whitespaces)
+        let interests = Array(selectedInterests).sorted()
         dataStore.currentUser.avatarEmoji = avatarEmoji
         dataStore.currentUser.avatarImageData = avatarImageData
         dataStore.currentUser.name = trimmedName.isEmpty ? dataStore.currentUser.name : trimmedName
+        dataStore.currentUser.gender = gender
+        dataStore.currentUser.birthYear = birthYear
+        dataStore.currentUser.birthDate = birthDateString
+        dataStore.currentUser.city = trimmedCity
+        dataStore.currentUser.occupation = trimmedOccupation
+        dataStore.currentUser.interests = interests
+        dataStore.currentUser.customInterests = trimmedCustomInterests
+        dataStore.currentUser.welcomeDisturb = welcomeDisturb
         dataStore.currentUser.bio = bio
         User.currentUser = dataStore.currentUser
         UserProfileStore().saveUser(dataStore.currentUser)
         dismiss()
 
-        // 同步到后端
         Task {
             do {
-                var data: [String: Any] = ["bio": bio]
+                var data: [String: Any] = [
+                    "gender": gender,
+                    "birth_year": birthYear,
+                    "birth_date": birthDateString,
+                    "bio": bio,
+                    "city": trimmedCity,
+                    "occupation": trimmedOccupation,
+                    "interests": interests,
+                    "custom_interests": trimmedCustomInterests,
+                    "welcome_disturb": welcomeDisturb,
+                ]
                 if !trimmedName.isEmpty { data["name"] = trimmedName }
                 let _ = try await APIClient.shared.updateMe(data: data)
+                await MainActor.run {
+                    dataStore.showToast("资料已保存", type: .info)
+                }
             } catch {
                 print("Sync profile to server error: \(error)")
+                await MainActor.run {
+                    dataStore.showToast("资料同步失败，请稍后重试", type: .error)
+                }
             }
         }
+    }
+
+    private static func parseBirthDate(_ value: String) -> Date? {
+        birthDateFormatter.date(from: value)
     }
 }
 

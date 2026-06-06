@@ -317,7 +317,7 @@ struct APIMemoryResponse: Codable {
     let category: String?
     let status: String?
     let occurrenceCount: Int?
-    let createdAt: String
+    let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, type, content, confidence, source, key, category, status

@@ -3,6 +3,9 @@ import SwiftUI
 struct EventListView: View {
     @Environment(DataStore.self) private var dataStore
     @State private var emptyStateAnimating = false
+    @State private var statusFilter: EventStatusFilter = .all
+    @State private var dateFilter: EventDateFilter = .all
+    @State private var sortOption: EventSortOption = .smart
 
     var body: some View {
         NavigationStack {
@@ -19,36 +22,143 @@ struct EventListView: View {
     }
 
     private var eventList: some View {
-        List {
-            ForEach(dataStore.events) { event in
-                NavigationLink(destination: EventDetailView(event: event)) {
-                    EventCard(event: event)
-                }
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    if event.status == .pending {
-                        Button(role: .destructive) {
-                            dataStore.cancelEvent(event.id)
-                        } label: {
-                            Label("取消", systemImage: "xmark.circle")
-                        }
+        VStack(spacing: 0) {
+            filterBar
 
-                        Button {
-                            dataStore.startEditEvent(event.id)
-                        } label: {
-                            Label("修改", systemImage: "pencil")
+            if visibleEvents.isEmpty {
+                filteredEmptyState
+            } else {
+                List {
+                    ForEach(visibleEvents) { event in
+                        NavigationLink(destination: EventDetailView(event: event)) {
+                            EventCard(event: event)
                         }
-                        .tint(AppTheme.primaryColor)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            if event.status == .pending {
+                                Button(role: .destructive) {
+                                    dataStore.cancelEvent(event.id)
+                                } label: {
+                                    Label("取消", systemImage: "xmark.circle")
+                                }
+
+                                Button {
+                                    dataStore.startEditEvent(event.id)
+                                } label: {
+                                    Label("修改", systemImage: "pencil")
+                                }
+                                .tint(AppTheme.primaryColor)
+                            }
+                        }
                     }
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await dataStore.fetchEventsFromServer()
                 }
             }
         }
-        .listStyle(.plain)
-        .refreshable {
-            await dataStore.fetchEventsFromServer()
+    }
+
+    private var visibleEvents: [Event] {
+        EventListQuery(
+            statusFilter: statusFilter,
+            dateFilter: dateFilter,
+            sortOption: sortOption,
+            now: .now
+        ).apply(to: dataStore.events)
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                statusMenu
+                dateMenu
+                sortMenu
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
         }
+        .background(AppTheme.backgroundColor)
+    }
+
+    private var statusMenu: some View {
+        Menu {
+            Picker("状态", selection: $statusFilter) {
+                ForEach(EventStatusFilter.allCases) { option in
+                    Label(option.title, systemImage: option.icon).tag(option)
+                }
+            }
+        } label: {
+            filterChip(icon: statusFilter.icon, title: statusFilter.title)
+        }
+    }
+
+    private var dateMenu: some View {
+        Menu {
+            Picker("时间", selection: $dateFilter) {
+                ForEach(EventDateFilter.allCases) { option in
+                    Label(option.title, systemImage: option.icon).tag(option)
+                }
+            }
+        } label: {
+            filterChip(icon: dateFilter.icon, title: dateFilter.title)
+        }
+    }
+
+    private var sortMenu: some View {
+        Menu {
+            Picker("排序", selection: $sortOption) {
+                ForEach(EventSortOption.allCases) { option in
+                    Label(option.title, systemImage: option.icon).tag(option)
+                }
+            }
+        } label: {
+            filterChip(icon: sortOption.icon, title: sortOption.title)
+        }
+    }
+
+    private func filterChip(icon: String, title: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+            Image(systemName: "chevron.down")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(.primary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemGroupedBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var filteredEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal.decrease.circle")
+                .font(.system(size: 42))
+                .foregroundStyle(.secondary.opacity(0.55))
+            Text("没有符合条件的活动")
+                .font(.headline)
+            Button("清除筛选") {
+                statusFilter = .all
+                dateFilter = .all
+                sortOption = .smart
+            }
+            .font(.subheadline)
+            .fontWeight(.semibold)
+            .foregroundStyle(AppTheme.primaryColor)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var emptyState: some View {
@@ -81,6 +191,221 @@ struct EventListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+enum EventStatusFilter: Hashable, CaseIterable, Identifiable {
+    case all
+    case pending
+    case matching
+    case matched
+    case active
+    case completed
+    case cancelled
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all: return "全部状态"
+        case .pending: return "等待匹配"
+        case .matching: return "匹配中"
+        case .matched: return "已匹配"
+        case .active: return "进行中"
+        case .completed: return "已完成"
+        case .cancelled: return "已取消"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: return "tray.full"
+        case .pending: return "clock.badge.questionmark"
+        case .matching: return "arrow.triangle.branch"
+        case .matched: return "person.2"
+        case .active: return "bolt"
+        case .completed: return "checkmark.circle"
+        case .cancelled: return "xmark.circle"
+        }
+    }
+
+    var status: EventStatus? {
+        switch self {
+        case .all: return nil
+        case .pending: return .pending
+        case .matching: return .matching
+        case .matched: return .matched
+        case .active: return .active
+        case .completed: return .completed
+        case .cancelled: return .cancelled
+        }
+    }
+}
+
+enum EventDateFilter: Hashable, CaseIterable, Identifiable {
+    case all
+    case today
+    case upcoming
+    case thisWeek
+    case past
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all: return "全部时间"
+        case .today: return "今天"
+        case .upcoming: return "未来"
+        case .thisWeek: return "本周"
+        case .past: return "过去"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .all: return "calendar"
+        case .today: return "sun.max"
+        case .upcoming: return "calendar.badge.clock"
+        case .thisWeek: return "calendar.day.timeline.left"
+        case .past: return "clock.arrow.circlepath"
+        }
+    }
+
+    func contains(_ event: Event, now: Date, calendar: Calendar) -> Bool {
+        switch self {
+        case .all:
+            return true
+        case .today:
+            guard let start = event.startTime else { return false }
+            return calendar.isDate(start, inSameDayAs: now)
+        case .upcoming:
+            guard let start = event.startTime else { return true }
+            return start >= calendar.startOfDay(for: now)
+        case .thisWeek:
+            guard let start = event.startTime,
+                  let interval = calendar.dateInterval(of: .weekOfYear, for: now) else {
+                return false
+            }
+            return interval.contains(start)
+        case .past:
+            guard let start = event.startTime else { return false }
+            return start < calendar.startOfDay(for: now)
+        }
+    }
+}
+
+enum EventSortOption: Hashable, CaseIterable, Identifiable {
+    case smart
+    case startAsc
+    case startDesc
+    case createdDesc
+    case status
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .smart: return "默认排序"
+        case .startAsc: return "时间最近"
+        case .startDesc: return "时间最远"
+        case .createdDesc: return "最新创建"
+        case .status: return "状态优先"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .smart: return "sparkles"
+        case .startAsc: return "arrow.up.forward"
+        case .startDesc: return "arrow.down.forward"
+        case .createdDesc: return "plus.circle"
+        case .status: return "flag"
+        }
+    }
+}
+
+struct EventListQuery {
+    var statusFilter: EventStatusFilter
+    var dateFilter: EventDateFilter
+    var sortOption: EventSortOption
+    var now: Date
+    var calendar: Calendar = Calendar(identifier: .gregorian)
+
+    func apply(to events: [Event]) -> [Event] {
+        var calendar = calendar
+        calendar.locale = Locale(identifier: "zh_CN")
+        calendar.firstWeekday = 2
+
+        return events
+            .filter { event in
+                if let selectedStatus = statusFilter.status, event.status != selectedStatus {
+                    return false
+                }
+                return dateFilter.contains(event, now: now, calendar: calendar)
+            }
+            .sorted { lhs, rhs in
+                compare(lhs, rhs, calendar: calendar)
+            }
+    }
+
+    private func compare(_ lhs: Event, _ rhs: Event, calendar: Calendar) -> Bool {
+        switch sortOption {
+        case .smart:
+            let leftRank = smartRank(lhs, now: now, calendar: calendar)
+            let rightRank = smartRank(rhs, now: now, calendar: calendar)
+            if leftRank != rightRank { return leftRank < rightRank }
+            return earlierStart(lhs, rhs)
+        case .startAsc:
+            return earlierStart(lhs, rhs)
+        case .startDesc:
+            return laterStart(lhs, rhs)
+        case .createdDesc:
+            return lhs.createdAt > rhs.createdAt
+        case .status:
+            let leftRank = statusRank(lhs.status)
+            let rightRank = statusRank(rhs.status)
+            if leftRank != rightRank { return leftRank < rightRank }
+            return earlierStart(lhs, rhs)
+        }
+    }
+
+    private func earlierStart(_ lhs: Event, _ rhs: Event) -> Bool {
+        switch (lhs.startTime, rhs.startTime) {
+        case let (left?, right?): return left < right
+        case (_?, nil): return true
+        case (nil, _?): return false
+        case (nil, nil): return lhs.createdAt > rhs.createdAt
+        }
+    }
+
+    private func laterStart(_ lhs: Event, _ rhs: Event) -> Bool {
+        switch (lhs.startTime, rhs.startTime) {
+        case let (left?, right?): return left > right
+        case (_?, nil): return true
+        case (nil, _?): return false
+        case (nil, nil): return lhs.createdAt > rhs.createdAt
+        }
+    }
+
+    private func smartRank(_ event: Event, now: Date, calendar: Calendar) -> Int {
+        if event.status == .cancelled || event.status == .completed {
+            return 3
+        }
+        guard let start = event.startTime else {
+            return 1
+        }
+        return start < calendar.startOfDay(for: now) ? 2 : 0
+    }
+
+    private func statusRank(_ status: EventStatus) -> Int {
+        switch status {
+        case .pending: return 0
+        case .matching: return 1
+        case .matched: return 2
+        case .active: return 3
+        case .completed: return 4
+        case .cancelled: return 5
+        }
     }
 }
 
