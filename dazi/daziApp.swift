@@ -3,9 +3,11 @@ import UIKit
 
 @main
 struct daziApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var dataStore = DataStore()
 
     init() {
+        NotificationService.shared.configure()
         preWarmKeyboard()
     }
 

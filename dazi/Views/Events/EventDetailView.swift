@@ -233,7 +233,8 @@ struct EventDetailView: View {
         .buttonStyle(SecondaryButtonStyle())
     }
 
-    private func formatDate(_ date: Date) -> String {
+    private func formatDate(_ date: Date?) -> String {
+        guard let date else { return "待定" }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "M月d日 EEEE HH:mm"

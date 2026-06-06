@@ -1,0 +1,8 @@
+[project]
+name = "conversation-lab"
+version = "0.1.0"
+description = "Standalone simulator for i搭不搭 main conversation flow"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

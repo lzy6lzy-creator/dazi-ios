@@ -140,7 +140,8 @@ struct EventCard: View {
         return parts.isEmpty ? "待定" : parts.joined(separator: " · ")
     }
 
-    private func formatDate(_ date: Date) -> String {
+    private func formatDate(_ date: Date?) -> String {
+        guard let date else { return "时间待定" }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "M月d日 HH:mm"

@@ -1,0 +1,298 @@
+{
+  "prompt": "a2a_match_v3",
+  "scenario_set": "core",
+  "model": "kimi-k2.5",
+  "passed": true,
+  "reports": [
+    {
+      "scenario_id": "tennis_newbie_aa_match",
+      "title": "网球新手局，场地费 AA，可匹配",
+      "passed": true,
+      "score": 0.88,
+      "should_match": true,
+      "failures": []
+    },
+    {
+      "scenario_id": "tennis_skill_conflict",
+      "title": "网球水平目标冲突，不匹配",
+      "passed": true,
+      "score": 0.15,
+      "should_match": false,
+      "failures": []
+    },
+    {
+      "scenario_id": "hotpot_spice_conflict",
+      "title": "火锅饮食硬限制冲突，不匹配",
+      "passed": true,
+      "score": 0.15,
+      "should_match": false,
+      "failures": []
+    }
+  ],
+  "transcripts": [
+    {
+      "scenario_id": "tennis_newbie_aa_match",
+      "title": "网球新手局，场地费 AA，可匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "我这边周六下午3-5点在徐汇，新手友好局，AA场地费。你们时间地点方便吗？"
+        },
+        {
+          "speaker": "B",
+          "content": "时间地点都OK，我这边也是新手水平，AA没问题。想确认下：你们局是纯娱乐还是会带基础教学？我偏好轻松对打，不想太高压。"
+        },
+        {
+          "speaker": "A",
+          "content": "纯娱乐局，不安排教学，轻松对打为主。你徐汇具体哪个球场？我这边在万体馆附近。"
+        },
+        {
+          "speaker": "B",
+          "content": "我这边在万体馆附近也没问题，距离很近。确认下：你们一般几个人？我这边就一人，希望别太多人轮换等太久。"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "我这边周六下午3-5点在徐汇，新手友好局，AA场地费。你们时间地点方便吗？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "time",
+            "private_used": [
+              "none"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "时间地点都OK，我这边也是新手水平，AA没问题。想确认下：你们局是纯娱乐还是会带基础教学？我偏好轻松对打，不想太高压。",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "activity",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "纯娱乐局，不安排教学，轻松对打为主。你徐汇具体哪个球场？我这边在万体馆附近。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "place",
+            "private_used": [
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "我这边在万体馆附近也没问题，距离很近。确认下：你们一般几个人？我这边就一人，希望别太多人轮换等太久。",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "constraint",
+            "private_used": [
+              "none"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": true,
+        "compatibility": 0.88,
+        "has_blocking_conflict": false,
+        "conflicts": [],
+        "match_reasons": [
+          "时间高度重叠：A 15:00-17:00，B 15:30-17:30，双方均表示OK",
+          "地点一致：徐汇万体馆附近，双方确认距离很近",
+          "活动类型与目标一致：均为网球，新手水平，轻松对打娱乐局，无教学",
+          "费用方式一致：AA场地费",
+          "人数需求可协商：B希望人少，A未拒绝且未表示人多"
+        ],
+        "uncertainties": [
+          "具体人数A未明确，但B已表达偏好，A未拒绝"
+        ],
+        "chatroom_carryover": "双方确认周六下午3-5点半在徐汇万体馆附近，新手娱乐局，AA场地费，轻松对打无教学。B一人参加，希望人数别太多。",
+        "summary": "核心条件高度一致，可自动匹配"
+      }
+    },
+    {
+      "scenario_id": "tennis_skill_conflict",
+      "title": "网球水平目标冲突，不匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "我这边是新手练习局，希望有人耐心一起练。看你们想找高水平对打、不想教学，请问你们接受和新手练球吗？"
+        },
+        {
+          "speaker": "B",
+          "content": "我这边只接受高水平对打，不想教学，新手局不太合适。抱歉这次可能不太 match。"
+        },
+        {
+          "speaker": "A",
+          "content": "理解，活动目标确实不太匹配。我这边确认一下，如果之后有水平相近的练习局，欢迎再约。"
+        },
+        {
+          "speaker": "B",
+          "content": "好的，这次先这样。祝找到合适的高水平球友。"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "我这边是新手练习局，希望有人耐心一起练。看你们想找高水平对打、不想教学，请问你们接受和新手练球吗？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "skill",
+            "private_used": [
+              "profile"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "我这边只接受高水平对打，不想教学，新手局不太合适。抱歉这次可能不太 match。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "profile"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "理解，活动目标确实不太匹配。我这边确认一下，如果之后有水平相近的练习局，欢迎再约。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "none"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "好的，这次先这样。祝找到合适的高水平球友。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "none"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": false,
+        "compatibility": 0.15,
+        "has_blocking_conflict": true,
+        "conflicts": [
+          "活动目标冲突：A为新手练习局希望有人耐心带练，B只接受高水平对打且明确拒绝教学",
+          "技能水平要求冲突：A接受新手，B要求高水平",
+          "B已明确拒绝A的核心条件"
+        ],
+        "match_reasons": [
+          "时间一致：均为2026-06-06 15:00-17:00",
+          "地点一致：均为上海徐汇"
+        ],
+        "uncertainties": [],
+        "chatroom_carryover": "",
+        "summary": "活动目标与技能水平要求存在明确冲突，双方已确认不匹配。"
+      }
+    },
+    {
+      "scenario_id": "hotpot_spice_conflict",
+      "title": "火锅饮食硬限制冲突，不匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "我们时间地点都对得上，但我这边完全不能吃辣，你们只吃重辣锅吗？有没有可能选鸳鸯或微辣？"
+        },
+        {
+          "speaker": "B",
+          "content": "我这边只接受重辣锅，不吃鸳鸯或微辣。口味上可能不太合适，你们那边完全不能吃辣的话，这顿可能难凑到一起？"
+        },
+        {
+          "speaker": "A",
+          "content": "口味确实冲突了，我这边完全吃不了辣，没法配合重辣锅。这次先不约啦，祝你们吃得开心！"
+        },
+        {
+          "speaker": "B",
+          "content": "好的，口味确实合不来，这次先不约啦，祝你们找到合适的饭搭子！"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "我们时间地点都对得上，但我这边完全不能吃辣，你们只吃重辣锅吗？有没有可能选鸳鸯或微辣？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "question_focus": "constraint",
+            "private_used": [
+              "profile",
+              "memory"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "我这边只接受重辣锅，不吃鸳鸯或微辣。口味上可能不太合适，你们那边完全不能吃辣的话，这顿可能难凑到一起？",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "question_focus": "constraint",
+            "private_used": [
+              "profile"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "口味确实冲突了，我这边完全吃不了辣，没法配合重辣锅。这次先不约啦，祝你们吃得开心！",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "profile"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "好的，口味确实合不来，这次先不约啦，祝你们找到合适的饭搭子！",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "question_focus": "none",
+            "private_used": [
+              "none"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": false,
+        "compatibility": 0.15,
+        "has_blocking_conflict": true,
+        "conflicts": [
+          "饮食禁忌冲突：A方完全不能吃辣，B方只吃重辣锅，双方口味要求互斥且均不愿妥协"
+        ],
+        "match_reasons": [],
+        "uncertainties": [],
+        "chatroom_carryover": "",
+        "summary": "双方已明确确认口味冲突无法调和，主动结束协商，不匹配。"
+      }
+    }
+  ]
+}

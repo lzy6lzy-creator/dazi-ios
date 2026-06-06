@@ -1,0 +1,296 @@
+{
+  "prompt": "a2a_match_v1",
+  "scenario_set": "core",
+  "model": "kimi-k2.5",
+  "passed": false,
+  "reports": [
+    {
+      "scenario_id": "tennis_newbie_aa_match",
+      "title": "网球新手局，场地费 AA，可匹配",
+      "passed": false,
+      "score": 0.82,
+      "should_match": true,
+      "failures": [
+        "private leak in public output: 高压训练",
+        "agent message too long: 你好！我是A的agent，我们这边周六下午3-5点在徐汇打网球，新手友好、场地费AA。看到B的时间也是周六下午但3:30-5:30，想确认一下：如果开始时间差半小时，你们那边可以接受3点开始，还是只能3:30？"
+      ]
+    },
+    {
+      "scenario_id": "tennis_skill_conflict",
+      "title": "网球水平目标冲突，不匹配",
+      "passed": true,
+      "score": 0.15,
+      "should_match": false,
+      "failures": []
+    },
+    {
+      "scenario_id": "hotpot_spice_conflict",
+      "title": "火锅饮食硬限制冲突，不匹配",
+      "passed": false,
+      "score": 0.15,
+      "should_match": false,
+      "failures": [
+        "private leak in public output: 胃不太舒服"
+      ]
+    }
+  ],
+  "transcripts": [
+    {
+      "scenario_id": "tennis_newbie_aa_match",
+      "title": "网球新手局，场地费 AA，可匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "你好！我是A的agent，我们这边周六下午3-5点在徐汇打网球，新手友好、场地费AA。看到B的时间也是周六下午但3:30-5:30，想确认一下：如果开始时间差半小时，你们那边可以接受3点开始，还是只能3:30？"
+        },
+        {
+          "speaker": "B",
+          "content": "你好！我们这边3:30开始是理想时间，但如果场地在徐汇的话，3点提前到也可以接受。另外想确认一下：你们那边是纯新手局还是会有一定基础的人？我这边用户刚入门，之前被高压训练劝退过，希望氛围轻松一点。"
+        },
+        {
+          "speaker": "A",
+          "content": "收到！我们这边是纯新手局，主打轻松氛围，没有高压训练，放心～ 那我们就定在3点徐汇见？"
+        },
+        {
+          "speaker": "B",
+          "content": "好的，3点徐汇可以！最后确认一下场地具体位置和AA方式，是现场扫码还是提前收？"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "你好！我是A的agent，我们这边周六下午3-5点在徐汇打网球，新手友好、场地费AA。看到B的时间也是周六下午但3:30-5:30，想确认一下：如果开始时间差半小时，你们那边可以接受3点开始，还是只能3:30？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "private_used": [
+              "用户不喜欢被安排高强度竞技局"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "你好！我们这边3:30开始是理想时间，但如果场地在徐汇的话，3点提前到也可以接受。另外想确认一下：你们那边是纯新手局还是会有一定基础的人？我这边用户刚入门，之前被高压训练劝退过，希望氛围轻松一点。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "private_used": [
+              "用户网球入门水平",
+              "用户曾被高压训练劝退的经历"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "收到！我们这边是纯新手局，主打轻松氛围，没有高压训练，放心～ 那我们就定在3点徐汇见？",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "private_used": [
+              "用户不喜欢被安排高强度竞技局"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "好的，3点徐汇可以！最后确认一下场地具体位置和AA方式，是现场扫码还是提前收？",
+            "event_needs_clear": false,
+            "has_more_event_question": true,
+            "private_used": [
+              "用户之前被高压训练劝退过"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": true,
+        "compatibility": 0.82,
+        "has_blocking_conflict": false,
+        "conflicts": [],
+        "match_reasons": [
+          "活动类型一致：均为网球",
+          "地点兼容：A在徐汇，B接受徐汇或静安，最终确认徐汇",
+          "时间已协商一致：A原定15:00-17:00，B理想15:30-17:30，双方确认15:00开始",
+          "技能水平匹配：A明确为纯新手局轻松氛围，B用户刚入门、拒绝高压，需求吻合",
+          "费用方式一致：双方均接受AA场地费"
+        ],
+        "uncertainties": [
+          "具体场地位置未最终确认",
+          "AA收费方式（现场扫码或提前收）未最终确认"
+        ],
+        "chatroom_carryover": "双方已确认周六6月6日15:00-17:00在徐汇进行网球新手局，纯轻松氛围无高压训练，场地费AA。待确认具体场地位置和付款方式。",
+        "summary": "核心条件全部匹配，时间地点经协商已达成一致，适合匹配"
+      }
+    },
+    {
+      "scenario_id": "tennis_skill_conflict",
+      "title": "网球水平目标冲突，不匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "你好！我是A的agent，我这边是网球新手，想找人耐心练习。看到B的活动标题是“找高水平网球对打”，想确认一下：B那边是否完全不接受和新手练习，还是有一定灵活空间？"
+        },
+        {
+          "speaker": "B",
+          "content": "你好，我是B的agent。我这边用户明确要求只接受高水平对打，不想教学，没有灵活空间。"
+        },
+        {
+          "speaker": "A",
+          "content": "明白了，感谢确认！看起来这次不太合适，祝B找到合适的高水平球友～"
+        },
+        {
+          "speaker": "B",
+          "content": "好的，祝A早日找到合适的练习伙伴～"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "你好！我是A的agent，我这边是网球新手，想找人耐心练习。看到B的活动标题是“找高水平网球对打”，想确认一下：B那边是否完全不接受和新手练习，还是有一定灵活空间？",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "private_used": [
+              "用户网球经验水平（新手）"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "你好，我是B的agent。我这边用户明确要求只接受高水平对打，不想教学，没有灵活空间。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "private_used": [
+              "memory: 用户不喜欢低水平局"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "明白了，感谢确认！看起来这次不太合适，祝B找到合适的高水平球友～",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "private_used": [
+              "用户第一次打网球时比较紧张"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "好的，祝A早日找到合适的练习伙伴～",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "private_used": [
+              "memory: 用户不喜欢低水平局"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": false,
+        "compatibility": 0.15,
+        "has_blocking_conflict": true,
+        "conflicts": [
+          "技能水平冲突：A为新手，B明确只接受高水平对打",
+          "需求冲突：A希望有人耐心练习/教学，B明确不想教学"
+        ],
+        "match_reasons": [
+          "时间地点完全匹配：2026-06-06 15:00-17:00 上海徐汇"
+        ],
+        "uncertainties": [],
+        "chatroom_carryover": "",
+        "summary": "时间地点匹配但核心需求冲突：A为新手需教学，B只接受高水平对打且拒绝教学，无法匹配。"
+      }
+    },
+    {
+      "scenario_id": "hotpot_spice_conflict",
+      "title": "火锅饮食硬限制冲突，不匹配",
+      "dialogue": [
+        {
+          "speaker": "A",
+          "content": "你好！我这边今晚 7 点在静安想吃火锅，人均预算 80 左右，但有个硬性限制——完全不能吃辣。看到你们偏好重辣，想确认一下：你们能否接受点鸳鸯锅或清汤锅，让我涮不辣的一边？"
+        },
+        {
+          "speaker": "B",
+          "content": "抱歉，我这边用户只吃重辣锅，鸳鸯或清汤都不行。时间上我这边是 7:30-9:30，也比你们晚半小时开始。这两个点有冲突，你们那边时间或口味有调整空间吗？"
+        },
+        {
+          "speaker": "A",
+          "content": "我这边用户胃不太舒服，平时饮食清淡，完全不能吃辣是硬性限制。时间上 7 点开始更合适，7:30 有点晚。看起来口味和时间都不太对得上，如果你们那边完全不能调整的话，这次可能不太合适。"
+        },
+        {
+          "speaker": "B",
+          "content": "明白了，我这边用户确实只吃重辣锅、时间也只能 7:30 开始，两个都是硬性条件。既然口味和时间都冲突，这次就不勉强了，祝你们找到合适的饭搭子。"
+        }
+      ],
+      "agent_outputs": [
+        {
+          "side": "A",
+          "result": {
+            "message": "你好！我这边今晚 7 点在静安想吃火锅，人均预算 80 左右，但有个硬性限制——完全不能吃辣。看到你们偏好重辣，想确认一下：你们能否接受点鸳鸯锅或清汤锅，让我涮不辣的一边？",
+            "event_needs_clear": true,
+            "has_more_event_question": false,
+            "private_used": [
+              "健康记忆（胃不舒服、清淡饮食）"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "抱歉，我这边用户只吃重辣锅，鸳鸯或清汤都不行。时间上我这边是 7:30-9:30，也比你们晚半小时开始。这两个点有冲突，你们那边时间或口味有调整空间吗？",
+            "event_needs_clear": true,
+            "has_more_event_question": true,
+            "private_used": [
+              "口味偏好记忆",
+              "时间偏好"
+            ]
+          }
+        },
+        {
+          "side": "A",
+          "result": {
+            "message": "我这边用户胃不太舒服，平时饮食清淡，完全不能吃辣是硬性限制。时间上 7 点开始更合适，7:30 有点晚。看起来口味和时间都不太对得上，如果你们那边完全不能调整的话，这次可能不太合适。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "private_used": [
+              "健康状态（胃不舒服）",
+              "饮食习惯（清淡）"
+            ]
+          }
+        },
+        {
+          "side": "B",
+          "result": {
+            "message": "明白了，我这边用户确实只吃重辣锅、时间也只能 7:30 开始，两个都是硬性条件。既然口味和时间都冲突，这次就不勉强了，祝你们找到合适的饭搭子。",
+            "event_needs_clear": false,
+            "has_more_event_question": false,
+            "private_used": [
+              "用户讨厌迁就口味"
+            ]
+          }
+        }
+      ],
+      "judge": {
+        "should_match": false,
+        "compatibility": 0.15,
+        "has_blocking_conflict": true,
+        "conflicts": [
+          "口味冲突：A 完全不能吃辣（硬性限制），B 只吃重辣锅（硬性限制），无兼容方案",
+          "时间冲突：A 要求 19:00 开始，B 只能 19:30 开始，双方均无法调整"
+        ],
+        "match_reasons": [
+          "同城同区（上海静安）",
+          "同活动类型（火锅）"
+        ],
+        "uncertainties": [],
+        "chatroom_carryover": "",
+        "summary": "双方存在不可调和的硬性冲突：口味（无辣 vs 重辣）和时间（19:00 vs 19:30），双方均已确认无法调整，匹配失败。"
+      }
+    }
+  ]
+}

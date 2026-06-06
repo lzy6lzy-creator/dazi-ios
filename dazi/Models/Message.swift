@@ -11,6 +11,34 @@ enum MessageRole: String, Codable, Sendable {
 struct ClarificationOption: Identifiable, Codable, Sendable {
     let id: String
     let label: String
+    let value: ClarificationOptionValue?
+
+    enum CodingKeys: String, CodingKey {
+        case id, label, value
+    }
+
+    init(id: String, label: String, value: ClarificationOptionValue? = nil) {
+        self.id = id
+        self.label = label
+        self.value = value
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        label = try container.decode(String.self, forKey: .label)
+        value = try? container.decode(ClarificationOptionValue.self, forKey: .value)
+    }
+}
+
+struct ClarificationOptionValue: Codable, Sendable {
+    let startTime: String?
+    let endTime: String?
+
+    enum CodingKeys: String, CodingKey {
+        case startTime = "start_time"
+        case endTime = "end_time"
+    }
 }
 
 struct ClarificationQuestion: Identifiable, Codable, Sendable {
@@ -23,12 +51,28 @@ struct ClarificationQuestion: Identifiable, Codable, Sendable {
     let allowCustom: Bool
     let matchFilter: String?
     let options: [ClarificationOption]
+    let defaultOptionIds: [String]
 
     enum CodingKeys: String, CodingKey {
         case id, type, title, category, required, options
         case helperText = "helper_text"
         case allowCustom = "allow_custom"
         case matchFilter = "match_filter"
+        case defaultOptionIds = "default_option_ids"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decodeIfPresent(String.self, forKey: .type) ?? "single_choice"
+        title = try container.decode(String.self, forKey: .title)
+        helperText = try container.decodeIfPresent(String.self, forKey: .helperText)
+        category = try container.decodeIfPresent(String.self, forKey: .category)
+        required = try container.decodeIfPresent(Bool.self, forKey: .required) ?? false
+        allowCustom = try container.decodeIfPresent(Bool.self, forKey: .allowCustom) ?? true
+        matchFilter = try container.decodeIfPresent(String.self, forKey: .matchFilter)
+        options = try container.decodeIfPresent([ClarificationOption].self, forKey: .options) ?? []
+        defaultOptionIds = try container.decodeIfPresent([String].self, forKey: .defaultOptionIds) ?? []
     }
 }
 
@@ -36,6 +80,7 @@ struct ClarificationAnswerInput: Sendable {
     let questionId: String
     var optionIds: [String] = []
     var customText: String?
+    var customValue: [String: String]?
     var minAge: Int?
     var maxAge: Int?
 
@@ -43,18 +88,22 @@ struct ClarificationAnswerInput: Sendable {
         questionId: String,
         optionIds: [String] = [],
         customText: String? = nil,
+        customValue: [String: String]? = nil,
         minAge: Int? = nil,
         maxAge: Int? = nil
     ) {
         self.questionId = questionId
         self.optionIds = optionIds
         self.customText = customText
+        self.customValue = customValue
         self.minAge = minAge
         self.maxAge = maxAge
     }
 }
 
 struct Message: Identifiable, Codable, Sendable {
+    static let publishingContent = "正在发布活动，请稍等"
+
     let id: String
     var content: String
     var role: MessageRole

@@ -39,8 +39,8 @@ struct Event: Identifiable, Codable, Sendable {
     var activityType: String
     var title: String
     var description: String
-    var startTime: Date
-    var endTime: Date
+    var startTime: Date?
+    var endTime: Date?
     var location: String
     var city: String
     var preferences: [String]
@@ -58,8 +58,8 @@ struct Event: Identifiable, Codable, Sendable {
         activityType: String,
         title: String,
         description: String,
-        startTime: Date,
-        endTime: Date,
+        startTime: Date?,
+        endTime: Date?,
         location: String,
         city: String = "",
         preferences: [String],
@@ -93,8 +93,8 @@ struct Event: Identifiable, Codable, Sendable {
         self.activityType = api.activityType
         self.title = api.title
         self.description = ""
-        self.startTime = Self.parseDate(api.startTime) ?? .now
-        self.endTime = Self.parseDate(api.endTime) ?? .now
+        self.startTime = Self.parseDate(api.startTime)
+        self.endTime = Self.parseDate(api.endTime)
         self.location = api.location ?? ""
         self.city = api.city ?? ""
         self.preferences = api.preferences ?? []

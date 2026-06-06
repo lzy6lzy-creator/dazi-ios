@@ -52,7 +52,7 @@ struct ChatRoom: Identifiable, Codable, Sendable {
             User(
                 id: member.role == "agent" ? "agent_\(member.userId)" : member.userId,
                 name: member.name,
-                avatarEmoji: member.emoji ?? (member.role == "agent" ? "🤖" : "😊"),
+                avatarEmoji: member.avatarUrl ?? member.emoji ?? (member.role == "agent" ? "🤖" : "😊"),
                 isAgent: member.role == "agent"
             )
         }

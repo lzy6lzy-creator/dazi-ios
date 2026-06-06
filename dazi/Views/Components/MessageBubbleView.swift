@@ -10,9 +10,20 @@ struct MessageBubbleView: View {
     @State private var customValues: [String: String] = [:]
     @State private var minAgeValues: [String: String] = [:]
     @State private var maxAgeValues: [String: String] = [:]
+    @State private var expandedCustomQuestionIds: Set<String> = []
+    @State private var startTimeValues: [String: Date] = [:]
+    @State private var endTimeValues: [String: Date] = [:]
 
     private var isFromUser: Bool {
         message.role == .user
+    }
+
+    private var isPublishingStatus: Bool {
+        message.role == .agent && message.content == Message.publishingContent
+    }
+
+    private var isAgentSessionDivider: Bool {
+        message.role == .system && message.content.contains("下面为你开启新的对话")
     }
 
     private var bubbleColor: Color {
@@ -44,20 +55,40 @@ struct MessageBubbleView: View {
         }
     }
 
+    @ViewBuilder
     private var systemBubble: some View {
-        HStack {
-            Spacer()
-            Text(message.content)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(bubbleColor.opacity(0.8))
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
-            Spacer()
+        if isAgentSessionDivider {
+            HStack(spacing: 10) {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.22))
+                    .frame(height: 1)
+                Text(message.content)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.22))
+                    .frame(height: 1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        } else {
+            HStack {
+                Spacer()
+                Text(message.content)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(bubbleColor.opacity(0.8))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+                Spacer()
+            }
+            .padding(.vertical, 4)
         }
-        .padding(.vertical, 4)
     }
 
     private var chatBubble: some View {
@@ -75,20 +106,31 @@ struct MessageBubbleView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                Text(message.content)
-                    .font(.body)
-                    .foregroundStyle(textColor)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(bubbleColor)
-                    .clipShape(
-                        UnevenRoundedRectangle(
-                            topLeadingRadius: isFromUser ? AppTheme.radiusBubble : 4,
-                            bottomLeadingRadius: AppTheme.radiusBubble,
-                            bottomTrailingRadius: isFromUser ? 4 : AppTheme.radiusBubble,
-                            topTrailingRadius: AppTheme.radiusBubble
+                Group {
+                    if isPublishingStatus {
+                        HStack(spacing: 10) {
+                            Text(message.content)
+                                .font(.body)
+                                .foregroundStyle(textColor)
+                            TypingIndicator()
+                        }
+                    } else {
+                        Text(message.content)
+                            .font(.body)
+                            .foregroundStyle(textColor)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(bubbleColor)
+                .clipShape(
+                    UnevenRoundedRectangle(
+                        topLeadingRadius: isFromUser ? AppTheme.radiusBubble : 4,
+                        bottomLeadingRadius: AppTheme.radiusBubble,
+                        bottomTrailingRadius: isFromUser ? 4 : AppTheme.radiusBubble,
+                        topTrailingRadius: AppTheme.radiusBubble
                         )
-                    )
+                )
 
                 if !message.clarificationQuestions.isEmpty {
                     clarificationCards
@@ -126,53 +168,91 @@ struct MessageBubbleView: View {
     }
 
     private var clarificationCards: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(message.clarificationQuestions) { question in
-                clarificationQuestionCard(question)
-            }
-
-            Button {
-                submitClarification()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: message.clarificationSubmitted ? "checkmark.circle.fill" : "arrow.up.circle.fill")
-                    Text(message.clarificationSubmitted ? "已提交" : "提交补充")
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("活动确认")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                    Spacer()
+                    Text("\(message.clarificationQuestions.count) 项")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 44)
-                .padding(.vertical, 11)
-                .background(canSubmitClarification ? AppTheme.primaryColor : Color.gray.opacity(0.45))
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 9)
+
+                Divider()
+
+                ForEach(Array(message.clarificationQuestions.enumerated()), id: \.element.id) { index, question in
+                    clarificationQuestionRow(question)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    if index < message.clarificationQuestions.count - 1 {
+                        Divider()
+                            .padding(.leading, 10)
+                    }
+                }
             }
-            .disabled(!canSubmitClarification)
+            .background(Color(.systemBackground))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                    .stroke(Color.black.opacity(0.08), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+            .animation(.snappy(duration: 0.22), value: message.clarificationQuestions.count)
+
+            HStack {
+                Spacer()
+                Button {
+                    submitClarification()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "checkmark")
+                            .font(.caption2)
+                        Text(message.clarificationSubmitted ? "已提交" : "确认")
+                    }
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 34)
+                    .background(canSubmitClarification ? AppTheme.primaryColor : Color.gray.opacity(0.45))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.plain)
+                .disabled(!canSubmitClarification)
+            }
         }
-        .padding(12)
-        .frame(maxWidth: 310, alignment: .leading)
+        .padding(10)
+        .frame(maxWidth: 304, alignment: .leading)
         .background(AppTheme.cardBackground)
         .overlay(
-            RoundedRectangle(cornerRadius: AppTheme.radiusLG)
+            RoundedRectangle(cornerRadius: AppTheme.radiusMD)
                 .stroke(Color.black.opacity(0.06), lineWidth: 1)
         )
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
         .padding(.top, 6)
+        .onAppear {
+            seedDefaultClarificationSelections()
+        }
+        .onChange(of: message.id) { _, _ in
+            resetClarificationInputs()
+        }
+        .onChange(of: message.clarificationQuestions.map(\.id)) { _, _ in
+            seedDefaultClarificationSelections()
+        }
     }
 
-    private func clarificationQuestionCard(_ question: ClarificationQuestion) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                if let category = question.category, !category.isEmpty {
-                    Text(category)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
-                        .foregroundStyle(AppTheme.primaryColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(AppTheme.primaryColor.opacity(0.10))
-                        .clipShape(Capsule())
-                }
+    private func clarificationQuestionRow(_ question: ClarificationQuestion) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Text(questionSectionTitle(question))
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
                 if question.matchFilter == "hard_filter" {
                     Text("硬条件")
                         .font(.caption2)
@@ -183,45 +263,51 @@ struct MessageBubbleView: View {
                         .background(Color.red.opacity(0.08))
                         .clipShape(Capsule())
                 }
+                Spacer(minLength: 0)
             }
 
-            Text(question.title)
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if let helperText = question.helperText, !helperText.isEmpty {
-                Text(helperText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            if shouldShowQuestionTitle(question) {
+                Text(question.title)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            FlowLayout(spacing: 8) {
-                ForEach(question.options) { option in
-                    clarificationOptionButton(question: question, option: option)
+            if isTimeQuestion(question) {
+                timeRangeFields(question)
+            } else {
+                FlowLayout(spacing: 8) {
+                    ForEach(question.options) { option in
+                        clarificationOptionButton(question: question, option: option)
+                    }
+                    if question.allowCustom {
+                        customInputToggleButton(question)
+                    }
                 }
             }
 
-            if question.allowCustom {
+            if !isTimeQuestion(question), expandedCustomQuestionIds.contains(question.id) {
                 if question.type == "age_range" {
                     ageCustomFields(question)
                 } else {
-                    TextField("自己输入", text: binding(for: question.id, in: $customValues))
+                    TextField(customInputPlaceholder(for: question), text: binding(for: question.id, in: $customValues))
                         .font(.subheadline)
                         .textFieldStyle(.plain)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 9)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
                         .frame(minHeight: 44)
-                        .background(Color(.systemBackground))
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
                 }
             }
         }
-        .padding(10)
-        .background(Color(.systemBackground).opacity(0.72))
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+        .padding(.horizontal, 10)
+        .padding(.vertical, 9)
     }
 
     private func clarificationOptionButton(
@@ -229,20 +315,110 @@ struct MessageBubbleView: View {
         option: ClarificationOption
     ) -> some View {
         let selected = selectedOptionIds[question.id]?.contains(option.id) == true
+        let location = isLocationQuestion(question)
+        let selectedColor = location ? Color(red: 0.08, green: 0.48, blue: 0.52) : AppTheme.primaryColor
+        let selectedBackground = selectedColor.opacity(0.12)
+        let normalBackground = Color(.secondarySystemGroupedBackground)
+        let borderColor = selected ? selectedColor : Color.black.opacity(0.10)
         return Button {
             toggleOption(question: question, optionId: option.id)
         } label: {
             Text(option.label)
                 .font(.caption)
-                .fontWeight(.medium)
-                .foregroundStyle(selected ? .white : .primary)
+                .fontWeight(.semibold)
+                .foregroundStyle(selected ? selectedColor : .primary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
-                .frame(minHeight: 44)
-                .background(selected ? AppTheme.primaryColor : Color(.secondarySystemFill))
-                .clipShape(Capsule())
+                .frame(minHeight: 34)
+                .background(selected ? selectedBackground : normalBackground)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(borderColor, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .disabled(message.clarificationSubmitted)
+    }
+
+    private func timeRangeFields(_ question: ClarificationQuestion) -> some View {
+        VStack(spacing: 8) {
+            timePickerBox(
+                title: "开始",
+                selection: startTimeBinding(for: question),
+                question: question
+            )
+            timePickerBox(
+                title: "结束",
+                selection: endTimeBinding(for: question),
+                question: question
+            )
+        }
+    }
+
+    private func timePickerBox(
+        title: String,
+        selection: Binding<Date>,
+        question: ClarificationQuestion
+    ) -> some View {
+        HStack(spacing: 10) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: 34, alignment: .leading)
+
+            DatePicker(
+                title,
+                selection: selection,
+                displayedComponents: [.date, .hourAndMinute]
+            )
+            .labelsHidden()
+            .datePickerStyle(.compact)
+            .disabled(message.clarificationSubmitted)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(minHeight: 48)
+        .background(Color(.secondarySystemGroupedBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                .stroke(AppTheme.primaryColor.opacity(0.20), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+        .onAppear {
+            seedDefaultTimeValues(for: question)
+        }
+    }
+
+    private func customInputToggleButton(_ question: ClarificationQuestion) -> some View {
+        let expanded = expandedCustomQuestionIds.contains(question.id)
+        return Button {
+            toggleCustomInput(for: question)
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: expanded ? "minus" : "plus")
+                    .font(.caption2)
+                Text(expanded ? "收起手动输入" : "手动输入")
+            }
+            .font(.caption)
+            .fontWeight(.semibold)
+            .foregroundStyle(AppTheme.secondaryColor)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .frame(minHeight: 34)
+            .background(AppTheme.secondaryColor.opacity(0.08))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(
+                        AppTheme.secondaryColor.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .disabled(message.clarificationSubmitted)
@@ -266,7 +442,11 @@ struct MessageBubbleView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 9)
         .frame(minHeight: 44)
-        .background(Color(.systemBackground))
+        .background(Color(.secondarySystemGroupedBackground))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+        )
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
     }
 
@@ -278,6 +458,43 @@ struct MessageBubbleView: View {
             state.wrappedValue[questionId] ?? ""
         } set: { newValue in
             state.wrappedValue[questionId] = newValue
+        }
+    }
+
+    private func seedDefaultClarificationSelections() {
+        for question in message.clarificationQuestions {
+            if selectedOptionIds[question.id] == nil {
+                let optionIds = Set(question.options.map(\.id))
+                let defaults = Set(question.defaultOptionIds.filter { optionIds.contains($0) })
+                if !defaults.isEmpty {
+                    selectedOptionIds[question.id] = defaults
+                }
+            }
+            if isTimeQuestion(question) {
+                seedDefaultTimeValues(for: question)
+            }
+        }
+    }
+
+    private func resetClarificationInputs() {
+        selectedOptionIds = [:]
+        customValues = [:]
+        minAgeValues = [:]
+        maxAgeValues = [:]
+        expandedCustomQuestionIds = []
+        startTimeValues = [:]
+        endTimeValues = [:]
+        seedDefaultClarificationSelections()
+    }
+
+    private func toggleCustomInput(for question: ClarificationQuestion) {
+        if expandedCustomQuestionIds.contains(question.id) {
+            expandedCustomQuestionIds.remove(question.id)
+            customValues[question.id] = nil
+            minAgeValues[question.id] = nil
+            maxAgeValues[question.id] = nil
+        } else {
+            expandedCustomQuestionIds.insert(question.id)
         }
     }
 
@@ -294,6 +511,9 @@ struct MessageBubbleView: View {
             selected = [optionId]
         }
         selectedOptionIds[question.id] = selected
+        if isTimeQuestion(question) {
+            seedDefaultTimeValues(for: question, force: true)
+        }
     }
 
     private var canSubmitClarification: Bool {
@@ -312,7 +532,126 @@ struct MessageBubbleView: View {
         if question.type == "age_range" {
             return Int(minAgeValues[question.id] ?? "") != nil && Int(maxAgeValues[question.id] ?? "") != nil
         }
+        if isTimeQuestion(question) {
+            return timeRange(for: question) != nil
+        }
         return !(customValues[question.id] ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func questionSectionTitle(_ question: ClarificationQuestion) -> String {
+        let id = question.id.lowercased()
+        if ["event", "activity", "activity_type"].contains(id) { return "活动" }
+        if id == "time" { return "时间" }
+        if isLocationQuestion(question) { return "地点" }
+        if ["gender", "sex", "partner_gender"].contains(id) { return "搭子偏好" }
+        if ["preferences", "preference"].contains(id) { return "特殊偏好" }
+        if id == "age" { return "年龄" }
+        if let category = question.category, !category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return category
+        }
+        return question.title
+    }
+
+    private func isTimeQuestion(_ question: ClarificationQuestion) -> Bool {
+        question.id.lowercased() == "time"
+    }
+
+    private func shouldShowQuestionTitle(_ question: ClarificationQuestion) -> Bool {
+        let id = question.id.lowercased()
+        let coreIds = [
+            "event",
+            "activity",
+            "activity_type",
+            "time",
+            "location",
+            "area",
+            "gender",
+            "sex",
+            "partner_gender",
+            "preferences",
+            "preference",
+        ]
+        return !coreIds.contains(id)
+    }
+
+    private func isLocationQuestion(_ question: ClarificationQuestion) -> Bool {
+        let id = question.id.lowercased()
+        if ["location", "area", "place", "district", "region"].contains(id) {
+            return true
+        }
+        let text = "\(question.category ?? "") \(question.title)"
+        return ["地点", "位置", "城市", "区域", "哪片区", "哪里", "在哪"].contains { text.contains($0) }
+    }
+
+    private func customInputPlaceholder(for question: ClarificationQuestion) -> String {
+        if isLocationQuestion(question) {
+            return "输入商圈、影院或地址"
+        }
+        let id = question.id.lowercased()
+        if id == "time" {
+            return "输入具体时间"
+        }
+        if ["event", "activity", "activity_type"].contains(id) {
+            return "输入活动内容"
+        }
+        return "自己输入"
+    }
+
+    private func startTimeBinding(for question: ClarificationQuestion) -> Binding<Date> {
+        Binding {
+            timeRange(for: question)?.start ?? Date()
+        } set: { newValue in
+            startTimeValues[question.id] = newValue
+            let currentEnd = endTimeValues[question.id] ?? timeRange(for: question)?.end ?? newValue.addingTimeInterval(2 * 3600)
+            if currentEnd <= newValue {
+                endTimeValues[question.id] = newValue.addingTimeInterval(2 * 3600)
+            }
+        }
+    }
+
+    private func endTimeBinding(for question: ClarificationQuestion) -> Binding<Date> {
+        Binding {
+            timeRange(for: question)?.end ?? Date().addingTimeInterval(2 * 3600)
+        } set: { newValue in
+            let currentStart = startTimeValues[question.id] ?? timeRange(for: question)?.start ?? Date()
+            endTimeValues[question.id] = newValue > currentStart ? newValue : currentStart.addingTimeInterval(3600)
+        }
+    }
+
+    private func seedDefaultTimeValues(for question: ClarificationQuestion, force: Bool = false) {
+        guard isTimeQuestion(question), let range = defaultTimeRange(for: question) else { return }
+        if force || startTimeValues[question.id] == nil {
+            startTimeValues[question.id] = range.start
+        }
+        if force || endTimeValues[question.id] == nil {
+            endTimeValues[question.id] = range.end
+        }
+    }
+
+    private func timeRange(for question: ClarificationQuestion) -> (start: Date, end: Date)? {
+        let fallback = defaultTimeRange(for: question)
+        let start = startTimeValues[question.id] ?? fallback?.start
+        let end = endTimeValues[question.id] ?? fallback?.end
+        guard let start, let end else { return nil }
+        if end <= start {
+            return (start, start.addingTimeInterval(3600))
+        }
+        return (start, end)
+    }
+
+    private func defaultTimeRange(for question: ClarificationQuestion) -> (start: Date, end: Date)? {
+        let selectedIds = selectedOptionIds[question.id] ?? Set(question.defaultOptionIds)
+        let candidateOptions = question.options.filter { selectedIds.contains($0.id) } + question.options
+        for option in candidateOptions {
+            guard let startText = option.value?.startTime,
+                  let endText = option.value?.endTime,
+                  let start = Self.parseClarificationDate(startText),
+                  let end = Self.parseClarificationDate(endText) else {
+                continue
+            }
+            return (start, end > start ? end : start.addingTimeInterval(3600))
+        }
+        return nil
     }
 
     private func submitClarification() {
@@ -323,6 +662,16 @@ struct MessageBubbleView: View {
 
     private func answer(for question: ClarificationQuestion) -> ClarificationAnswerInput? {
         let optionIds = Array(selectedOptionIds[question.id] ?? [])
+        if isTimeQuestion(question), let range = timeRange(for: question) {
+            return ClarificationAnswerInput(
+                questionId: question.id,
+                optionIds: optionIds,
+                customValue: [
+                    "start_time": Self.isoFormatter.string(from: range.start),
+                    "end_time": Self.isoFormatter.string(from: range.end),
+                ]
+            )
+        }
         if question.type == "age_range" {
             let minAge = Int(minAgeValues[question.id] ?? "")
             let maxAge = Int(maxAgeValues[question.id] ?? "")
@@ -384,6 +733,22 @@ struct MessageBubbleView: View {
         f.dateFormat = "HH:mm"
         return f
     }()
+
+    private static let isoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    private static let fractionalIsoFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static func parseClarificationDate(_ value: String) -> Date? {
+        isoFormatter.date(from: value) ?? fractionalIsoFormatter.date(from: value)
+    }
 
     private var timeString: String {
         Self.timeFormatter.string(from: message.timestamp)
