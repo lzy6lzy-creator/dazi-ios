@@ -62,3 +62,10 @@ APP_BUNDLE_ID_SUFFIX = .dev.yourname
 
 - `BundleID.local.xcconfig` 已加入 `.gitignore`，不会提交到仓库。
 - App Store / TestFlight 走 `Release` 配置，不受本地后缀影响。
+
+### 5. 最短操作清单（给合作者）
+
+1. `git checkout main && git pull`
+2. 新建 `dazi/Config/BundleID.local.xcconfig`，写 `APP_BUNDLE_ID_SUFFIX = .dev.你的名字`
+3. 打开 Xcode，`dazi` Target 的 `Signing & Capabilities` 选自己的 Personal Team
+4. Build/Run 到真机（Debug）
