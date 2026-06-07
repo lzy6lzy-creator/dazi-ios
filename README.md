@@ -39,7 +39,7 @@ xcodebuild -project dazi.xcodeproj -scheme dazi -configuration Debug -destinatio
 在你本地新增文件（不提交）：
 
 ```text
-dazi/Config/BundleID.local.xcconfig
+Config/BundleID.local.xcconfig
 ```
 
 内容示例：
@@ -66,6 +66,6 @@ APP_BUNDLE_ID_SUFFIX = .dev.yourname
 ### 5. 最短操作清单（给合作者）
 
 1. `git checkout main && git pull`
-2. 新建 `dazi/Config/BundleID.local.xcconfig`，写 `APP_BUNDLE_ID_SUFFIX = .dev.你的名字`
+2. 新建 `Config/BundleID.local.xcconfig`，写 `APP_BUNDLE_ID_SUFFIX = .dev.你的名字`
 3. 打开 Xcode，`dazi` Target 的 `Signing & Capabilities` 选自己的 Personal Team
 4. Build/Run 到真机（Debug）

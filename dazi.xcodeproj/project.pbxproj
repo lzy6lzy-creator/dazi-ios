@@ -8,8 +8,8 @@
 
 /* Begin PBXFileReference section */
 		107FB79A2F59F853006CC05C /* dazi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dazi.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		107FB79D2F59F853006CC05C /* BundleID.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = dazi/Config/BundleID.debug.xcconfig; sourceTree = "<group>"; };
-		107FB79E2F59F853006CC05C /* BundleID.release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = dazi/Config/BundleID.release.xcconfig; sourceTree = "<group>"; };
+		107FB79D2F59F853006CC05C /* BundleID.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/BundleID.debug.xcconfig; sourceTree = "<group>"; };
+		107FB79E2F59F853006CC05C /* BundleID.release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/BundleID.release.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
