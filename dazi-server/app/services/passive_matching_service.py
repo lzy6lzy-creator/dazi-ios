@@ -7,12 +7,12 @@ from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import UUID
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.ws import manager as ws_manager
 from app.models.chat import ChatMessage, ChatRoom, ChatRoomMember, PassiveMatchRequest
-from app.models.event import Event
+from app.models.event import Event, MatchBlocklist
 from app.models.user import Agent, User
 from app.services.location_policy import is_location_compatible
 from app.services.match_blocklist_service import add_match_blocklist
@@ -42,30 +42,51 @@ NO_GENDER_FILTER_EVENT = SimpleNamespace(
 class PassiveMatchingService:
     async def run_passive_matching(self, db: AsyncSession) -> int:
         """Scan eligible events and create passive match requests."""
+        now = datetime.now(timezone.utc)
         result = await db.execute(
-            select(Event).where(
+            select(Event.id).where(
                 Event.status == "pending",
                 Event.match_round >= PASSIVE_MATCH_THRESHOLD,
                 Event.embedding.is_not(None),
-                or_(Event.expires_at.is_(None), Event.expires_at > datetime.now(timezone.utc)),
-                or_(Event.start_time.is_(None), Event.start_time > datetime.now(timezone.utc)),
+                or_(Event.expires_at.is_(None), Event.expires_at > now),
+                or_(Event.start_time.is_(None), Event.start_time > now),
             )
         )
-        events = result.scalars().all()
-        logger.info(f"Passive matching: found {len(events)} eligible events")
+        event_ids = result.scalars().all()
+        logger.info(f"Passive matching: found {len(event_ids)} eligible events")
 
         request_count = 0
-        for event in events:
+        for event_id in event_ids:
             try:
-                success = await self._create_request_for_event(event, db)
+                success = await self._create_request_for_event_id(event_id, db)
                 if success:
                     request_count += 1
                 await db.commit()
             except Exception as e:
                 await db.rollback()
-                logger.error(f"Passive request failed for event {event.id}: {e}")
+                logger.error(f"Passive request failed for event {event_id}: {e}")
 
         return request_count
+
+    async def _create_request_for_event_id(self, event_id: UUID, db: AsyncSession) -> bool:
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            select(Event)
+            .where(
+                Event.id == event_id,
+                Event.status == "pending",
+                Event.match_round >= PASSIVE_MATCH_THRESHOLD,
+                Event.embedding.is_not(None),
+                or_(Event.expires_at.is_(None), Event.expires_at > now),
+                or_(Event.start_time.is_(None), Event.start_time > now),
+            )
+            .with_for_update()
+        )
+        event = result.scalar_one_or_none()
+        if not event:
+            return False
+
+        return await self._create_request_for_event(event, db)
 
     async def _create_request_for_event(self, event: Event, db: AsyncSession) -> bool:
         existing = await db.execute(
@@ -77,42 +98,54 @@ class PassiveMatchingService:
         if existing.scalar_one_or_none():
             return False
 
-        params = {
-            "event_id": str(event.id),
-            "event_user_id": str(event.user_id),
-            "embedding": event.embedding,
-        }
-
         requester_r = await db.execute(select(User).where(User.id == event.user_id))
         requester = requester_r.scalar_one_or_none()
 
-        query = text("""
-            SELECT u.id, u.name, u.city, u.birth_date, u.gender, u.embedding <=> :embedding AS distance
-            FROM users u
-            WHERE u.id != :event_user_id
-              AND u.is_active = TRUE
-              AND u.embedding IS NOT NULL
-              AND u.welcome_disturb = TRUE
-              AND NOT EXISTS (
-                  SELECT 1 FROM passive_match_requests pmr
-                  WHERE pmr.event_id = :event_id
-                    AND pmr.target_user_id = u.id
-                    AND pmr.status = 'pending'
-              )
-              AND NOT EXISTS (
-                  SELECT 1 FROM match_blocklists mb
-                  WHERE (mb.event_a_id = :event_id OR mb.event_b_id = :event_id)
-                    AND (
-                         (mb.user_a_id = :event_user_id AND mb.user_b_id = u.id)
-                         OR (mb.user_b_id = :event_user_id AND mb.user_a_id = u.id)
-                     )
-              )
-            ORDER BY distance ASC
-            LIMIT :limit
-        """)
-        params["limit"] = CANDIDATE_TOP_K
+        pending_request_exists = (
+            select(PassiveMatchRequest.id)
+            .where(
+                PassiveMatchRequest.event_id == event.id,
+                PassiveMatchRequest.target_user_id == User.id,
+                PassiveMatchRequest.status == "pending",
+            )
+            .exists()
+        )
+        blocklist_exists = (
+            select(MatchBlocklist.id)
+            .where(
+                or_(
+                    MatchBlocklist.event_a_id == event.id,
+                    MatchBlocklist.event_b_id == event.id,
+                ),
+                or_(
+                    and_(
+                        MatchBlocklist.user_a_id == event.user_id,
+                        MatchBlocklist.user_b_id == User.id,
+                    ),
+                    and_(
+                        MatchBlocklist.user_b_id == event.user_id,
+                        MatchBlocklist.user_a_id == User.id,
+                    ),
+                ),
+            )
+            .exists()
+        )
+        distance = User.embedding.cosine_distance(event.embedding).label("distance")
+        query = (
+            select(User.id, User.name, User.city, User.birth_date, User.gender, distance)
+            .where(
+                User.id != event.user_id,
+                User.is_active.is_(True),
+                User.embedding.is_not(None),
+                User.welcome_disturb.is_(True),
+                ~pending_request_exists,
+                ~blocklist_exists,
+            )
+            .order_by(distance)
+            .limit(CANDIDATE_TOP_K)
+        )
 
-        result = await db.execute(query, params)
+        result = await db.execute(query)
         candidates = []
         today = datetime.now(timezone.utc).date()
         for row in result.all():

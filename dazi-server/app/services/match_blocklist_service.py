@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import MatchBlocklist
@@ -52,3 +52,19 @@ async def add_match_blocklist(
     db.add(row)
     await db.flush()
     return row
+
+
+async def clear_event_match_state(
+    db: AsyncSession,
+    *,
+    event_id: UUID,
+) -> None:
+    """Clear stale event-pair blocklists after an event is edited."""
+    await db.execute(
+        delete(MatchBlocklist).where(
+            or_(
+                MatchBlocklist.event_a_id == event_id,
+                MatchBlocklist.event_b_id == event_id,
+            )
+        )
+    )

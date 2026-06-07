@@ -34,6 +34,7 @@ from app.services.agent_stream_parser import (
     parse_draft_tag_payload,
 )
 from app.services.matching_tasks import schedule_event_matching
+from app.services.match_blocklist_service import clear_event_match_state
 from app.services.prompt_builder import PromptBuilder
 from app.services.sse import sse_event
 from app.services.memory_service import extract_and_update_memories_after_publish
@@ -895,8 +896,8 @@ async def _publish_existing_draft_without_llm(
 
     await _clear_published_draft_state(uid_str=uid_str, editing_event_id=editing_event_id)
 
+    schedule_event_matching(background_tasks, event_id)
     if created_new_event:
-        schedule_event_matching(background_tasks, event_id)
         if draft:
             background_tasks.add_task(
                 _extract_memories_background,
@@ -1205,6 +1206,10 @@ async def _update_event_from_draft(
             event.location, event.preferences, event.constraints
         )
         event.embedding = await embedding_service.encode(text)
+        event.matched_event_id = None
+        event.match_score = None
+        event.match_round = 0
+        await clear_event_match_state(db, event_id=event_id)
 
         await db.flush()
 

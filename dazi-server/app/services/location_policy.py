@@ -56,6 +56,10 @@ def profile_compatible(source: PlaceProfile, target: PlaceProfile, strictness: s
         return 0.75, "flexible"
     if source.place_normalized and source.place_normalized == target.place_normalized:
         return 1.0, "same_place"
+    if source.admin_district and source.admin_district == target.admin_district:
+        if source.place_kind == "district" or target.place_kind == "district":
+            return 0.82, "district_contains_place"
+        return 0.8, "same_district"
     if source.admin_city and source.admin_city == target.admin_city:
         return 0.85, "same_city"
 

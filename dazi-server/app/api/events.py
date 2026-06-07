@@ -13,6 +13,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.event import Event
 from app.api.schemas import EventCreate, EventUpdate, EventResponse
+from app.services.match_blocklist_service import clear_event_match_state
 from app.services.matching_tasks import schedule_event_matching
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
@@ -118,6 +119,9 @@ async def update_event(
     event.location = _single_location(event.location)
     event.city = None
     event.city_normalized = None
+    event.matched_event_id = None
+    event.match_score = None
+    event.match_round = 0
 
     # 重新生成 embedding
     text = embedding_service.build_event_text(
@@ -125,6 +129,7 @@ async def update_event(
         event.location, event.preferences, event.constraints
     )
     event.embedding = await embedding_service.encode(text)
+    await clear_event_match_state(db, event_id=event_id)
 
     await db.flush()
     return event

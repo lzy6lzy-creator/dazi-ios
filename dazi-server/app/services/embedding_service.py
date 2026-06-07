@@ -12,7 +12,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from app.core.config import settings
-from app.services.location_normalizer import align_city_from_catalog, standard_city_names
+from app.services.location_normalizer import align_city_from_catalog, normalize_place, standard_city_names
 
 # 国内服务器使用 HuggingFace 镜像
 os.environ.setdefault("HF_ENDPOINT", "https://hf-mirror.com")
@@ -106,6 +106,13 @@ class EmbeddingService:
             parts.append(city)
         if location:
             parts.append(location)
+        profile = normalize_place(activity_type=activity_type, city=city, location=location)
+        if profile.geo_scope == "local" or profile.place_kind in {"city", "district"}:
+            parts.extend(
+                part
+                for part in [profile.admin_city, profile.admin_district, profile.place_normalized]
+                if part
+            )
         if preferences:
             parts.extend(preferences)
         if constraints:

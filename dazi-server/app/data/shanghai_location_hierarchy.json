@@ -1,0 +1,132 @@
+{
+  "cities": [
+    {
+      "name": "上海",
+      "region": "长三角",
+      "aliases": ["上海市", "魔都", "沪上"],
+      "districts": [
+        {
+          "name": "黄浦",
+          "aliases": ["黄浦区", "老黄浦", "市中心"],
+          "places": [
+            {"name": "新天地", "kind": "neighborhood", "aliases": ["上海新天地", "新天地商圈"]},
+            {"name": "外滩", "kind": "landmark", "aliases": ["The Bund", "上海外滩", "外滩源"]},
+            {"name": "南京东路", "kind": "neighborhood", "aliases": ["南京路", "南京路步行街", "南京东路步行街"]},
+            {"name": "人民广场", "kind": "neighborhood", "aliases": ["人广", "人民公园"]},
+            {"name": "豫园", "kind": "landmark", "aliases": ["城隍庙", "老城隍庙", "豫园商城", "豫园老街"]},
+            {"name": "淮海中路", "kind": "neighborhood", "aliases": ["淮海路", "中淮海"]},
+            {"name": "田子坊", "kind": "neighborhood", "aliases": ["泰康路田子坊"]},
+            {"name": "思南公馆", "kind": "landmark", "aliases": ["思南路"]},
+            {"name": "打浦桥", "kind": "neighborhood", "aliases": []}
+          ]
+        },
+        {
+          "name": "静安",
+          "aliases": ["静安区"],
+          "places": [
+            {"name": "静安寺", "kind": "landmark", "aliases": ["静安寺商圈"]},
+            {"name": "南京西路", "kind": "neighborhood", "aliases": ["南西", "南京西路商圈"]},
+            {"name": "静安嘉里中心", "kind": "venue", "aliases": ["嘉里中心"]},
+            {"name": "上海展览中心", "kind": "venue", "aliases": ["上展中心"]},
+            {"name": "大宁", "kind": "neighborhood", "aliases": ["大宁国际", "大宁国际商业广场"]},
+            {"name": "苏河湾", "kind": "neighborhood", "aliases": ["静安苏河湾"]},
+            {"name": "上海火车站", "kind": "venue", "aliases": ["上海站", "火车站"]},
+            {"name": "愚园路", "kind": "neighborhood", "aliases": []}
+          ]
+        },
+        {
+          "name": "徐汇",
+          "aliases": ["徐汇区"],
+          "places": [
+            {"name": "徐家汇", "kind": "neighborhood", "aliases": ["徐家汇商圈"]},
+            {"name": "武康路", "kind": "landmark", "aliases": ["武康路历史文化名街"]},
+            {"name": "衡山路", "kind": "neighborhood", "aliases": ["衡复", "衡复风貌区"]},
+            {"name": "西岸", "kind": "neighborhood", "aliases": ["徐汇滨江", "西岸艺术中心", "西岸梦中心"]},
+            {"name": "龙华", "kind": "neighborhood", "aliases": ["龙华寺"]},
+            {"name": "上海体育场", "kind": "venue", "aliases": ["八万人体育场", "上海体育馆", "万体馆"]},
+            {"name": "上海植物园", "kind": "landmark", "aliases": ["植物园"]},
+            {"name": "永康路", "kind": "neighborhood", "aliases": []}
+          ]
+        },
+        {
+          "name": "浦东",
+          "aliases": ["浦东新区", "浦东"],
+          "places": [
+            {"name": "陆家嘴", "kind": "neighborhood", "aliases": ["小陆家嘴", "陆家嘴金融城"]},
+            {"name": "东方明珠", "kind": "landmark", "aliases": ["东方明珠塔"]},
+            {"name": "上海中心", "kind": "landmark", "aliases": ["上海中心大厦"]},
+            {"name": "世纪公园", "kind": "landmark", "aliases": []},
+            {"name": "前滩", "kind": "neighborhood", "aliases": ["前滩太古里"]},
+            {"name": "世博源", "kind": "venue", "aliases": ["世博园", "世博滨江"]},
+            {"name": "张江", "kind": "neighborhood", "aliases": ["张江高科"]},
+            {"name": "金桥", "kind": "neighborhood", "aliases": []},
+            {"name": "上海迪士尼", "kind": "venue", "aliases": ["迪士尼", "上海迪士尼乐园", "迪士尼小镇"]},
+            {"name": "海昌海洋公园", "kind": "venue", "aliases": ["上海海昌海洋公园"]},
+            {"name": "滴水湖", "kind": "landmark", "aliases": ["临港滴水湖"]},
+            {"name": "上海科技馆", "kind": "venue", "aliases": ["科技馆"]}
+          ]
+        },
+        {
+          "name": "长宁",
+          "aliases": ["长宁区"],
+          "places": [
+            {"name": "中山公园", "kind": "neighborhood", "aliases": ["中山公园商圈"]},
+            {"name": "虹桥", "kind": "neighborhood", "aliases": ["虹桥开发区", "虹桥商圈"]},
+            {"name": "古北", "kind": "neighborhood", "aliases": ["古北新区"]},
+            {"name": "上海动物园", "kind": "landmark", "aliases": ["动物园"]},
+            {"name": "武夷路", "kind": "neighborhood", "aliases": []},
+            {"name": "愚园路", "kind": "neighborhood", "aliases": []}
+          ]
+        },
+        {
+          "name": "虹口",
+          "aliases": ["虹口区"],
+          "places": [
+            {"name": "北外滩", "kind": "neighborhood", "aliases": ["虹口北外滩"]},
+            {"name": "鲁迅公园", "kind": "landmark", "aliases": ["虹口公园"]},
+            {"name": "四川北路", "kind": "neighborhood", "aliases": ["川北路"]},
+            {"name": "甜爱路", "kind": "neighborhood", "aliases": []},
+            {"name": "多伦路", "kind": "neighborhood", "aliases": ["多伦路文化名人街"]},
+            {"name": "虹口足球场", "kind": "venue", "aliases": []}
+          ]
+        },
+        {
+          "name": "杨浦",
+          "aliases": ["杨浦区"],
+          "places": [
+            {"name": "五角场", "kind": "neighborhood", "aliases": ["五角场商圈"]},
+            {"name": "大学路", "kind": "neighborhood", "aliases": []},
+            {"name": "复旦大学", "kind": "venue", "aliases": ["复旦"]},
+            {"name": "同济大学", "kind": "venue", "aliases": ["同济"]},
+            {"name": "共青森林公园", "kind": "landmark", "aliases": []},
+            {"name": "杨浦滨江", "kind": "neighborhood", "aliases": []}
+          ]
+        },
+        {
+          "name": "普陀",
+          "aliases": ["普陀区"],
+          "places": [
+            {"name": "环球港", "kind": "venue", "aliases": ["月星环球港"]},
+            {"name": "长风公园", "kind": "landmark", "aliases": ["长风海洋世界"]},
+            {"name": "真如", "kind": "neighborhood", "aliases": ["真如寺"]},
+            {"name": "曹杨", "kind": "neighborhood", "aliases": []},
+            {"name": "长寿路", "kind": "neighborhood", "aliases": ["长寿路商圈"]},
+            {"name": "苏州河普陀段", "kind": "neighborhood", "aliases": ["普陀苏州河"]}
+          ]
+        },
+        {
+          "name": "闵行",
+          "aliases": ["闵行区"],
+          "places": [
+            {"name": "虹桥天地", "kind": "venue", "aliases": ["虹桥天街"]},
+            {"name": "七宝", "kind": "neighborhood", "aliases": ["七宝老街"]},
+            {"name": "莘庄", "kind": "neighborhood", "aliases": ["莘庄商圈"]},
+            {"name": "浦江郊野公园", "kind": "landmark", "aliases": []},
+            {"name": "韩国街", "kind": "neighborhood", "aliases": ["井亭天地"]},
+            {"name": "老外街", "kind": "neighborhood", "aliases": []}
+          ]
+        }
+      ]
+    }
+  ]
+}

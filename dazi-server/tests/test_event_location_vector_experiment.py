@@ -58,6 +58,12 @@ class EventLocationVectorExperimentTest(unittest.TestCase):
 
         self.assertGreaterEqual(score_location_hybrid_text(source, target), 0.85)
 
+    def test_location_hybrid_text_handles_shanghai_district_place_hierarchy(self):
+        source = {"activity_type": "吃饭", "eval_location": "新天地"}
+        target = {"activity_type": "吃饭", "eval_location": "黄浦区"}
+
+        self.assertGreaterEqual(score_location_hybrid_text(source, target), 0.85)
+
     def test_location_hybrid_text_keeps_unrelated_places_low(self):
         source = {"activity_type": "旅行", "eval_location": "大理 洱海"}
         target = {"activity_type": "旅行", "eval_location": "厦门 鼓浪屿"}

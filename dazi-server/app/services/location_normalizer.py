@@ -3,6 +3,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.services.location_database import LocationRecord, find_location_record
+
 
 ACTIVITY_STRICTNESS = {
     "吃饭": "strict",
@@ -352,6 +354,7 @@ class PlaceProfile:
     geo_scope: str
     aliases: tuple[str, ...] = ()
     confidence: float = 0.0
+    admin_district: str | None = None
 
 
 def compact_text(*values: str | None) -> str:
@@ -411,6 +414,27 @@ def find_place(text: str) -> str | None:
     return None
 
 
+def location_record_aliases(record: LocationRecord) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((record.name, *record.aliases)))
+
+
+def place_profile_from_location_record(
+    raw: str,
+    record: LocationRecord,
+) -> PlaceProfile:
+    return PlaceProfile(
+        raw,
+        record.kind,
+        record.name,
+        record.city,
+        record.region,
+        "local",
+        location_record_aliases(record),
+        0.92 if record.kind == "district" else 0.9,
+        record.district,
+    )
+
+
 def region_aliases(region_name: str) -> tuple[str, ...]:
     canonical = canonical_region_name(region_name)
     if not canonical:
@@ -443,6 +467,9 @@ def align_city_from_catalog(city_raw: str | None) -> str | None:
     place_name = find_place(text)
     if place_name:
         return PLACES[place_name]["city"] or None
+    location_record = find_location_record(text)
+    if location_record:
+        return location_record.city
     region_name = find_region(text)
     if region_name:
         region = REGIONS[region_name]
@@ -488,6 +515,10 @@ def normalize_place(
             region_aliases(region_name),
             0.95,
         )
+
+    location_record = find_location_record(raw)
+    if location_record:
+        return place_profile_from_location_record(raw, location_record)
 
     place_name = find_place(raw)
     if place_name:

@@ -250,6 +250,71 @@ class AgentChatFlowHelperTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(order, ["commit", "matching", "memory"])
         clear_draft.assert_awaited_once_with(str(user_id))
 
+    async def test_publish_existing_edit_schedules_matching_after_commit(self):
+        user_id = uuid4()
+        event_id = uuid4()
+        order = []
+
+        class FakeDB:
+            def add(self, _item):
+                return None
+
+            async def flush(self):
+                return None
+
+            async def commit(self):
+                order.append("commit")
+
+            async def rollback(self):
+                order.append("rollback")
+
+        class FakeBackgroundTasks:
+            def add_task(self, *_args, **_kwargs):
+                order.append("memory")
+
+        draft = {
+            "title": "明天新天地咖啡",
+            "activity_type": "咖啡",
+            "location": "上海新天地",
+            "preferences": [],
+            "constraints": [],
+        }
+
+        with patch(
+            "app.api.agent_chat.ChatHistoryCache.get_event_draft",
+            new=AsyncMock(return_value=draft),
+        ), patch(
+            "app.api.agent_chat.ChatHistoryCache.append_message",
+            new=AsyncMock(),
+        ), patch(
+            "app.api.agent_chat.ChatHistoryCache.start_new_agent_chat_session",
+            new=AsyncMock(),
+        ), patch(
+            "app.api.agent_chat.ChatHistoryCache.clear_event_draft",
+            new=AsyncMock(),
+        ), patch(
+            "app.api.agent_chat.ChatHistoryCache.clear_editing_event",
+            new=AsyncMock(),
+        ), patch(
+            "app.api.agent_chat._update_event_from_draft",
+            new=AsyncMock(return_value=event_id),
+        ), patch(
+            "app.api.agent_chat.schedule_event_matching",
+            new=lambda _background_tasks, scheduled_event_id: order.append(("matching", scheduled_event_id)),
+        ):
+            response = await _publish_existing_draft_without_llm(
+                user=SimpleNamespace(id=user_id),
+                uid_str=str(user_id),
+                message="确认发布",
+                editing_event_id=str(event_id),
+                background_tasks=FakeBackgroundTasks(),
+                db=FakeDB(),
+            )
+
+        self.assertTrue(response.event_ready)
+        self.assertEqual(response.event_id, event_id)
+        self.assertEqual(order, ["commit", ("matching", event_id)])
+
     async def test_publish_keeps_draft_when_commit_fails(self):
         user_id = uuid4()
 

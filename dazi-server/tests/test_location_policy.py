@@ -4,6 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
+from app.services.location_database import find_location_record
 from app.services.location_normalizer import (
     align_city_from_catalog,
     cities_for_region,
@@ -66,6 +67,55 @@ class LocationPolicyTests(unittest.TestCase):
         self.assertEqual(align_city_from_catalog("羊城"), "广州")
         self.assertEqual(align_city_from_catalog("鹏城"), "深圳")
         self.assertEqual(align_city_from_catalog("北京周边"), "北京")
+
+    def test_shanghai_location_database_covers_common_districts_and_places(self):
+        huangpu = find_location_record("黄浦区")
+        xintiandi = find_location_record("上海新天地")
+        lujiazui = find_location_record("陆家嘴")
+        jingan_temple = find_location_record("静安寺")
+
+        self.assertIsNotNone(huangpu)
+        self.assertEqual(huangpu.kind, "district")
+        self.assertEqual(huangpu.city, "上海")
+        self.assertEqual(huangpu.district, "黄浦")
+
+        self.assertIsNotNone(xintiandi)
+        self.assertEqual(xintiandi.city, "上海")
+        self.assertEqual(xintiandi.district, "黄浦")
+        self.assertEqual(xintiandi.kind, "neighborhood")
+
+        self.assertIsNotNone(lujiazui)
+        self.assertEqual(lujiazui.district, "浦东")
+
+        self.assertIsNotNone(jingan_temple)
+        self.assertEqual(jingan_temple.district, "静安")
+
+    def test_normalize_shanghai_district_and_contained_place(self):
+        xintiandi = normalize_place(activity_type="吃饭", city=None, location="新天地")
+        huangpu = normalize_place(activity_type="吃饭", city=None, location="黄浦区")
+
+        self.assertEqual(xintiandi.place_kind, "neighborhood")
+        self.assertEqual(xintiandi.place_normalized, "新天地")
+        self.assertEqual(xintiandi.admin_city, "上海")
+        self.assertEqual(xintiandi.admin_district, "黄浦")
+
+        self.assertEqual(huangpu.place_kind, "district")
+        self.assertEqual(huangpu.place_normalized, "黄浦")
+        self.assertEqual(huangpu.admin_city, "上海")
+        self.assertEqual(huangpu.admin_district, "黄浦")
+
+    def test_shanghai_district_matches_contained_places(self):
+        decision = is_location_compatible(
+            {"activity_type": "吃饭", "city": None, "location": "新天地"},
+            {"activity_type": "吃饭", "city": None, "location": "黄浦区"},
+        )
+
+        self.assertTrue(decision.should_pass)
+        self.assertEqual(decision.relation, "district_contains_place")
+
+    def test_city_alignment_uses_shanghai_location_database(self):
+        self.assertEqual(align_city_from_catalog("黄浦区"), "上海")
+        self.assertEqual(align_city_from_catalog("上海新天地"), "上海")
 
     def test_eval_dataset_passes_hybrid_policy_expectations(self):
         cases_path = Path(__file__).resolve().parents[1] / "experiments" / "location_matching" / "location_eval_cases.json"
