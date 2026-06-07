@@ -4,6 +4,7 @@ import unittest
 from datetime import date
 
 from app.services.clarification_service import (
+    ConversationQuestionNormalizer,
     merge_clarification_answers,
     normalize_conversation_payload,
     normalize_clarification_payload,
@@ -57,7 +58,7 @@ class ClarificationServiceTests(unittest.TestCase):
         self.assertEqual(result["reply"], "我把需要确认的点整理成卡片。")
         self.assertEqual(result["draft"]["title"], "上海街拍")
         self.assertEqual(len(result["questions"]), 1)
-        self.assertEqual(result["questions"][0]["id"], "photo_style")
+        self.assertEqual(result["questions"][0]["id"], "location")
         self.assertEqual(result["questions"][0]["options"][0]["label"], "街拍")
 
     def test_normalize_payload_keeps_all_questions_and_default_option_ids(self):
@@ -78,8 +79,171 @@ class ClarificationServiceTests(unittest.TestCase):
             ],
         })
 
-        self.assertEqual([q["id"] for q in result["questions"]], ["gender", "time", "skill", "cost", "preference"])
-        self.assertEqual(result["questions"][-1]["default_option_ids"], ["quiet"])
+        self.assertEqual([q["id"] for q in result["questions"]], [
+            "gender",
+            "time",
+            "preferences",
+            "budget",
+            "preferences_2",
+        ])
+        self.assertEqual(result["questions"][-1]["default_option_ids"], ["preferences_2_1"])
+
+    def test_lightweight_questions_generate_system_ids_and_options(self):
+        result = normalize_conversation_payload({
+            "action": "clarify",
+            "reply": "我先确认几个点。",
+            "questions": [
+                {
+                    "id": "model_should_not_win",
+                    "choice": "single",
+                    "title": "时间",
+                    "options": ["今晚 19:00", "明晚 19:00"],
+                    "default_option_ids": ["今晚 19:00"],
+                },
+                {
+                    "choice": "multi",
+                    "title": "具体偏好类型",
+                    "options": ["新手也行", "场地费 AA"],
+                    "default_option_ids": ["场地费 AA"],
+                },
+            ],
+        })
+
+        questions = result["questions"]
+        self.assertEqual([question["id"] for question in questions], ["time", "preferences"])
+        self.assertEqual(questions[0]["type"], "single_choice")
+        self.assertEqual(questions[0]["options"], [
+            {"id": "time_1", "label": "今晚 19:00", "value": "今晚 19:00"},
+            {"id": "time_2", "label": "明晚 19:00", "value": "明晚 19:00"},
+        ])
+        self.assertEqual(questions[0]["default_option_ids"], ["time_1"])
+        self.assertEqual(questions[1]["type"], "multi_choice")
+        self.assertEqual(questions[1]["default_option_ids"], ["preferences_2"])
+
+    def test_lightweight_duplicate_titles_get_stable_suffixes(self):
+        result = normalize_conversation_payload({
+            "action": "clarify",
+            "reply": "我先确认几个点。",
+            "questions": [
+                {"choice": "single", "title": "时间", "options": ["上午", "下午"]},
+                {"choice": "single", "title": "时间", "options": ["周六", "周日"]},
+                {"choice": "single", "title": "其他title", "options": ["都可以"]},
+            ],
+        })
+
+        self.assertEqual([question["id"] for question in result["questions"]], ["time", "time_2", "question"])
+        self.assertEqual(result["questions"][1]["options"][0]["id"], "time_2_1")
+
+    def test_lightweight_age_question_outputs_age_range_values(self):
+        result = normalize_conversation_payload({
+            "action": "clarify",
+            "reply": "我先确认年龄。",
+            "questions": [
+                {
+                    "choice": "single",
+                    "title": "年龄",
+                    "options": ["-5 到 +5 岁", "-10 到 +10 岁", "不限年龄"],
+                    "default_option_ids": ["-5 到 +5 岁"],
+                },
+            ],
+        })
+
+        question = result["questions"][0]
+        self.assertEqual(question["id"], "age")
+        self.assertEqual(question["type"], "age_range")
+        self.assertEqual(question["options"], [
+            {"id": "age_1", "label": "+-3", "value": {"range": 3}},
+            {"id": "age_2", "label": "+-5", "value": {"range": 5}},
+            {"id": "age_3", "label": "+-10", "value": {"range": 10}},
+            {"id": "age_4", "label": "不限", "value": None},
+        ])
+        self.assertEqual(question["default_option_ids"], ["age_2"])
+
+    def test_gender_question_forces_fixed_options(self):
+        result = normalize_conversation_payload({
+            "action": "clarify",
+            "reply": "我先确认性别偏好。",
+            "questions": [
+                {
+                    "choice": "single",
+                    "title": "性别",
+                    "options": ["不限男女", "只要女生", "随便"],
+                    "default_option_ids": ["只要女生"],
+                },
+            ],
+        })
+
+        question = result["questions"][0]
+        self.assertEqual(question["id"], "gender")
+        self.assertEqual(question["type"], "single_choice")
+        self.assertEqual([option["label"] for option in question["options"]], ["男", "女", "优先男", "优先女", "不限"])
+        self.assertEqual([option["id"] for option in question["options"]], [
+            "gender_1",
+            "gender_2",
+            "gender_3",
+            "gender_4",
+            "gender_5",
+        ])
+        self.assertEqual(question["default_option_ids"], ["gender_2"])
+
+    def test_age_question_forces_fixed_options(self):
+        result = normalize_conversation_payload({
+            "action": "clarify",
+            "reply": "我先确认年龄。",
+            "questions": [
+                {
+                    "choice": "single",
+                    "title": "年龄",
+                    "options": ["20-30", "同龄就行"],
+                    "default_option_ids": ["同龄就行"],
+                },
+            ],
+        })
+
+        question = result["questions"][0]
+        self.assertEqual(question["id"], "age")
+        self.assertEqual(question["type"], "age_range")
+        self.assertEqual([option["label"] for option in question["options"]], ["+-3", "+-5", "+-10", "不限"])
+        self.assertEqual([option["value"] for option in question["options"]], [
+            {"range": 3},
+            {"range": 5},
+            {"range": 10},
+            None,
+        ])
+        self.assertEqual(question["default_option_ids"], ["age_2"])
+
+    def test_age_question_defaults_to_plus_minus_5_when_no_default_given(self):
+        result = normalize_conversation_payload({
+            "action": "clarify",
+            "reply": "我先确认年龄。",
+            "questions": [
+                {
+                    "choice": "single",
+                    "title": "年龄",
+                    "options": ["+-3", "+-5", "+-10", "不限"],
+                },
+            ],
+        })
+
+        question = result["questions"][0]
+        self.assertEqual([option["label"] for option in question["options"]], ["+-3", "+-5", "+-10", "不限"])
+        self.assertEqual(question["default_option_ids"], ["age_2"])
+
+    def test_stream_and_final_normalization_share_question_ids(self):
+        normalizer = ConversationQuestionNormalizer()
+        raw_questions = [
+            {"choice": "single", "title": "时间", "options": ["上午", "下午"]},
+            {"choice": "single", "title": "时间", "options": ["周六", "周日"]},
+        ]
+
+        streamed = [normalizer.normalize_next(raw_question) for raw_question in raw_questions]
+        final = normalize_conversation_payload(
+            {"action": "clarify", "reply": "确认一下。", "questions": raw_questions},
+            question_normalizer=normalizer,
+        )["questions"]
+
+        self.assertEqual([question["id"] for question in streamed], ["time", "time_2"])
+        self.assertEqual([question["id"] for question in final], ["time", "time_2"])
 
     def test_normalize_payload_rejects_malformed_questions_safely(self):
         result = normalize_clarification_payload({

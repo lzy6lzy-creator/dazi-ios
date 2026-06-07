@@ -38,6 +38,7 @@ from app.services.prompt_builder import PromptBuilder
 from app.services.sse import sse_event
 from app.services.memory_service import extract_and_update_memories_after_publish
 from app.services.clarification_service import (
+    ConversationQuestionNormalizer,
     merge_clarification_answers,
     normalize_conversation_payload,
     normalize_draft_payload,
@@ -50,6 +51,7 @@ router = APIRouter(prefix="/api/v1/agent", tags=["agent-chat"])
 BEIJING_TZ = timezone(timedelta(hours=8))
 SESSION_RESET_ROLE = "session"
 SESSION_RESET_PREFIX = "[SESSION_RESET_AFTER_EVENT]"
+SESSION_DIVIDER_TEXT = "活动已发布。下面为你开启新的对话。"
 
 
 @router.post("/chat", response_model=AgentChatResponse)
@@ -122,6 +124,7 @@ async def chat_with_agent_stream(
 
             parser = AgentStreamParser(visible_tags={"reply"})
             question_extractor = QuestionJSONStreamExtractor()
+            question_normalizer = ConversationQuestionNormalizer()
             clarify_stream_session_id = str(uuid4())
             streamed_question_ids: set[str] = set()
             visible_text_emitted = False
@@ -135,7 +138,7 @@ async def chat_with_agent_stream(
                     visible_text_emitted = True
                     yield sse_event("reply_delta", {"text": visible})
                 for raw_question in question_extractor.feed(chunk):
-                    question = _normalize_stream_question(raw_question)
+                    question = _normalize_stream_question(raw_question, question_normalizer)
                     if not question:
                         continue
                     question_id = str(question.get("id") or "")
@@ -151,7 +154,8 @@ async def chat_with_agent_stream(
                     )
 
             decision = normalize_conversation_payload(
-                parse_conversation_tag_payload(parser.raw_text)
+                parse_conversation_tag_payload(parser.raw_text),
+                question_normalizer=question_normalizer,
             )
             response = await _apply_conversation_decision(
                 user=context["user"],
@@ -191,21 +195,25 @@ async def get_chat_history(
         select(AgentChatMessage)
         .where(
             AgentChatMessage.user_id == user_id,
-            AgentChatMessage.role.in_(["user", "assistant"]),
+            AgentChatMessage.role.in_(["user", "assistant", SESSION_RESET_ROLE]),
         )
         .order_by(AgentChatMessage.created_at.desc())
         .limit(limit)
     )
     messages = list(reversed(result.scalars().all()))
-    return [
-        {
-            "id": str(m.id),
-            "role": m.role,
-            "content": m.content,
-            "created_at": m.created_at.isoformat(),
-        }
-        for m in messages
-    ]
+    return [_serialize_agent_history_message(m) for m in messages]
+
+
+def _serialize_agent_history_message(m: AgentChatMessage) -> dict:
+    content = m.content
+    if m.role == SESSION_RESET_ROLE and content.startswith(f"{SESSION_RESET_PREFIX}:"):
+        content = SESSION_DIVIDER_TEXT
+    return {
+        "id": str(m.id),
+        "role": m.role,
+        "content": content,
+        "created_at": m.created_at.isoformat(),
+    }
 
 
 @router.delete("/history")
@@ -681,6 +689,7 @@ async def _apply_conversation_decision(
     db: AsyncSession,
     session_id_override: str | None = None,
 ) -> AgentChatResponse:
+    decision = normalize_conversation_payload(decision)
     action = decision.get("action") or "chat"
     reply = decision.get("reply") or "我在，你再跟我说说。"
     draft = decision.get("draft") or {}
@@ -754,13 +763,11 @@ async def _apply_conversation_decision(
     return AgentChatResponse(reply=reply)
 
 
-def _normalize_stream_question(raw_question: dict) -> dict | None:
-    normalized = normalize_conversation_payload({
-        "action": "clarify",
-        "questions": [raw_question],
-    })
-    questions = normalized.get("questions") or []
-    return questions[0] if questions else None
+def _normalize_stream_question(
+    raw_question: dict,
+    question_normalizer: ConversationQuestionNormalizer,
+) -> dict | None:
+    return question_normalizer.normalize_next(raw_question)
 
 
 def _looks_like_confirmation(message: str) -> bool:

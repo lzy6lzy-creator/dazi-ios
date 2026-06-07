@@ -12,6 +12,7 @@ from app.api.agent_chat import _build_memory_source_after_publish
 from app.api.agent_chat import _editing_event_intro_reply
 from app.api.agent_chat import _parse_draft_datetime
 from app.api.agent_chat import _publish_existing_draft_without_llm
+from app.api.agent_chat import _serialize_agent_history_message
 from app.api.agent_chat import _start_new_agent_chat_session_after_event_ready
 from app.api.agent_chat import SESSION_RESET_PREFIX
 from app.api.agent_chat import SESSION_RESET_ROLE
@@ -49,7 +50,7 @@ class AgentChatFlowHelperTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("实惠、正常吃", text)
         self.assertIn("不吃辣", text)
 
-    async def test_apply_conversation_decision_uses_llm_questions_without_rule_injection(self):
+    async def test_apply_conversation_decision_uses_system_generated_question_ids(self):
         user_id = uuid4()
         added = []
 
@@ -71,10 +72,11 @@ class AgentChatFlowHelperTests(unittest.IsolatedAsyncioTestCase):
             },
             "questions": [
                 {
-                    "id": "skill",
-                    "type": "single_choice",
-                    "title": "观影偏好？",
-                    "options": [{"id": "quiet", "label": "安静看"}],
+                    "id": "model_should_not_win",
+                    "choice": "single",
+                    "title": "具体偏好类型",
+                    "options": ["安静看"],
+                    "default_option_ids": ["安静看"],
                 }
             ],
         }
@@ -97,9 +99,10 @@ class AgentChatFlowHelperTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertTrue(response.clarification_pending)
-        self.assertEqual([question.id for question in response.clarification_questions], ["skill"])
+        self.assertEqual([question.id for question in response.clarification_questions], ["preferences"])
+        self.assertEqual(response.clarification_questions[0].options[0].id, "preferences_1")
         stored_session = set_session.await_args.args[2]
-        self.assertEqual([question["id"] for question in stored_session["questions"]], ["skill"])
+        self.assertEqual([question["id"] for question in stored_session["questions"]], ["preferences"])
         self.assertNotIn("location", stored_session["draft"])
         self.assertEqual(len(added), 2)
 
@@ -159,6 +162,25 @@ class AgentChatFlowHelperTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(added[0].role, SESSION_RESET_ROLE)
         self.assertTrue(added[0].content.startswith(f"{SESSION_RESET_PREFIX}:"))
         start_session.assert_awaited_once()
+
+    def test_session_reset_history_message_is_serialized_as_divider(self):
+        message_id = uuid4()
+        event_id = uuid4()
+        created_at = datetime(2026, 6, 8, 12, 0, tzinfo=timezone.utc)
+
+        payload = _serialize_agent_history_message(
+            SimpleNamespace(
+                id=message_id,
+                role=SESSION_RESET_ROLE,
+                content=f"{SESSION_RESET_PREFIX}:{event_id}",
+                created_at=created_at,
+            )
+        )
+
+        self.assertEqual(payload["id"], str(message_id))
+        self.assertEqual(payload["role"], SESSION_RESET_ROLE)
+        self.assertEqual(payload["content"], "活动已发布。下面为你开启新的对话。")
+        self.assertEqual(payload["created_at"], created_at.isoformat())
 
     async def test_publish_commits_before_scheduling_background_work(self):
         user_id = uuid4()

@@ -14,7 +14,7 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertNotIn("clarification_questions", prompt_names)
         self.assertNotIn("event_extraction", prompt_names)
 
-    def test_conversation_orchestrator_prompt_includes_state_and_tag_actions(self):
+    def test_conversation_orchestrator_prompt_keeps_dynamic_context_at_tail(self):
         prompt = PromptBuilder.build_conversation_orchestrator_prompt(
             user_name="小明",
             user_city="上海",
@@ -26,19 +26,23 @@ class PromptBuilderTests(unittest.TestCase):
             conversation_state="当前已有待确认活动草稿",
         )
 
-        self.assertIn("chat|clarify|draft|cancel", prompt)
+        self.assertIn("## 输入内容说明", prompt)
+        self.assertIn("## 输出组合", prompt)
+        self.assertIn("## 固定输出格式", prompt)
+        self.assertIn("## 动态上下文", prompt)
         self.assertIn("<reply>", prompt)
         self.assertIn("<question_json>", prompt)
-        self.assertIn("逐项输出", prompt)
-        self.assertIn("## 当前时间", prompt)
         self.assertIn("当前已有待确认活动草稿", prompt)
         self.assertIn("当前位置：上海 徐汇区", prompt)
         self.assertIn("不吃辣", prompt)
+        self.assertLess(prompt.index("## 输入内容说明"), prompt.index("## 输出组合"))
+        self.assertLess(prompt.index("## 固定输出格式"), prompt.index("## 动态上下文"))
+        self.assertGreater(prompt.index("当前位置：上海 徐汇区"), prompt.index("## 动态上下文"))
         self.assertNotIn('"city"', prompt)
         self.assertNotIn("[EVENT_DRAFT]", prompt)
         self.assertNotIn("[EVENT_READY]", prompt)
 
-    def test_conversation_orchestrator_prompt_uses_location_only_gate_rules(self):
+    def test_conversation_orchestrator_prompt_uses_lightweight_actions(self):
         prompt = PromptBuilder.build_conversation_orchestrator_prompt(
             user_name="小明",
             current_location="上海 徐汇区",
@@ -49,20 +53,17 @@ class PromptBuilderTests(unittest.TestCase):
             conversation_state="无待处理状态",
         )
 
-        self.assertIn("action 必须是 clarify，而不是 draft", prompt)
-        self.assertIn("服务端不会用规则补 event/time/location/gender/preferences", prompt)
-        self.assertIn("不要依赖服务端补字段", prompt)
-        self.assertIn("如果地点未明确", prompt)
-        self.assertIn("用户明确提到地点时，以用户表述为准", prompt)
-        self.assertIn("只使用 location 一个地点槽位", prompt)
+        self.assertIn("<action>clarify</action>", prompt)
+        self.assertIn("<action>draft</action>", prompt)
+        self.assertIn("<action>cancel</action>", prompt)
+        self.assertNotIn("chat|clarify|draft|cancel", prompt)
+        self.assertIn("reply + clarify", prompt)
+        self.assertIn("reply + draft", prompt)
+        self.assertIn("reply + cancel", prompt)
         self.assertNotIn("id=city", prompt)
         self.assertNotIn("draft.city", prompt)
-        self.assertIn("time 永远展示", prompt)
-        self.assertIn("不是服务端固定默认时间", prompt)
-        self.assertIn("新手也行", prompt)
-        self.assertIn("场地费 AA", prompt)
 
-    def test_conversation_orchestrator_prompt_includes_age_and_gender_cards(self):
+    def test_conversation_orchestrator_prompt_includes_fixed_age_and_gender_options(self):
         prompt = PromptBuilder.build_conversation_orchestrator_prompt(
             user_name="小明",
             current_location="上海 徐汇区",
@@ -73,17 +74,12 @@ class PromptBuilderTests(unittest.TestCase):
             conversation_state="无待处理状态",
         )
 
-        self.assertIn("年龄和性别是常规匹配确认项", prompt)
-        self.assertIn("id=age", prompt)
-        self.assertIn("type=age_range", prompt)
-        self.assertIn("-5 到 +5", prompt)
+        self.assertIn('options 必须且只能是 ["男","女","优先男","优先女","不限"]', prompt)
+        self.assertIn('options 必须且只能是 ["+-3","+-5","+-10","不限"]', prompt)
+        self.assertIn('default_option_ids 必须是 ["+-5"]', prompt)
         self.assertIn("default_option_ids", prompt)
-        self.assertIn("男、女、优先男、优先女、不限", prompt)
-        self.assertIn("不再重复展示 gender 卡片", prompt)
-        self.assertIn("id=gender", prompt)
-        self.assertIn("用户自己的 profile gender 不能替代本次活动的搭子性别偏好", prompt)
 
-    def test_conversation_orchestrator_prompt_combines_extraction_with_default_cards(self):
+    def test_conversation_orchestrator_prompt_keeps_input_description_static(self):
         prompt = PromptBuilder.build_conversation_orchestrator_prompt(
             user_name="小明",
             current_location="上海 徐汇区",
@@ -94,13 +90,10 @@ class PromptBuilderTests(unittest.TestCase):
             conversation_state="无待处理状态",
         )
 
-        self.assertIn("clarify 同时做信息抽取和结构化确认", prompt)
-        self.assertIn("不要限制 questions 数量", prompt)
-        self.assertIn("default_option_ids", prompt)
-        self.assertIn("start_time 和 end_time", prompt)
-        self.assertIn("LLM 要根据用户表达推断具体 start_time/end_time", prompt)
-        self.assertIn("前端固定默认时间", prompt)
-        self.assertIn("小/中/大多个候选", prompt)
+        self.assertIn("用户最新输入会作为本轮 user message 提供", prompt)
+        self.assertIn("每轮动态上下文放在本 prompt 最后", prompt)
+        self.assertLess(prompt.index("用户最新输入会作为本轮 user message 提供"), prompt.index("## 输出组合"))
+        self.assertLess(prompt.index("## 固定输出格式"), prompt.index("## 动态上下文"))
 
     def test_draft_prompt_builder_outputs_tag_format(self):
         prompt = PromptBuilder.build_event_draft_prompt(

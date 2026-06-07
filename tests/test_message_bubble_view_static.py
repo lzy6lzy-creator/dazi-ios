@@ -4,6 +4,8 @@ from pathlib import Path
 
 SOURCE = Path(__file__).resolve().parents[1] / "dazi/Views/Components/MessageBubbleView.swift"
 TEXT = SOURCE.read_text()
+DATASTORE_SOURCE = Path(__file__).resolve().parents[1] / "dazi/Services/DataStore.swift"
+DATASTORE_TEXT = DATASTORE_SOURCE.read_text()
 
 
 class MessageBubbleViewStaticTests(unittest.TestCase):
@@ -23,6 +25,15 @@ class MessageBubbleViewStaticTests(unittest.TestCase):
     def test_age_bindings_keep_min_and_max_distinct(self):
         self.assertIn("currentMax - 1", TEXT)
         self.assertIn("currentMin + 1", TEXT)
+
+    def test_agent_history_session_role_restores_session_divider(self):
+        self.assertIn(
+            'private static let agentSessionDividerText = "活动已发布。下面为你开启新的对话。"',
+            DATASTORE_TEXT,
+        )
+        self.assertIn('case "session":', DATASTORE_TEXT)
+        self.assertIn("rawContent.hasPrefix(Self.agentSessionResetPrefix)", DATASTORE_TEXT)
+        self.assertIn("content = Self.agentSessionDividerText", DATASTORE_TEXT)
 
 
 if __name__ == "__main__":

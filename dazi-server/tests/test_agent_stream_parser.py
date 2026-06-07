@@ -56,6 +56,21 @@ class AgentStreamParserTests(unittest.TestCase):
         self.assertEqual(extractor.feed("\"id\":\"location\"}</question_json>"), [{"id": "location"}])
         self.assertEqual(extractor.feed("</question_json>"), [])
 
+    def test_question_json_stream_extractor_keeps_lightweight_question_raw(self):
+        extractor = QuestionJSONStreamExtractor()
+
+        emitted = extractor.feed(
+            "<question_json>{\"choice\":\"single\",\"title\":\"时间\","
+            "\"options\":[\"今晚\",\"明晚\"],\"default_option_ids\":[\"今晚\"]}</question_json>"
+        )
+
+        self.assertEqual(emitted, [{
+            "choice": "single",
+            "title": "时间",
+            "options": ["今晚", "明晚"],
+            "default_option_ids": ["今晚"],
+        }])
+
     def test_parse_conversation_tag_payload_falls_back_to_json_output(self):
         payload = (
             "{\"action\":\"chat\",\"reply\":\"能啊，测试成功。\","

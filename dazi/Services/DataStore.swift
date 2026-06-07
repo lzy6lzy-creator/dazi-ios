@@ -28,6 +28,9 @@ class DataStore {
     private let notifications = NotificationService.shared
     private var notifiedRoomCreationIds: Set<String> = []
 
+    private static let agentSessionDividerText = "活动已发布。下面为你开启新的对话。"
+    private static let agentSessionResetPrefix = "[SESSION_RESET_AFTER_EVENT]"
+
     init() {
         if let savedUser = profileStore.loadUser() {
             currentUser = savedUser
@@ -556,8 +559,9 @@ class DataStore {
     }
 
     private func makeAgentHistoryMessage(from apiMessage: APIAgentHistoryMessage) -> Message? {
-        let content = apiMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return nil }
+        let rawContent = apiMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawContent.isEmpty else { return nil }
+        var content = rawContent
         let role: MessageRole
         let senderName: String
         let senderAvatar: String
@@ -573,6 +577,14 @@ class DataStore {
             senderName = currentUser.agentName
             senderAvatar = currentUser.agentEmoji
             senderAvatarImageData = currentUser.agentAvatarImageData
+        case "session":
+            role = .system
+            senderName = "系统"
+            senderAvatar = "ℹ️"
+            senderAvatarImageData = nil
+            if rawContent.hasPrefix(Self.agentSessionResetPrefix) {
+                content = Self.agentSessionDividerText
+            }
         default:
             role = .system
             senderName = "系统"
@@ -717,7 +729,7 @@ class DataStore {
     }
 
     private func appendAgentSessionDividerIfNeeded() {
-        let text = "活动已发布。下面为你开启新的对话。"
+        let text = Self.agentSessionDividerText
         if agentMessages.last?.role == .system && agentMessages.last?.content == text {
             return
         }

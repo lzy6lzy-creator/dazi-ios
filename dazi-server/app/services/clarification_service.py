@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import date
+import re
 from typing import Any
 
 
@@ -12,6 +13,41 @@ _DRAFT_LIST_FIELDS = ("preferences", "constraints")
 _AGE_FILTER_MODE_VALUES = {"preference", "hard_filter"}
 _LOCATION_QUESTION_IDS = {"city", "location", "area", "place", "district", "region"}
 _EVENT_QUESTION_IDS = {"event", "activity", "activity_type"}
+_EXACT_TITLE_IDS = {
+    "时间": "time",
+    "地点": "location",
+    "年龄": "age",
+    "性别": "gender",
+    "预算": "budget",
+    "具体偏好类型": "preferences",
+    "其他title": "question",
+}
+_FIXED_OPTION_LABELS = {
+    "gender": ("男", "女", "优先男", "优先女", "不限"),
+    "age": ("+-3", "+-5", "+-10", "不限"),
+}
+
+
+class ConversationQuestionNormalizer:
+    """Convert lightweight LLM question_json into client ClarificationQuestion shape."""
+
+    def __init__(self):
+        self._stream_counts: dict[str, int] = {}
+
+    def normalize_next(self, raw_question: Any) -> dict | None:
+        return _normalize_question(raw_question, self._stream_counts)
+
+    def normalize_questions(self, raw_questions: list[Any]) -> list[dict]:
+        counts: dict[str, int] = {}
+        questions = []
+        for raw_question in raw_questions:
+            question = _normalize_question(raw_question, counts)
+            if question:
+                questions.append(question)
+        return questions
+
+    def normalize_payload(self, payload: Any) -> dict:
+        return normalize_conversation_payload(payload, question_normalizer=self)
 
 
 def normalize_clarification_payload(payload: Any) -> dict:
@@ -24,11 +60,7 @@ def normalize_clarification_payload(payload: Any) -> dict:
     if not isinstance(raw_questions, list):
         raw_questions = []
 
-    questions = []
-    for index, raw_question in enumerate(raw_questions):
-        question = _normalize_question(raw_question, index)
-        if question:
-            questions.append(question)
+    questions = ConversationQuestionNormalizer().normalize_questions(raw_questions)
 
     draft = _sanitize_draft(payload.get("draft"))
 
@@ -39,7 +71,11 @@ def normalize_clarification_payload(payload: Any) -> dict:
     }
 
 
-def normalize_conversation_payload(payload: Any) -> dict:
+def normalize_conversation_payload(
+    payload: Any,
+    *,
+    question_normalizer: ConversationQuestionNormalizer | None = None,
+) -> dict:
     """Normalize the main conversation orchestrator JSON into a safe shape."""
     if not isinstance(payload, dict):
         return {"action": "chat", "reply": "", "questions": [], "draft": {}}
@@ -55,11 +91,8 @@ def normalize_conversation_payload(payload: Any) -> dict:
     if not isinstance(raw_questions, list):
         raw_questions = []
 
-    questions = []
-    for index, raw_question in enumerate(raw_questions):
-        question = _normalize_question(raw_question, index)
-        if question:
-            questions.append(question)
+    normalizer = question_normalizer or ConversationQuestionNormalizer()
+    questions = normalizer.normalize_questions(raw_questions)
 
     return {
         "action": action,
@@ -130,7 +163,7 @@ def merge_clarification_answers(
     return merged
 
 
-def _normalize_question(raw_question: Any, index: int) -> dict | None:
+def _normalize_question(raw_question: Any, counts: dict[str, int]) -> dict | None:
     if not isinstance(raw_question, dict):
         return None
 
@@ -139,17 +172,23 @@ def _normalize_question(raw_question: Any, index: int) -> dict | None:
     if not title or not isinstance(raw_options, list) or not raw_options:
         return None
 
+    base_id = _base_question_id(raw_question, title)
+    question_id = _unique_question_id(base_id, counts)
+    question_type = _question_type(raw_question, base_id)
+
+    option_source = _fixed_option_source(base_id, raw_options)
     options = []
-    for opt_index, raw_option in enumerate(raw_options[:MAX_OPTIONS]):
-        option = _normalize_option(raw_option, opt_index)
+    aliases_by_id: dict[str, set[str]] = {}
+    for opt_index, raw_option in enumerate(option_source[:MAX_OPTIONS]):
+        option, aliases = _normalize_option(raw_option, question_id, opt_index, question_type)
         if option:
+            aliases.update(_fixed_option_aliases(base_id, option["label"]))
             options.append(option)
+            aliases_by_id[option["id"]] = aliases
     if not options:
         return None
 
-    question_id = str(raw_question.get("id") or f"question_{index + 1}").strip()
-    question_type = str(raw_question.get("type") or "single_choice").strip()
-    category = str(raw_question.get("category") or "偏好").strip()
+    category = str(raw_question.get("category") or _category_for_question(base_id, title)).strip()
     match_filter = raw_question.get("match_filter")
     if match_filter not in {"preference", "hard_filter", None}:
         match_filter = None
@@ -167,6 +206,8 @@ def _normalize_question(raw_question: Any, index: int) -> dict | None:
         "default_option_ids": _normalize_default_option_ids(
             raw_question.get("default_option_ids"),
             options,
+            aliases_by_id,
+            base_id,
         ),
     }
 
@@ -225,29 +266,184 @@ def _clean_string_list(value: Any) -> list[str]:
     return cleaned
 
 
-def _normalize_option(raw_option: Any, index: int) -> dict | None:
-    if not isinstance(raw_option, dict):
-        return None
-    label = str(raw_option.get("label") or "").strip()
+def _base_question_id(raw_question: dict, title: str) -> str:
+    if title in _EXACT_TITLE_IDS:
+        return _EXACT_TITLE_IDS[title]
+
+    text = f"{raw_question.get('category') or ''} {title}".strip()
+    if any(keyword in text for keyword in ("时间", "几点", "什么时候", "日期", "上午", "下午", "晚上")):
+        return "time"
+    if any(keyword in text for keyword in ("地点", "位置", "城市", "区域", "哪片区", "哪里", "在哪")):
+        return "location"
+    if any(keyword in text for keyword in ("年龄", "同龄", "岁")):
+        return "age"
+    if any(keyword in text for keyword in ("性别", "男", "女", "同性", "异性")):
+        return "gender"
+    if any(keyword in text for keyword in ("预算", "价格", "费用", "人均", "AA", "aa")):
+        return "budget"
+    if any(keyword in text for keyword in ("偏好", "要求", "口味", "水平", "技能", "特殊")):
+        return "preferences"
+    if any(keyword in text for keyword in ("活动", "想做什么", "项目")):
+        return "event"
+    return "question"
+
+
+def _unique_question_id(base_id: str, counts: dict[str, int]) -> str:
+    counts[base_id] = counts.get(base_id, 0) + 1
+    if counts[base_id] == 1:
+        return base_id
+    return f"{base_id}_{counts[base_id]}"
+
+
+def _question_type(raw_question: dict, base_id: str) -> str:
+    if base_id == "age":
+        return "age_range"
+    choice = str(raw_question.get("choice") or "").strip().lower()
+    if choice == "multi":
+        return "multi_choice"
+    if choice == "single":
+        return "single_choice"
+    question_type = str(raw_question.get("type") or "single_choice").strip()
+    if question_type in {"single_choice", "multi_choice", "age_range"}:
+        return question_type
+    return "single_choice"
+
+
+def _category_for_question(base_id: str, title: str) -> str:
+    return {
+        "time": "时间",
+        "location": "地点",
+        "age": "年龄",
+        "gender": "偏好",
+        "budget": "预算",
+        "preferences": "偏好",
+        "event": "活动",
+    }.get(base_id, title or "偏好")
+
+
+def _fixed_option_source(base_id: str, raw_options: list) -> list:
+    labels = _FIXED_OPTION_LABELS.get(base_id)
+    if labels:
+        return list(labels)
+    return raw_options
+
+
+def _normalize_option(
+    raw_option: Any,
+    question_id: str,
+    index: int,
+    question_type: str,
+) -> tuple[dict | None, set[str]]:
+    aliases: set[str] = set()
+    if isinstance(raw_option, str):
+        label = raw_option.strip()
+        value = _option_value_for_label(label, question_type)
+    elif isinstance(raw_option, dict):
+        label = str(raw_option.get("label") or raw_option.get("value") or "").strip()
+        value = raw_option.get("value") if "value" in raw_option else _option_value_for_label(label, question_type)
+        raw_id = str(raw_option.get("id") or "").strip()
+        if raw_id:
+            aliases.add(raw_id)
+    else:
+        return None, aliases
     if not label:
-        return None
-    option_id = str(raw_option.get("id") or f"option_{index + 1}").strip()
+        return None, aliases
+    option_id = f"{question_id}_{index + 1}"
+    aliases.update({option_id, label})
     return {
         "id": option_id,
         "label": label,
-        "value": raw_option.get("value"),
-    }
+        "value": value,
+    }, aliases
 
 
-def _normalize_default_option_ids(value: Any, options: list[dict]) -> list[str]:
+def _fixed_option_aliases(base_id: str, label: str) -> set[str]:
+    if base_id == "gender":
+        return _gender_option_aliases(label)
+    if base_id == "age":
+        return _age_option_aliases(label)
+    return set()
+
+
+def _gender_option_aliases(label: str) -> set[str]:
+    aliases = {label}
+    if label == "男":
+        aliases.update({"男生", "男性", "只要男生", "只找男生", "仅限男生", "必须男生", "只限男生", "男搭子"})
+    elif label == "女":
+        aliases.update({"女生", "女性", "只要女生", "只找女生", "仅限女生", "必须女生", "只限女生", "女搭子"})
+    elif label == "优先男":
+        aliases.update({"男生优先", "优先男生", "偏男", "偏向男生", "优先男性"})
+    elif label == "优先女":
+        aliases.update({"女生优先", "优先女生", "偏女", "偏向女生", "优先女性"})
+    elif label == "不限":
+        aliases.update({"不限男女", "男女不限", "不限性别", "随便", "都可以", "无所谓"})
+    return aliases
+
+
+def _age_option_aliases(label: str) -> set[str]:
+    aliases = {label}
+    if label == "+-3":
+        aliases.update({"±3", "+/-3", "-3 到 +3", "-3到+3", "-3 到 +3 岁", "上下3岁"})
+    elif label == "+-5":
+        aliases.update({"±5", "+/-5", "-5 到 +5", "-5到+5", "-5 到 +5 岁", "上下5岁", "同龄", "同龄就行", "同龄优先"})
+    elif label == "+-10":
+        aliases.update({"±10", "+/-10", "-10 到 +10", "-10到+10", "-10 到 +10 岁", "上下10岁"})
+    elif label == "不限":
+        aliases.update({"不限年龄", "年龄不限", "不限制年龄", "都可以", "随便"})
+    return aliases
+
+
+def _option_value_for_label(label: str, question_type: str) -> Any:
+    if question_type != "age_range":
+        return label
+    if "不限" in label:
+        return None
+    radius = _age_radius_from_label(label)
+    if radius is not None:
+        return {"range": radius}
+    return label
+
+
+def _age_radius_from_label(label: str) -> int | None:
+    plus_minus = re.search(r"(?:±|\+/-|\+-)\s*(\d+)", label)
+    if plus_minus:
+        return _safe_int(plus_minus.group(1))
+
+    range_match = re.search(r"[-−]?\s*(\d+)\s*(?:到|~|至|-)\s*\+?\s*(\d+)", label)
+    if range_match:
+        left = _safe_int(range_match.group(1))
+        right = _safe_int(range_match.group(2))
+        if left is not None and right is not None:
+            return max(left, right)
+    return None
+
+
+def _normalize_default_option_ids(
+    value: Any,
+    options: list[dict],
+    aliases_by_id: dict[str, set[str]],
+    base_id: str,
+) -> list[str]:
     if not isinstance(value, list):
-        return []
-    valid_ids = {str(option.get("id")) for option in options if option.get("id")}
+        value = []
     result: list[str] = []
     for item in value:
-        option_id = str(item).strip()
-        if option_id in valid_ids and option_id not in result:
-            result.append(option_id)
+        text = str(item).strip()
+        if not text:
+            continue
+        for option in options:
+            option_id = str(option.get("id") or "")
+            if not option_id or option_id in result:
+                continue
+            if text in aliases_by_id.get(option_id, set()):
+                result.append(option_id)
+                break
+    if result:
+        return result
+    if base_id == "age":
+        for option in options:
+            if option.get("label") == "+-5" and option.get("id"):
+                return [str(option["id"])]
     return result
 
 
