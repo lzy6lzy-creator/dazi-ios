@@ -23,3 +23,42 @@ iOS Debug 构建：
 ```bash
 xcodebuild -project dazi.xcodeproj -scheme dazi -configuration Debug -destination 'generic/platform=iOS Simulator' build
 ```
+
+## iOS 两人协作：Bundle ID 本地私有配置
+
+为避免两个人都用同一个 `Bundle ID` 导致真机安装互相覆盖，项目已支持本地覆盖个人后缀。
+
+### 1. 仓库默认
+
+- 发布/打包用 `com.linke.dazi`
+- 本地真机调试可改成：
+  - `com.linke.dazi.dev.你的名字`
+
+### 2. 每位开发者设置自己的个人后缀
+
+在你本地新增文件（不提交）：
+
+```text
+dazi/Config/BundleID.local.xcconfig
+```
+
+内容示例：
+
+```xcconfig
+APP_BUNDLE_ID_SUFFIX = .dev.yourname
+```
+
+`yourname` 改成你自己的唯一标识（英文拼音/英文名均可）。
+
+### 3. 签名流程
+
+1. Xcode 打开 `dazi.xcodeproj`
+2. 选 `dazi` Target 的 `Signing & Capabilities`
+3. `Team` 选你自己的 Personal Team（本地真机调试）
+4. `Bundle Identifier` 使用默认值（已从配置读取）
+5. Debug 真机运行即可自动使用你本地后缀
+
+### 4. 注意
+
+- `BundleID.local.xcconfig` 已加入 `.gitignore`，不会提交到仓库。
+- App Store / TestFlight 走 `Release` 配置，不受本地后缀影响。
