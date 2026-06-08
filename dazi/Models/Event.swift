@@ -22,12 +22,12 @@ enum EventStatus: String, Codable, Sendable {
     /// 从服务器英文状态映射
     static func fromServer(_ s: String) -> EventStatus {
         switch s {
-        case "pending": return .pending
-        case "matching": return .matching
-        case "matched": return .matched
-        case "active": return .active
-        case "completed": return .completed
-        case "cancelled": return .cancelled
+        case "pending", EventStatus.pending.rawValue: return .pending
+        case "matching", EventStatus.matching.rawValue: return .matching
+        case "matched", EventStatus.matched.rawValue: return .matched
+        case "active", EventStatus.active.rawValue: return .active
+        case "completed", EventStatus.completed.rawValue: return .completed
+        case "cancelled", EventStatus.cancelled.rawValue: return .cancelled
         default: return .pending
         }
     }

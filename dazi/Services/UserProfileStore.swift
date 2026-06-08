@@ -18,6 +18,7 @@ class UserProfileStore {
         static let userOccupation = "dazi_user_occupation"
         static let userCustomInterests = "dazi_user_custom_interests"
         static let userWelcomeDisturb = "dazi_user_welcome_disturb"
+        static let userProfileEventVisibility = "dazi_user_profile_event_visibility"
         static let agentName = "dazi_agent_name"
         static let agentEmoji = "dazi_agent_emoji"
         static let agentAvatarImageData = "dazi_agent_avatar_image_data"
@@ -48,6 +49,7 @@ class UserProfileStore {
             occupation: defaults.string(forKey: Keys.userOccupation) ?? "",
             customInterests: defaults.string(forKey: Keys.userCustomInterests) ?? "",
             welcomeDisturb: defaults.bool(forKey: Keys.userWelcomeDisturb),
+            profileEventVisibility: defaults.string(forKey: Keys.userProfileEventVisibility) ?? "partial",
             agentName: defaults.string(forKey: Keys.agentName) ?? "点点",
             agentEmoji: defaults.string(forKey: Keys.agentEmoji) ?? "🤖",
             agentAvatarImageData: defaults.data(forKey: Keys.agentAvatarImageData),
@@ -70,6 +72,7 @@ class UserProfileStore {
         defaults.set(user.occupation, forKey: Keys.userOccupation)
         defaults.set(user.customInterests, forKey: Keys.userCustomInterests)
         defaults.set(user.welcomeDisturb, forKey: Keys.userWelcomeDisturb)
+        defaults.set(user.profileEventVisibility, forKey: Keys.userProfileEventVisibility)
         defaults.set(user.agentName, forKey: Keys.agentName)
         defaults.set(user.agentEmoji, forKey: Keys.agentEmoji)
         defaults.set(user.agentAvatarImageData, forKey: Keys.agentAvatarImageData)
@@ -82,6 +85,7 @@ class UserProfileStore {
             Keys.userAvatarImageData,
             Keys.userCity, Keys.userBio, Keys.userGender, Keys.userBirthYear, Keys.userBirthDate,
             Keys.userInterests, Keys.userOccupation, Keys.userCustomInterests, Keys.userWelcomeDisturb,
+            Keys.userProfileEventVisibility,
             Keys.agentName, Keys.agentEmoji,
             Keys.agentAvatarImageData, Keys.agentPersonality,
         ]

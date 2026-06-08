@@ -42,7 +42,7 @@ struct AgentChatView: View {
                         )
                         Text(dataStore.currentUser.agentName)
                             .font(.headline)
-                        Text("你的搭子经纪人")
+                        Text("你的个人助理")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

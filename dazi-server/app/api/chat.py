@@ -10,11 +10,12 @@ Chat Room API - 聊天室消息管理
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
@@ -91,17 +92,53 @@ async def _push_message_to_room(
         title = f"{sender_name} · {room_title}"
     body = content or "有一条新消息"
 
-    await push_notification_service.send_to_users(
-        db,
-        user_ids,
-        title=title,
-        body=body,
-        data={
-            "type": "new_message",
-            "room_id": str(room_id),
-            "message_id": str(msg.id),
-        },
+    for target_user_id in user_ids:
+        badge = await _unread_room_count_for_user(target_user_id, db)
+        await push_notification_service.send_to_users(
+            db,
+            [target_user_id],
+            title=title,
+            body=body,
+            data={
+                "type": "new_message",
+                "room_id": str(room_id),
+                "message_id": str(msg.id),
+            },
+            badge=badge,
+        )
+
+
+async def _room_has_unread(member: ChatRoomMember, db: AsyncSession) -> bool:
+    if member.last_read_at is None:
+        return True
+
+    result = await db.execute(
+        select(ChatMessage.id)
+        .where(
+            ChatMessage.room_id == member.room_id,
+            ChatMessage.created_at > member.last_read_at,
+            or_(
+                ChatMessage.sender_type != "user",
+                ChatMessage.sender_id != member.user_id,
+            ),
+        )
+        .limit(1)
     )
+    return result.scalar_one_or_none() is not None
+
+
+async def _unread_room_count_for_user(user_id: UUID, db: AsyncSession) -> int:
+    members_r = await db.execute(
+        select(ChatRoomMember).where(
+            ChatRoomMember.user_id == user_id,
+            ChatRoomMember.role == "user",
+        )
+    )
+    count = 0
+    for member in members_r.scalars().all():
+        if await _room_has_unread(member, db):
+            count += 1
+    return count
 
 
 async def _room_push_title(room_id: UUID, db: AsyncSession) -> str:
@@ -132,6 +169,47 @@ def _truncate_push_text(text: str, limit: int = 90) -> str:
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[:limit] + "..."
+
+
+def _mentioned_room_agents(
+    message: str,
+    explicit_mentions: list[str] | None,
+    agent_names: list[str],
+) -> list[str]:
+    names = list(dict.fromkeys(name for name in agent_names if name))
+    if not names:
+        return []
+
+    explicit = {(mention or "").strip() for mention in (explicit_mentions or [])}
+    explicit_lower = {mention.casefold() for mention in explicit}
+    if {"agent", "ai", "@agent", "@ai"} & explicit_lower:
+        return names
+
+    explicit_matches = [name for name in names if name in explicit]
+    if explicit_matches:
+        return explicit_matches
+
+    text = message or ""
+    text_lower = text.casefold()
+    if any(alias in text_lower for alias in ("@agent", "＠agent", "@ai", "＠ai")):
+        return names
+
+    return [
+        name for name in names
+        if f"@{name}" in text or f"＠{name}" in text
+    ]
+
+
+async def _room_agent_names(room_id: UUID, db: AsyncSession) -> list[str]:
+    result = await db.execute(
+        select(Agent.name)
+        .join(ChatRoomMember, ChatRoomMember.agent_id == Agent.id)
+        .where(
+            ChatRoomMember.room_id == room_id,
+            ChatRoomMember.role == "agent",
+        )
+    )
+    return [name for name in result.scalars().all() if name]
 
 
 def _format_room_event_context(event: Event | None, label: str, self_user_id: UUID) -> str:
@@ -196,6 +274,11 @@ def _chat_room_member_response(member: ChatRoomMember, user: User | None = None,
         # Backward-compatible: older clients read only emoji.
         emoji=user.avatar_url if user else None,
         avatar_url=user.avatar_url if user else None,
+        gender=getattr(user, "gender", None) if user else None,
+        birth_year=getattr(user, "birth_year", None) if user else None,
+        birth_date=getattr(user, "birth_date", None) if user else None,
+        bio=getattr(user, "bio", None) if user else None,
+        city=getattr(user, "city", None) if user else None,
     )
 
 
@@ -216,6 +299,17 @@ async def list_my_rooms(
 
     response = []
     for room in rooms:
+        current_member_r = await db.execute(
+            select(ChatRoomMember).where(
+                ChatRoomMember.room_id == room.id,
+                ChatRoomMember.user_id == user_id,
+                ChatRoomMember.role == "user",
+            )
+        )
+        current_member = current_member_r.scalar_one_or_none()
+        if not current_member:
+            continue
+
         # 加载事件标题
         event_title = None
         if room.event_id_a:
@@ -250,13 +344,17 @@ async def list_my_rooms(
 
         response.append(ChatRoomResponse(
             id=room.id,
+            event_id_a=room.event_id_a,
+            event_id_b=room.event_id_b,
             event_title=event_title,
             match_summary=room.match_summary,
+            agent_dialogue=room.agent_dialogue,
             is_active=room.is_active,
             created_at=room.created_at,
             closed_at=room.closed_at,
             members=members,
             last_message=MessageResponse.model_validate(last_msg) if last_msg else None,
+            has_unread=await _room_has_unread(current_member, db),
         ))
 
     return response
@@ -349,6 +447,27 @@ async def get_room_messages(
     return messages
 
 
+@router.post("/rooms/{room_id}/read")
+async def mark_room_read(
+    room_id: UUID,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    member_r = await db.execute(
+        select(ChatRoomMember).where(
+            ChatRoomMember.room_id == room_id,
+            ChatRoomMember.user_id == user_id,
+            ChatRoomMember.role == "user",
+        )
+    )
+    member = member_r.scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=403, detail="你不是该聊天室成员")
+
+    member.last_read_at = datetime.now(timezone.utc)
+    return {"message": "ok"}
+
+
 @router.post("/rooms/{room_id}/messages", response_model=MessageResponse)
 async def send_message(
     room_id: UUID,
@@ -376,13 +495,16 @@ async def send_message(
     if not room or not room.is_active:
         raise HTTPException(status_code=400, detail="聊天室已关闭")
 
+    agent_names = await _room_agent_names(room_id, db)
+    mentioned_agent_names = _mentioned_room_agents(data.content, data.mentions, agent_names)
+
     # 保存消息
     msg = ChatMessage(
         room_id=room_id,
         sender_id=user_id,
         sender_type="user",
         content=data.content,
-        mentions=data.mentions,
+        mentions=mentioned_agent_names or data.mentions,
     )
     db.add(msg)
     await db.flush()
@@ -395,13 +517,13 @@ async def send_message(
         logger.warning("Message saved but push notification failed for room %s: %s", room_id, exc)
 
     # 检测 @Agent，触发 Agent 回复
-    if data.mentions:
+    if mentioned_agent_names:
         background_tasks.add_task(
             _handle_agent_mention,
             room_id=room_id,
             user_id=user_id,
             message=data.content,
-            mentions=data.mentions,
+            mentions=mentioned_agent_names,
         )
 
     return msg
@@ -782,7 +904,10 @@ async def _handle_agent_mention(
 
                 # WebSocket 广播 Agent 回复
                 await _broadcast_message_to_room(room_id, agent_msg, db)
-                await _push_message_to_room(room_id, agent_msg, db)
+                try:
+                    await _push_message_to_room(room_id, agent_msg, db)
+                except Exception as exc:
+                    logger.warning("Agent reply saved but push notification failed for room %s: %s", room_id, exc)
 
             await db.commit()
 

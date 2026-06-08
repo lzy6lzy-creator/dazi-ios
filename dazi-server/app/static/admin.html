@@ -321,6 +321,11 @@ tr.click-row { cursor: pointer; }
 .badge-completed { color: #d6dde8; }
 .badge-cancelled, .badge-hard_filtered, .badge-location_filtered, .badge-blocklisted { color: #ffc2c0; border-color: rgba(239, 100, 97, .45); }
 .badge-below_threshold, .badge-standby { color: #ffe0a3; border-color: rgba(224, 168, 61, .45); }
+.badge-new { color: #c5cfdb; border-color: rgba(144, 153, 168, .45); }
+.badge-approved { color: #cce6ff; border-color: rgba(90, 167, 255, .45); }
+.badge-invited { color: #ffe0a3; border-color: rgba(224, 168, 61, .45); }
+.badge-accepted { color: #cbffd9; border-color: rgba(75, 196, 123, .45); }
+.badge-rejected { color: #ffc2c0; border-color: rgba(239, 100, 97, .45); }
 
 .tags {
   display: flex;
@@ -676,6 +681,8 @@ label.field {
         <div class="panel-title"><h1>内测报名</h1><span class="subtle" id="betaSignupsSummary"></span></div>
         <div class="toolbar">
           <button class="primary" onclick="loadBetaSignups()">刷新报名</button>
+          <button class="blue" onclick="syncBetaSignupAscStatus()">同步 ASC 状态</button>
+          <button class="primary" onclick="inviteAllBetaSignups()">一键邀请全部</button>
           <button class="blue" onclick="downloadBetaSignupsCsv()">导出 CSV</button>
         </div>
       </div>
@@ -1020,6 +1027,50 @@ function statusBadge(status) {
   return `<span class="badge badge-${safe}">${escapeHtml(status || '-')}</span>`;
 }
 
+function isInInternalTfGroup(signup) {
+  const asc = signup.app_store_connect || {};
+  return Boolean(
+    signup.status === 'accepted'
+    || asc.in_internal_group
+    || asc.beta_tester_status === 'created'
+    || asc.beta_tester_status === 'group_attached'
+  );
+}
+
+function hasAcceptedAscInvite(signup) {
+  const asc = signup.app_store_connect || {};
+  return asc.user_invitation_status === 'accepted' && !isInInternalTfGroup(signup);
+}
+
+function betaSignupPrimaryActionLabel(signup) {
+  if (isInInternalTfGroup(signup)) return '已入组';
+  if (signup.status === 'rejected') return '已拒绝';
+  if (hasAcceptedAscInvite(signup)) return '拉入 TF 组';
+  return '邀请';
+}
+
+function ascStatusBadge(signup) {
+  const asc = signup.app_store_connect;
+  if (!asc) return '<span class="subtle">未同步</span>';
+  if (isInInternalTfGroup(signup)) return '<span class="badge badge-accepted">TF 组内</span>';
+  if (hasAcceptedAscInvite(signup)) return '<span class="badge badge-approved">已接受待入组</span>';
+  if (asc.user_invitation_status === 'pending_existing') return '<span class="badge badge-invited">等待接受</span>';
+  if (asc.user_invitation_status === 'missing') return '<span class="badge badge-new">未邀请</span>';
+  if (asc.beta_tester_state) return `<span class="badge badge-invited">${escapeHtml(asc.beta_tester_state)}</span>`;
+  return `<span class="badge badge-${escapeAttr(asc.user_invitation_status || 'unknown')}">${escapeHtml(asc.user_invitation_status || 'unknown')}</span>`;
+}
+
+function betaSignupManualAction(signup) {
+  const id = escapeAttr(signup.id);
+  if (signup.status === 'rejected') {
+    return `<button data-beta-manual-status="new" onclick="restoreBetaSignup('${id}')">恢复</button>`;
+  }
+  if (isInInternalTfGroup(signup) || signup.status === 'archived') {
+    return '';
+  }
+  return `<button class="danger" data-beta-manual-status="rejected" onclick="rejectBetaSignup('${id}')">拒绝</button>`;
+}
+
 function tags(values) {
   const arr = Array.isArray(values) ? values : [];
   if (!arr.length) return '<span class="subtle">-</span>';
@@ -1236,19 +1287,12 @@ function renderUsersTable() {
 }
 
 function betaSignupActions(signup) {
-  const statusOptions = [
-    ['approved', '通过'],
-    ['invited', '已邀'],
-    ['accepted', '已入组'],
-    ['rejected', '拒绝'],
-  ];
-  const statusButtons = statusOptions.map(([value, label]) => `
-    <button data-beta-status="${escapeAttr(value)}" class="${signup.status === value ? 'active' : ''}" onclick="setBetaSignupStatus('${escapeAttr(signup.id)}', '${escapeAttr(value)}')">${label}</button>
-  `).join('');
-  const inviteDisabled = signup.status === 'invited' || signup.status === 'accepted' ? 'disabled' : '';
+  const label = betaSignupPrimaryActionLabel(signup);
+  const inviteDisabled = label === '已入组' || label === '已拒绝' ? 'disabled' : '';
+  const manualAction = betaSignupManualAction(signup);
   return `<div class="status-actions">
-    <button class="primary" ${inviteDisabled} onclick="inviteBetaSignup('${escapeAttr(signup.id)}')">邀请</button>
-    ${statusButtons}
+    <button class="primary" ${inviteDisabled} onclick="inviteBetaSignup('${escapeAttr(signup.id)}')">${label}</button>
+    ${manualAction}
   </div>`;
 }
 
@@ -1298,15 +1342,16 @@ function renderBetaSignupsTable() {
   }
   $('#betaSignupsContent').innerHTML = `<table>
     <thead><tr>
-      <th style="width:10%;">姓名</th>
-      <th style="width:16%;">Apple ID 邮箱</th>
-      <th style="width:11%;">联系</th>
-      <th style="width:8%;">城市</th>
-      <th style="width:12%;">设备</th>
-      <th style="width:10%;">活动</th>
-      <th style="width:8%;">状态</th>
-      <th style="width:10%;">时间</th>
-      <th style="width:15%;">操作</th>
+      <th style="width:9%;">姓名</th>
+      <th style="width:15%;">Apple ID 邮箱</th>
+      <th style="width:10%;">联系</th>
+      <th style="width:7%;">城市</th>
+      <th style="width:10%;">设备</th>
+      <th style="width:9%;">活动</th>
+      <th style="width:7%;">状态</th>
+      <th style="width:10%;">ASC</th>
+      <th style="width:9%;">时间</th>
+      <th style="width:14%;">操作</th>
     </tr></thead>
     <tbody>${rows.map(signup => `
       <tr>
@@ -1317,16 +1362,27 @@ function renderBetaSignupsTable() {
         <td class="truncate">${escapeHtml(signup.device || '-')}</td>
         <td>${tags(signup.activity_interests)}</td>
         <td>${statusBadge(signup.status)}</td>
+        <td>${ascStatusBadge(signup)}</td>
         <td class="nowrap">${fmtTime(signup.created_at)}</td>
         <td>${betaSignupActions(signup)}</td>
       </tr>
-      ${signup.note ? `<tr><td></td><td colspan="8"><span class="subtle">备注：</span>${escapeHtml(signup.note)}</td></tr>` : ''}
+      ${signup.note ? `<tr><td></td><td colspan="9"><span class="subtle">备注：</span>${escapeHtml(signup.note)}</td></tr>` : ''}
     `).join('')}</tbody>
   </table>`;
 }
 
 function updateBetaSignupRow(updated) {
   state.betaSignups = state.betaSignups.map(signup => signup.id === updated.id ? updated : signup);
+  renderBetaSignupsTable();
+}
+
+function mergeBetaSignupRows(results) {
+  const updates = new Map((results || [])
+    .map(item => item.signup)
+    .filter(Boolean)
+    .map(signup => [signup.id, signup]));
+  if (!updates.size) return;
+  state.betaSignups = state.betaSignups.map(signup => updates.get(signup.id) || signup);
   renderBetaSignupsTable();
 }
 
@@ -1340,13 +1396,40 @@ async function setBetaSignupStatus(id, status) {
   showToast(`内测报名状态已更新为 ${data.status}`);
 }
 
+async function rejectBetaSignup(id) {
+  const signup = state.betaSignups.find(item => item.id === id);
+  if (!signup) return showToast('找不到这条报名', true);
+  if (!confirmAction(`确认拒绝 ${signup.name} (${signup.email}) 的内测报名？`)) return;
+  await setBetaSignupStatus(id, 'rejected');
+}
+
+async function restoreBetaSignup(id) {
+  const signup = state.betaSignups.find(item => item.id === id);
+  if (!signup) return showToast('找不到这条报名', true);
+  if (!confirmAction(`确认恢复 ${signup.name} (${signup.email}) 的内测报名？`)) return;
+  await setBetaSignupStatus(id, 'new');
+}
+
+async function syncBetaSignupAscStatus() {
+  showToast('正在同步 App Store Connect 状态');
+  const data = await guarded(null, async () => requestAdmin('/api/admin/beta-signups/sync-asc-status', {
+    method: 'POST',
+  }));
+  if (!data) return;
+  mergeBetaSignupRows(data.results);
+  showToast(`ASC 状态已同步：更新 ${data.updated || 0} 条，失败 ${data.failed || 0} 条`);
+}
+
 async function inviteBetaSignup(id) {
   const signup = state.betaSignups.find(item => item.id === id);
   if (!signup) return showToast('找不到这条报名', true);
-  const message = `确认邀请 ${signup.name} (${signup.email}) 加入内部测试？`;
+  const label = betaSignupPrimaryActionLabel(signup);
+  const message = label === '拉入 TF 组'
+    ? `确认将 ${signup.name} (${signup.email}) 拉入 TestFlight 内部测试组？`
+    : `确认邀请 ${signup.name} (${signup.email}) 加入内部测试？`;
   if (!confirmAction(message)) return;
 
-  showToast('正在发送 TestFlight 内测邀请');
+  showToast(label === '拉入 TF 组' ? '正在拉入 TestFlight 内部测试组' : '正在发送 TestFlight 内测邀请');
   const data = await guarded(null, async () => requestAdmin(`/api/admin/beta-signups/${encodeURIComponent(id)}/invite-internal`, {
     method: 'POST',
   }));
@@ -1357,6 +1440,22 @@ async function inviteBetaSignup(id) {
     ? '，等待对方接受 App Store Connect 邀请'
     : '，已加入内部测试组';
   showToast(`已记录邀请状态${suffix}`);
+}
+
+async function inviteAllBetaSignups() {
+  const visibleCandidates = state.betaSignups
+    .filter(item => !['accepted', 'rejected'].includes(item.status))
+    .length;
+  const message = `确认一键邀请所有未入组且未拒绝的报名？当前列表可处理 ${visibleCandidates} 条，实际会按服务器全量报名执行。`;
+  if (!confirmAction(message)) return;
+
+  showToast('正在批量发送 TestFlight 内测邀请');
+  const data = await guarded(null, async () => requestAdmin('/api/admin/beta-signups/invite-internal-all', {
+    method: 'POST',
+  }));
+  if (!data) return;
+  mergeBetaSignupRows(data.results);
+  showToast(`批量邀请完成：成功 ${data.succeeded || 0} 条，失败 ${data.failed || 0} 条，跳过 ${data.skipped || 0} 条`);
 }
 
 async function downloadBetaSignupsCsv() {

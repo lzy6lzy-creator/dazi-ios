@@ -16,6 +16,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
     var occupation: String
     var customInterests: String
     var welcomeDisturb: Bool
+    var profileEventVisibility: String
 
     var agentName: String
     var agentEmoji: String
@@ -38,6 +39,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         occupation: String = "",
         customInterests: String = "",
         welcomeDisturb: Bool = false,
+        profileEventVisibility: String = "partial",
         agentName: String = "点点",
         agentEmoji: String = "🤖",
         agentAvatarImageData: Data? = nil,
@@ -58,6 +60,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         self.occupation = occupation
         self.customInterests = customInterests
         self.welcomeDisturb = welcomeDisturb
+        self.profileEventVisibility = profileEventVisibility
         self.agentName = agentName
         self.agentEmoji = agentEmoji
         self.agentAvatarImageData = agentAvatarImageData

@@ -59,6 +59,7 @@ struct APIUserResponse: Codable {
     let occupation: String?
     let customInterests: String?
     let welcomeDisturb: Bool?
+    let profileEventVisibility: String?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
@@ -68,6 +69,64 @@ struct APIUserResponse: Codable {
         case avatarUrl = "avatar_url"
         case customInterests = "custom_interests"
         case welcomeDisturb = "welcome_disturb"
+        case profileEventVisibility = "profile_event_visibility"
+        case createdAt = "created_at"
+    }
+}
+
+struct APIPublicProfileEventResponse: Codable {
+    let id: String
+    let title: String
+    let activityType: String
+    let detailLevel: String
+    let timeLabel: String?
+    let startTime: String?
+    let endTime: String?
+    let location: String?
+    let city: String?
+    let description: String?
+    let preferences: [String]?
+    let constraints: [String]?
+    let status: String
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, location, city, description, preferences, constraints, status
+        case activityType = "activity_type"
+        case detailLevel = "detail_level"
+        case timeLabel = "time_label"
+        case startTime = "start_time"
+        case endTime = "end_time"
+        case createdAt = "created_at"
+    }
+}
+
+struct APIPublicUserProfileResponse: Codable {
+    let id: String
+    let name: String
+    let gender: String?
+    let birthYear: Int?
+    let birthDate: String?
+    let bio: String?
+    let avatarUrl: String?
+    let interests: [String]?
+    let city: String?
+    let occupation: String?
+    let customInterests: String?
+    let welcomeDisturb: Bool?
+    let profileEventVisibility: String?
+    let pastEvents: [APIPublicProfileEventResponse]?
+    let createdAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, gender, bio, interests, city, occupation
+        case birthYear = "birth_year"
+        case birthDate = "birth_date"
+        case avatarUrl = "avatar_url"
+        case customInterests = "custom_interests"
+        case welcomeDisturb = "welcome_disturb"
+        case profileEventVisibility = "profile_event_visibility"
+        case pastEvents = "past_events"
         case createdAt = "created_at"
     }
 }
@@ -239,32 +298,64 @@ struct APIChatRoomMemberResponse: Codable {
     let role: String
     let emoji: String?
     let avatarUrl: String?
+    let gender: String?
+    let birthYear: Int?
+    let birthDate: String?
+    let bio: String?
+    let city: String?
 
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case avatarUrl = "avatar_url"
+        case birthYear = "birth_year"
+        case birthDate = "birth_date"
         case name, role, emoji
+        case gender, bio, city
     }
 }
 
 struct APIChatRoomResponse: Codable {
     let id: String
+    let eventIdA: String?
+    let eventIdB: String?
     let eventTitle: String?
     let matchSummary: String?
+    let agentDialogue: String?
     let isActive: Bool
     let createdAt: String
     let closedAt: String?
     let members: [APIChatRoomMemberResponse]
     let lastMessage: APIChatMessageResponse?
+    let hasUnread: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, members
+        case eventIdA = "event_id_a"
+        case eventIdB = "event_id_b"
         case eventTitle = "event_title"
         case matchSummary = "match_summary"
+        case agentDialogue = "agent_dialogue"
         case isActive = "is_active"
         case createdAt = "created_at"
         case closedAt = "closed_at"
         case lastMessage = "last_message"
+        case hasUnread = "has_unread"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        eventIdA = try container.decodeIfPresent(String.self, forKey: .eventIdA)
+        eventIdB = try container.decodeIfPresent(String.self, forKey: .eventIdB)
+        eventTitle = try container.decodeIfPresent(String.self, forKey: .eventTitle)
+        matchSummary = try container.decodeIfPresent(String.self, forKey: .matchSummary)
+        agentDialogue = try container.decodeIfPresent(String.self, forKey: .agentDialogue)
+        isActive = try container.decode(Bool.self, forKey: .isActive)
+        createdAt = try container.decode(String.self, forKey: .createdAt)
+        closedAt = try container.decodeIfPresent(String.self, forKey: .closedAt)
+        members = try container.decode([APIChatRoomMemberResponse].self, forKey: .members)
+        lastMessage = try container.decodeIfPresent(APIChatMessageResponse.self, forKey: .lastMessage)
+        hasUnread = try container.decodeIfPresent(Bool.self, forKey: .hasUnread) ?? false
     }
 }
 
@@ -783,6 +874,10 @@ final class APIClient {
         try await request(method: "GET", path: "/api/v1/chat/rooms/\(roomId)/messages?limit=\(limit)")
     }
 
+    func markRoomAsRead(roomId: String) async throws {
+        _ = try await requestDict(method: "POST", path: "/api/v1/chat/rooms/\(roomId)/read")
+    }
+
     func sendRoomMessage(roomId: String, content: String, mentions: [String]? = nil) async throws -> APIChatMessageResponse {
         var body: [String: Any] = ["content": content]
         if let mentions, !mentions.isEmpty {
@@ -813,7 +908,7 @@ final class APIClient {
         try await request(method: "GET", path: "/api/v1/chat/rooms/\(roomId)/vote-status")
     }
 
-    func getUserProfile(userId: String) async throws -> APIUserResponse {
+    func getUserProfile(userId: String) async throws -> APIPublicUserProfileResponse {
         try await request(method: "GET", path: "/api/v1/users/\(userId)/profile")
     }
 }

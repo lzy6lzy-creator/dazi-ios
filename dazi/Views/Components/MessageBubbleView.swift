@@ -3,13 +3,12 @@ import SwiftUI
 struct MessageBubbleView: View {
     let message: Message
     var showAvatar: Bool = true
+    var onAvatarTap: ((String) -> Void)?
     var onConfirm: (() -> Void)?
     var onSubmitClarification: ((String, [ClarificationAnswerInput], String?) -> Void)?
 
     @State private var selectedOptionIds: [String: Set<String>] = [:]
     @State private var customValues: [String: String] = [:]
-    @State private var minAgeValues: [String: String] = [:]
-    @State private var maxAgeValues: [String: String] = [:]
     @State private var expandedCustomQuestionIds: Set<String> = []
     @State private var startTimeValues: [String: Date] = [:]
     @State private var endTimeValues: [String: Date] = [:]
@@ -277,7 +276,7 @@ struct MessageBubbleView: View {
             if isTimeQuestion(question) {
                 timeRangeFields(question)
             } else if isAgeQuestion(question) {
-                ageRangeSliderFields(question)
+                ageRangePresetFields(question)
             } else if isGenderQuestion(question) {
                 horizontalOptionScroller(question, showsCustomInput: false)
             } else {
@@ -446,7 +445,7 @@ struct MessageBubbleView: View {
         .disabled(message.clarificationSubmitted)
     }
 
-    private func ageRangeSliderFields(_ question: ClarificationQuestion) -> some View {
+    private func ageRangePresetFields(_ question: ClarificationQuestion) -> some View {
         VStack(alignment: .leading, spacing: 9) {
             horizontalOptionScroller(question, showsCustomInput: false)
 
@@ -460,8 +459,8 @@ struct MessageBubbleView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(Color(.secondarySystemGroupedBackground))
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
-            } else {
-                let range = ageRange(for: question) ?? defaultAgeRange(for: question)
+            } else if !selectedAgeOptionIds(for: question).isEmpty {
+                let range = defaultAgeRange(for: question)
                 HStack {
                     Text("年龄范围")
                         .font(.caption)
@@ -473,24 +472,9 @@ struct MessageBubbleView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(AppTheme.primaryColor)
                 }
-                .padding(.horizontal, 2)
-
-                VStack(spacing: 10) {
-                    ageSliderRow(
-                        title: "下限",
-                        valueText: "\(range.min) 岁",
-                        selection: minAgeBinding(for: question),
-                        bounds: Self.ageSliderBounds(lower: Self.minimumAllowedAge, upper: range.max - 1)
-                    )
-                    ageSliderRow(
-                        title: "上限",
-                        valueText: "\(range.max) 岁",
-                        selection: maxAgeBinding(for: question),
-                        bounds: Self.ageSliderBounds(lower: range.min + 1, upper: Self.maximumAllowedAge)
-                    )
-                }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(.secondarySystemGroupedBackground))
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusSM)
@@ -498,40 +482,6 @@ struct MessageBubbleView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
             }
-        }
-        .onAppear {
-            seedDefaultAgeValues(for: question)
-        }
-    }
-
-    private func ageSliderRow(
-        title: String,
-        valueText: String,
-        selection: Binding<Double>,
-        bounds: ClosedRange<Double>?
-    ) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-                .frame(width: 34, alignment: .leading)
-
-            if let bounds, bounds.upperBound > bounds.lowerBound {
-                Slider(value: selection, in: bounds, step: 1)
-                    .tint(AppTheme.primaryColor)
-                    .disabled(message.clarificationSubmitted)
-            } else {
-                Capsule()
-                    .fill(Color.secondary.opacity(0.20))
-                    .frame(height: 4)
-            }
-
-            Text(valueText)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(.primary)
-                .frame(width: 44, alignment: .trailing)
         }
     }
 
@@ -558,17 +508,12 @@ struct MessageBubbleView: View {
             if isTimeQuestion(question) {
                 seedDefaultTimeValues(for: question)
             }
-            if isAgeQuestion(question) {
-                seedDefaultAgeValues(for: question)
-            }
         }
     }
 
     private func resetClarificationInputs() {
         selectedOptionIds = [:]
         customValues = [:]
-        minAgeValues = [:]
-        maxAgeValues = [:]
         expandedCustomQuestionIds = []
         startTimeValues = [:]
         endTimeValues = [:]
@@ -579,8 +524,6 @@ struct MessageBubbleView: View {
         if expandedCustomQuestionIds.contains(question.id) {
             expandedCustomQuestionIds.remove(question.id)
             customValues[question.id] = nil
-            minAgeValues[question.id] = nil
-            maxAgeValues[question.id] = nil
         } else {
             expandedCustomQuestionIds.insert(question.id)
         }
@@ -602,14 +545,6 @@ struct MessageBubbleView: View {
         if isTimeQuestion(question) {
             seedDefaultTimeValues(for: question, force: true)
         }
-        if isAgeQuestion(question) {
-            if isAgeUnlimitedSelected(question) {
-                minAgeValues[question.id] = nil
-                maxAgeValues[question.id] = nil
-            } else {
-                seedDefaultAgeValues(for: question, force: true)
-            }
-        }
     }
 
     private var canSubmitClarification: Bool {
@@ -623,7 +558,7 @@ struct MessageBubbleView: View {
 
     private func hasAnswer(for question: ClarificationQuestion) -> Bool {
         if isAgeQuestion(question) {
-            return isAgeUnlimitedSelected(question) || ageRange(for: question) != nil
+            return !selectedAgeOptionIds(for: question).isEmpty
         }
         if selectedOptionIds[question.id]?.isEmpty == false {
             return true
@@ -707,22 +642,17 @@ struct MessageBubbleView: View {
 
     private func startTimeBinding(for question: ClarificationQuestion) -> Binding<Date> {
         Binding {
-            timeRange(for: question)?.start ?? Date()
+            startTimeValues[question.id] ?? defaultTimeRange(for: question)?.start ?? Date()
         } set: { newValue in
             startTimeValues[question.id] = newValue
-            let currentEnd = endTimeValues[question.id] ?? timeRange(for: question)?.end ?? newValue.addingTimeInterval(2 * 3600)
-            if currentEnd <= newValue {
-                endTimeValues[question.id] = newValue.addingTimeInterval(2 * 3600)
-            }
         }
     }
 
     private func endTimeBinding(for question: ClarificationQuestion) -> Binding<Date> {
         Binding {
-            timeRange(for: question)?.end ?? Date().addingTimeInterval(2 * 3600)
+            endTimeValues[question.id] ?? defaultTimeRange(for: question)?.end ?? Date().addingTimeInterval(2 * 3600)
         } set: { newValue in
-            let currentStart = startTimeValues[question.id] ?? timeRange(for: question)?.start ?? Date()
-            endTimeValues[question.id] = newValue > currentStart ? newValue : currentStart.addingTimeInterval(3600)
+            endTimeValues[question.id] = newValue
         }
     }
 
@@ -741,10 +671,7 @@ struct MessageBubbleView: View {
         let start = startTimeValues[question.id] ?? fallback?.start
         let end = endTimeValues[question.id] ?? fallback?.end
         guard let start, let end else { return nil }
-        if end <= start {
-            return (start, start.addingTimeInterval(3600))
-        }
-        return (start, end)
+        return Self.normalizedTimeRange(start: start, end: end)
     }
 
     private func defaultTimeRange(for question: ClarificationQuestion) -> (start: Date, end: Date)? {
@@ -757,28 +684,9 @@ struct MessageBubbleView: View {
                   let end = Self.parseClarificationDate(endText) else {
                 continue
             }
-            return (start, end > start ? end : start.addingTimeInterval(3600))
+            return Self.normalizedTimeRange(start: start, end: end)
         }
         return nil
-    }
-
-    private func seedDefaultAgeValues(for question: ClarificationQuestion, force: Bool = false) {
-        guard isAgeQuestion(question), !isAgeUnlimitedSelected(question) else { return }
-        let range = defaultAgeRange(for: question)
-        if force || minAgeValues[question.id] == nil {
-            minAgeValues[question.id] = "\(range.min)"
-        }
-        if force || maxAgeValues[question.id] == nil {
-            maxAgeValues[question.id] = "\(range.max)"
-        }
-    }
-
-    private func ageRange(for question: ClarificationQuestion) -> (min: Int, max: Int)? {
-        guard isAgeQuestion(question), !isAgeUnlimitedSelected(question) else { return nil }
-        let fallback = defaultAgeRange(for: question)
-        let rawMin = Int(minAgeValues[question.id] ?? "") ?? fallback.min
-        let rawMax = Int(maxAgeValues[question.id] ?? "") ?? fallback.max
-        return Self.normalizedAgeRange(min: rawMin, max: rawMax)
     }
 
     private func defaultAgeRange(for question: ClarificationQuestion) -> (min: Int, max: Int) {
@@ -789,8 +697,18 @@ struct MessageBubbleView: View {
         return Self.normalizedAgeRange(min: minAge, max: maxAge)
     }
 
-    private func selectedAgeRadius(for question: ClarificationQuestion) -> Int? {
+    private func selectedAgeOptionIds(for question: ClarificationQuestion) -> Set<String> {
+        let availableIds = Set(question.options.map(\.id))
         let selectedIds = selectedOptionIds[question.id] ?? Set(question.defaultOptionIds)
+        let validSelectedIds = selectedIds.filter { availableIds.contains($0) }
+        if !validSelectedIds.isEmpty {
+            return validSelectedIds
+        }
+        return Set(question.defaultOptionIds.filter { availableIds.contains($0) })
+    }
+
+    private func selectedAgeRadius(for question: ClarificationQuestion) -> Int? {
+        let selectedIds = selectedAgeOptionIds(for: question)
         let selectedOptions = question.options.filter { selectedIds.contains($0.id) }
         let candidateOptions = selectedOptions.isEmpty ? question.options : selectedOptions
         for option in candidateOptions {
@@ -807,30 +725,8 @@ struct MessageBubbleView: View {
         return nil
     }
 
-    private func minAgeBinding(for question: ClarificationQuestion) -> Binding<Double> {
-        Binding {
-            Double(ageRange(for: question)?.min ?? defaultAgeRange(for: question).min)
-        } set: { newValue in
-            let currentMax = ageRange(for: question)?.max ?? defaultAgeRange(for: question).max
-            let upperBound = max(currentMax - 1, Self.minimumAllowedAge)
-            let value = min(Self.clampedAge(Int(newValue.rounded())), upperBound)
-            minAgeValues[question.id] = "\(value)"
-        }
-    }
-
-    private func maxAgeBinding(for question: ClarificationQuestion) -> Binding<Double> {
-        Binding {
-            Double(ageRange(for: question)?.max ?? defaultAgeRange(for: question).max)
-        } set: { newValue in
-            let currentMin = ageRange(for: question)?.min ?? defaultAgeRange(for: question).min
-            let lowerBound = min(currentMin + 1, Self.maximumAllowedAge)
-            let value = max(Self.clampedAge(Int(newValue.rounded())), lowerBound)
-            maxAgeValues[question.id] = "\(value)"
-        }
-    }
-
     private func isAgeUnlimitedSelected(_ question: ClarificationQuestion) -> Bool {
-        let selectedIds = selectedOptionIds[question.id] ?? Set(question.defaultOptionIds)
+        let selectedIds = selectedAgeOptionIds(for: question)
         return question.options.contains { option in
             selectedIds.contains(option.id) && isUnlimitedAgeOption(option)
         }
@@ -860,18 +756,11 @@ struct MessageBubbleView: View {
             )
         }
         if isAgeQuestion(question) {
-            if isAgeUnlimitedSelected(question) {
-                return ClarificationAnswerInput(questionId: question.id, optionIds: optionIds)
-            }
-            guard let range = ageRange(for: question) else {
+            let optionIds = selectedAgeOptionIds(for: question)
+            if optionIds.isEmpty {
                 return nil
             }
-            return ClarificationAnswerInput(
-                questionId: question.id,
-                optionIds: optionIds,
-                minAge: range.min,
-                maxAge: range.max
-            )
+            return ClarificationAnswerInput(questionId: question.id, optionIds: Array(optionIds))
         }
 
         let customText = customValues[question.id]?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -903,17 +792,29 @@ struct MessageBubbleView: View {
         .padding(.vertical, 2)
     }
 
+    @ViewBuilder
     private var avatarView: some View {
         let isAgentRole = message.role == .agent || message.role == .partnerAgent
         let fallbackEmoji = message.senderAvatar.isEmpty ? (isAgentRole ? "🤖" : "😊") : message.senderAvatar
         let bgColor = isAgentRole ? AppTheme.agentColor.opacity(0.12) : Color.gray.opacity(0.08)
-
-        return AvatarView(
+        let avatar = AvatarView(
             imageData: message.senderAvatarImageData,
             emoji: fallbackEmoji,
             size: 34,
             backgroundColor: bgColor
         )
+
+        if message.role == .partner, let senderUserId = message.senderUserId {
+            Button {
+                onAvatarTap?(senderUserId)
+            } label: {
+                avatar
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("查看\(message.senderName)主页")
+        } else {
+            avatar
+        }
     }
 
     private static let minimumAllowedAge = 18
@@ -941,6 +842,13 @@ struct MessageBubbleView: View {
         isoFormatter.date(from: value) ?? fractionalIsoFormatter.date(from: value)
     }
 
+    private static func normalizedTimeRange(start: Date, end: Date) -> (start: Date, end: Date) {
+        if end <= start {
+            return (start, start.addingTimeInterval(3600))
+        }
+        return (start, end)
+    }
+
     private static func clampedAge(_ value: Int) -> Int {
         min(max(value, minimumAllowedAge), maximumAllowedAge)
     }
@@ -959,11 +867,6 @@ struct MessageBubbleView: View {
             }
         }
         return (minAge, maxAge)
-    }
-
-    private static func ageSliderBounds(lower: Int, upper: Int) -> ClosedRange<Double>? {
-        guard upper > lower else { return nil }
-        return Double(lower)...Double(upper)
     }
 
     private static func ageRadius(from label: String) -> Int? {

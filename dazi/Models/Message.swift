@@ -110,6 +110,7 @@ struct Message: Identifiable, Codable, Sendable {
     var content: String
     var role: MessageRole
     var senderName: String
+    var senderUserId: String?
     var senderAvatar: String
     var senderAvatarImageData: Data?
     var timestamp: Date
@@ -125,6 +126,7 @@ struct Message: Identifiable, Codable, Sendable {
         content: String,
         role: MessageRole,
         senderName: String,
+        senderUserId: String? = nil,
         senderAvatar: String = "",
         senderAvatarImageData: Data? = nil,
         timestamp: Date = .now,
@@ -139,6 +141,7 @@ struct Message: Identifiable, Codable, Sendable {
         self.content = content
         self.role = role
         self.senderName = senderName
+        self.senderUserId = senderUserId
         self.senderAvatar = senderAvatar
         self.senderAvatarImageData = senderAvatarImageData
         self.timestamp = timestamp
@@ -156,6 +159,7 @@ struct Message: Identifiable, Codable, Sendable {
             content: content,
             role: .user,
             senderName: u.name,
+            senderUserId: u.id,
             senderAvatar: u.avatarEmoji,
             senderAvatarImageData: u.avatarImageData
         )

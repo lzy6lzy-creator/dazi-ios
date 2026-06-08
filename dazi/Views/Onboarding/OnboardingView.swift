@@ -603,6 +603,7 @@ struct OnboardingView: View {
             if !occupation.isEmpty { userData["occupation"] = occupation }
             if !customInterests.isEmpty { userData["custom_interests"] = customInterests }
             userData["welcome_disturb"] = welcomeDisturb
+            userData["profile_event_visibility"] = "partial"
             _ = try await api.updateMe(data: userData)
 
             var agentData: [String: Any] = ["name": agentName]

@@ -28,6 +28,12 @@ class User(Base):
     occupation: Mapped[str | None] = mapped_column(String(100))
     custom_interests: Mapped[str | None] = mapped_column(Text)
     welcome_disturb: Mapped[bool] = mapped_column(Boolean, default=False)
+    profile_event_visibility: Mapped[str] = mapped_column(
+        String(20),
+        default="partial",
+        server_default="partial",
+        nullable=False,
+    )
     embedding = mapped_column(Vector(768), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

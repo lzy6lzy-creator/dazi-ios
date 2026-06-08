@@ -77,8 +77,43 @@ class BetaSignupStaticTests(unittest.TestCase):
         self.assertIn("INTERNAL_TEST_PHONES_FILE", admin_api)
         self.assertIn("setBetaSignupStatus", admin_html)
         self.assertIn("inviteBetaSignup", admin_html)
-        self.assertIn("data-beta-status", admin_html)
+        self.assertIn("rejectBetaSignup", admin_html)
+        self.assertIn("restoreBetaSignup", admin_html)
+        self.assertIn("data-beta-manual-status", admin_html)
         self.assertIn("邀请", admin_html)
+
+    def test_admin_beta_signup_actions_are_simplified(self):
+        admin_html = read_text("app/static/admin.html")
+
+        self.assertIn("betaSignupManualAction", admin_html)
+        self.assertIn("betaSignupPrimaryActionLabel", admin_html)
+        self.assertIn("拒绝", admin_html)
+        self.assertIn("恢复", admin_html)
+        self.assertNotIn("['approved', '通过']", admin_html)
+        self.assertNotIn("['invited', '已邀']", admin_html)
+        self.assertNotIn("['accepted', '已入组']", admin_html)
+
+    def test_admin_can_bulk_invite_and_sync_asc_status(self):
+        admin_api = read_text("app/api/admin.py")
+        admin_html = read_text("app/static/admin.html")
+
+        self.assertIn('@router.post("/beta-signups/invite-internal-all")', admin_api)
+        self.assertIn('@router.post("/beta-signups/sync-asc-status")', admin_api)
+        self.assertIn('BULK_INVITE_SKIP_STATUSES = {"accepted", "rejected"}', admin_api)
+        self.assertIn("sync_beta_signup_status_from_asc", admin_api)
+        self.assertIn("payload[\"app_store_connect\"] = asc_status", admin_api)
+        self.assertIn("inviteAllBetaSignups", admin_html)
+        self.assertIn("syncBetaSignupAscStatus", admin_html)
+        self.assertIn("ascStatusBadge", admin_html)
+        self.assertIn("isInInternalTfGroup", admin_html)
+        self.assertIn("hasAcceptedAscInvite", admin_html)
+        self.assertIn("betaSignupPrimaryActionLabel", admin_html)
+        self.assertIn("拉入 TF 组", admin_html)
+        self.assertIn("<th style=\"width:10%;\">ASC</th>", admin_html)
+        self.assertIn("/api/admin/beta-signups/invite-internal-all", admin_html)
+        self.assertIn("/api/admin/beta-signups/sync-asc-status", admin_html)
+        self.assertIn("一键邀请全部", admin_html)
+        self.assertIn("同步 ASC 状态", admin_html)
 
 
 if __name__ == "__main__":

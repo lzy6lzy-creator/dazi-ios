@@ -102,10 +102,14 @@ async def _ensure_runtime_schema(conn) -> None:
     revisions, so additive schema changes need a lightweight runtime guard.
     """
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
+    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_event_visibility VARCHAR(20) DEFAULT 'partial'"))
+    await conn.execute(text("UPDATE users SET profile_event_visibility = 'partial' WHERE profile_event_visibility IS NULL"))
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS clarification_answers JSONB"))
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_min INTEGER"))
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_max INTEGER"))
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_mode VARCHAR(20)"))
+    await conn.execute(text("ALTER TABLE chat_room_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ DEFAULT NOW()"))
+    await conn.execute(text("ALTER TABLE chat_room_members ALTER COLUMN last_read_at DROP DEFAULT"))
     await conn.execute(text("ALTER TABLE match_logs ADD COLUMN IF NOT EXISTS score_breakdown JSONB"))
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS key VARCHAR(100)"))
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS category VARCHAR(40)"))

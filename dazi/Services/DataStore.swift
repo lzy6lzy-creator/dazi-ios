@@ -89,6 +89,7 @@ class DataStore {
                         occupation: apiUser.occupation ?? "",
                         customInterests: apiUser.customInterests ?? "",
                         welcomeDisturb: apiUser.welcomeDisturb ?? false,
+                        profileEventVisibility: apiUser.profileEventVisibility ?? "partial",
                         agentName: apiAgent.name,
                         agentEmoji: apiAgent.emoji ?? "🤖",
                         agentPersonality: apiAgent.personality ?? "贴心、有趣"
@@ -350,6 +351,7 @@ class DataStore {
             content: apiMsg.content,
             role: role,
             senderName: sender?.name ?? (role == .system ? "系统" : "用户"),
+            senderUserId: apiMsg.senderId,
             senderAvatar: sender?.avatarEmoji ?? "😊",
             senderAvatarImageData: sender?.avatarImageData,
             timestamp: parseAgentHistoryDate(apiMsg.createdAt)
@@ -442,11 +444,19 @@ class DataStore {
     }
 
     func markRoomAsRead(_ roomId: String) {
-        if let idx = chatRooms.firstIndex(where: { $0.id == roomId }) {
-            if chatRooms[idx].hasUnread {
-                chatRooms[idx].hasUnread = false
-                unreadChatCount = max(0, unreadChatCount - 1)
-                notifications.updateBadge(unreadChatCount)
+        guard let idx = chatRooms.firstIndex(where: { $0.id == roomId }) else { return }
+
+        if chatRooms[idx].hasUnread {
+            chatRooms[idx].hasUnread = false
+            unreadChatCount = chatRooms.filter(\.hasUnread).count
+            notifications.updateBadge(unreadChatCount)
+        }
+
+        Task {
+            do {
+                try await api.markRoomAsRead(roomId: roomId)
+            } catch {
+                print("Mark room read error: \(error)")
             }
         }
     }
@@ -537,7 +547,7 @@ class DataStore {
             ? "比如周末想看电影、找人一起徒步、想吃顿好的~"
             : "比如\(currentUser.interests.prefix(3).joined(separator: "、"))？"
         return Message(
-            content: "你好\(currentUser.name)！我是\(currentUser.agentName)，你的专属搭子经纪人。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
+            content: "你好\(currentUser.name)！我是\(currentUser.agentName)，你的个人助理。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
             role: .agent,
             senderName: currentUser.agentName,
             senderAvatar: currentUser.agentEmoji,
@@ -830,6 +840,7 @@ class DataStore {
             content: payload.content,
             role: role,
             senderName: sender?.name ?? (role == .system ? "系统" : "用户"),
+            senderUserId: payload.senderId,
             senderAvatar: sender?.avatarEmoji ?? "😊",
             senderAvatarImageData: sender?.avatarImageData
         )
@@ -893,9 +904,7 @@ class DataStore {
 
     private func handleWSEventUpdate(eventId: String, status: String) {
         if let idx = events.firstIndex(where: { $0.id == eventId }) {
-            if let newStatus = EventStatus(rawValue: status) {
-                events[idx].status = newStatus
-            }
+            events[idx].status = EventStatus.fromServer(status)
         }
         // 匹配成功时拉取最新聊天室
         if status == "matched" || status == "active" {
@@ -947,7 +956,6 @@ class DataStore {
                     // 保留已加载的本地消息
                     if let old = oldRooms.first(where: { $0.id == room.id }) {
                         room.messages = old.messages
-                        room.hasUnread = old.hasUnread
                     }
                     return room
                 }

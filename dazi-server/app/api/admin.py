@@ -49,6 +49,8 @@ router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(ve
 
 BETA_SIGNUP_STATUSES = {"new", "updated", "approved", "invited", "accepted", "rejected", "archived"}
 FEEDBACK_STATUSES = {"new", "reviewed", "resolved", "archived"}
+BULK_INVITE_SKIP_STATUSES = {"accepted", "rejected"}
+ASC_SYNC_MANUAL_STATUSES = {"rejected", "archived"}
 
 
 class BetaSignupStatusUpdate(BaseModel):
@@ -75,6 +77,33 @@ def append_internal_test_phone(phone: str | None, *, name: str, email: str) -> s
         return "added"
     except OSError as exc:
         raise HTTPException(status_code=500, detail=f"写入内测手机号白名单失败: {exc}") from exc
+
+
+def beta_signup_status_after_invite(asc_result: dict) -> str:
+    beta_status = asc_result.get("beta_tester_status")
+    if beta_status in {"created", "group_attached"}:
+        return "accepted"
+    return "invited"
+
+
+def sync_beta_signup_status_from_asc(signup: BetaSignup, asc_status: dict) -> tuple[str, str]:
+    current_status = (signup.status or "new").lower()
+    if current_status in ASC_SYNC_MANUAL_STATUSES:
+        return current_status, "manual_status_preserved"
+    if asc_status.get("in_internal_group"):
+        return "accepted", "in_internal_group"
+    if (
+        asc_status.get("user_id")
+        or asc_status.get("user_invitation_status") == "pending_existing"
+        or asc_status.get("beta_tester_id")
+    ):
+        return "invited", "asc_invitation_or_tester_exists"
+    return current_status, "no_asc_record"
+
+
+def should_bulk_invite_beta_signup(signup: BetaSignup) -> bool:
+    status = (signup.status or "new").lower()
+    return status not in BULK_INVITE_SKIP_STATUSES and bool((signup.email or "").strip())
 
 
 def admin_event_detail_payload(event: Event, user: User | None = None) -> dict:
@@ -679,6 +708,159 @@ async def update_beta_signup_status(
     return beta_signup_payload(signup)
 
 
+async def invite_beta_signup_record(signup: BetaSignup, client: AppStoreConnectClient) -> dict:
+    phone_status = append_internal_test_phone(signup.contact, name=signup.name, email=signup.email)
+    asc_result = await client.invite_internal_tester(
+        email=signup.email,
+        name=signup.name,
+    )
+    signup.status = beta_signup_status_after_invite(asc_result)
+    signup.updated_at = datetime.now(timezone.utc)
+    payload = beta_signup_payload(signup)
+    payload["phone_status"] = phone_status
+    payload["app_store_connect"] = asc_result
+    return payload
+
+
+@router.post("/beta-signups/invite-internal-all")
+async def invite_all_beta_signups_internal(
+    db: AsyncSession = Depends(get_db),
+):
+    """批量邀请所有未入组、未拒绝的内测报名。每条记录独立处理，失败不打断整批。"""
+    try:
+        client = AppStoreConnectClient.from_settings(settings)
+    except AppStoreConnectConfigError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    result = await db.execute(beta_signup_query())
+    signups = result.scalars().all()
+    results = []
+    processed = 0
+    succeeded = 0
+    failed = 0
+    skipped = 0
+
+    for signup in signups:
+        if not should_bulk_invite_beta_signup(signup):
+            skipped += 1
+            results.append({
+                "id": str(signup.id),
+                "email": signup.email,
+                "name": signup.name,
+                "status": signup.status,
+                "skipped": True,
+                "reason": "已入组或已拒绝",
+                "signup": beta_signup_payload(signup),
+            })
+            continue
+
+        processed += 1
+        try:
+            payload = await invite_beta_signup_record(signup, client)
+            succeeded += 1
+            results.append({
+                "id": str(signup.id),
+                "email": signup.email,
+                "name": signup.name,
+                "status": signup.status,
+                "ok": True,
+                "signup": payload,
+                "app_store_connect": payload.get("app_store_connect"),
+                "phone_status": payload.get("phone_status"),
+            })
+        except HTTPException as exc:
+            failed += 1
+            results.append({
+                "id": str(signup.id),
+                "email": signup.email,
+                "name": signup.name,
+                "status": signup.status,
+                "ok": False,
+                "error": exc.detail,
+                "signup": beta_signup_payload(signup),
+            })
+        except AppStoreConnectError as exc:
+            failed += 1
+            results.append({
+                "id": str(signup.id),
+                "email": signup.email,
+                "name": signup.name,
+                "status": signup.status,
+                "ok": False,
+                "error": str(exc),
+                "signup": beta_signup_payload(signup),
+            })
+
+    await db.flush()
+    return {
+        "total": len(signups),
+        "processed": processed,
+        "succeeded": succeeded,
+        "failed": failed,
+        "skipped": skipped,
+        "results": results,
+    }
+
+
+@router.post("/beta-signups/sync-asc-status")
+async def sync_beta_signups_asc_status(
+    db: AsyncSession = Depends(get_db),
+):
+    """从 App Store Connect 同步内测报名状态，保留 rejected/archived 等人工处理状态。"""
+    try:
+        client = AppStoreConnectClient.from_settings(settings)
+    except AppStoreConnectConfigError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    result = await db.execute(beta_signup_query())
+    signups = result.scalars().all()
+    rows = []
+    updated = 0
+    failed = 0
+
+    for signup in signups:
+        try:
+            asc_status = await client.get_internal_tester_status(signup.email)
+            new_status, reason = sync_beta_signup_status_from_asc(signup, asc_status)
+            old_status = signup.status
+            if new_status != old_status:
+                signup.status = new_status
+                signup.updated_at = datetime.now(timezone.utc)
+                updated += 1
+            payload = beta_signup_payload(signup)
+            payload["app_store_connect"] = asc_status
+            rows.append({
+                "id": str(signup.id),
+                "email": signup.email,
+                "name": signup.name,
+                "old_status": old_status,
+                "status": signup.status,
+                "reason": reason,
+                "ok": True,
+                "signup": payload,
+                "app_store_connect": asc_status,
+            })
+        except AppStoreConnectError as exc:
+            failed += 1
+            rows.append({
+                "id": str(signup.id),
+                "email": signup.email,
+                "name": signup.name,
+                "status": signup.status,
+                "ok": False,
+                "error": str(exc),
+                "signup": beta_signup_payload(signup),
+            })
+
+    await db.flush()
+    return {
+        "total": len(signups),
+        "updated": updated,
+        "failed": failed,
+        "results": rows,
+    }
+
+
 @router.post("/beta-signups/{signup_id}/invite-internal")
 async def invite_beta_signup_internal(
     signup_id: UUID,
@@ -690,23 +872,14 @@ async def invite_beta_signup_internal(
     if not signup:
         raise HTTPException(status_code=404, detail="内测报名不存在")
 
-    phone_status = append_internal_test_phone(signup.contact, name=signup.name, email=signup.email)
     try:
-        asc_result = await AppStoreConnectClient.from_settings(settings).invite_internal_tester(
-            email=signup.email,
-            name=signup.name,
-        )
+        payload = await invite_beta_signup_record(signup, AppStoreConnectClient.from_settings(settings))
     except AppStoreConnectConfigError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except AppStoreConnectError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    signup.status = "invited"
-    signup.updated_at = datetime.now(timezone.utc)
     await db.flush()
-    payload = beta_signup_payload(signup)
-    payload["phone_status"] = phone_status
-    payload["app_store_connect"] = asc_result
     return payload
 
 

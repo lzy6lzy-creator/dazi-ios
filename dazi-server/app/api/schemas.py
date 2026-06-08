@@ -51,6 +51,7 @@ class UserUpdate(BaseModel):
     occupation: Optional[str] = None
     custom_interests: Optional[str] = None
     welcome_disturb: Optional[bool] = None
+    profile_event_visibility: Optional[str] = None
 
 
 class UserResponse(BaseModel):
@@ -67,6 +68,26 @@ class UserResponse(BaseModel):
     occupation: Optional[str] = None
     custom_interests: Optional[str] = None
     welcome_disturb: bool = False
+    profile_event_visibility: str = "partial"
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PublicProfileEventResponse(BaseModel):
+    id: UUID
+    title: str
+    activity_type: str
+    detail_level: str = "partial"
+    time_label: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    location: Optional[str] = None
+    city: Optional[str] = None
+    description: Optional[str] = None
+    preferences: Optional[list[str]] = None
+    constraints: Optional[list[str]] = None
+    status: str
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -85,6 +106,9 @@ class PublicUserProfileResponse(BaseModel):
     occupation: Optional[str] = None
     custom_interests: Optional[str] = None
     welcome_disturb: bool = False
+    profile_event_visibility: str = "partial"
+    past_events: list[PublicProfileEventResponse] = Field(default_factory=list)
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -299,17 +323,26 @@ class ChatRoomMemberResponse(BaseModel):
     role: str  # "user" or "agent"
     emoji: Optional[str] = None
     avatar_url: Optional[str] = None
+    gender: Optional[str] = None
+    birth_year: Optional[int] = None
+    birth_date: Optional[date] = None
+    bio: Optional[str] = None
+    city: Optional[str] = None
 
 
 class ChatRoomResponse(BaseModel):
     id: UUID
+    event_id_a: Optional[UUID] = None
+    event_id_b: Optional[UUID] = None
     event_title: Optional[str] = None
     match_summary: Optional[str] = None
+    agent_dialogue: Optional[str] = None
     is_active: bool
     created_at: datetime
     closed_at: Optional[datetime] = None
     members: list[ChatRoomMemberResponse] = []
     last_message: Optional["MessageResponse"] = None
+    has_unread: bool = False
 
 
 class VoteRequest(BaseModel):

@@ -232,6 +232,51 @@ class AppStoreConnectClient:
             expected=(204, 409),
         )
 
+    async def get_beta_tester_groups(self, beta_tester_id: str):
+        data = await self._request(
+            "GET",
+            f"/v1/betaTesters/{beta_tester_id}/betaGroups",
+            params={
+                "fields[betaGroups]": "name,isInternalGroup",
+                "limit": "200",
+            },
+        )
+        return data.get("data") or []
+
+    async def get_internal_tester_status(self, email: str) -> dict:
+        app_id = await self.get_app_id()
+        group_id = await self.get_internal_group_id(app_id)
+
+        user = await self.get_user(email)
+        pending = None if user else await self.get_pending_invitation(email)
+        beta_tester = await self.get_beta_tester(email)
+        groups = await self.get_beta_tester_groups(beta_tester["id"]) if beta_tester else []
+        in_internal_group = any(group.get("id") == group_id for group in groups)
+
+        return {
+            "app_id": app_id,
+            "group_id": group_id,
+            "user_id": user["id"] if user else None,
+            "user_invitation_status": (
+                "accepted" if user else "pending_existing" if pending else "missing"
+            ),
+            "user_invitation_id": pending["id"] if pending else None,
+            "beta_tester_id": beta_tester["id"] if beta_tester else None,
+            "beta_tester_state": (beta_tester.get("attributes") or {}).get("state") if beta_tester else None,
+            "beta_tester_invite_type": (
+                (beta_tester.get("attributes") or {}).get("inviteType") if beta_tester else None
+            ),
+            "in_internal_group": in_internal_group,
+            "beta_groups": [
+                {
+                    "id": group.get("id"),
+                    "name": (group.get("attributes") or {}).get("name"),
+                    "is_internal_group": (group.get("attributes") or {}).get("isInternalGroup"),
+                }
+                for group in groups
+            ],
+        }
+
     async def invite_internal_tester(self, *, email: str, name: str) -> dict:
         app_id = await self.get_app_id()
         group_id = await self.get_internal_group_id(app_id)

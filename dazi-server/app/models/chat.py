@@ -34,6 +34,7 @@ class ChatRoomMember(Base):
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # user / agent
     is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
     joined_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
+    last_read_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
 
 
 class ChatMessage(Base):
