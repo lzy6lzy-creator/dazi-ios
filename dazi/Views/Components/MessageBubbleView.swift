@@ -113,6 +113,10 @@ struct MessageBubbleView: View {
                                 .foregroundStyle(textColor)
                             TypingIndicator()
                         }
+                    } else if !isFromUser, let attributed = try? AttributedString(markdown: message.content, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+                        Text(attributed)
+                            .font(.body)
+                            .foregroundStyle(textColor)
                     } else {
                         Text(message.content)
                             .font(.body)

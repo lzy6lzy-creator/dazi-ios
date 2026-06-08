@@ -666,8 +666,7 @@ def _build_clarification_answer_user_message(
         "answer_text": answer_text,
     }
     return (
-        "用户已完成澄清卡片选择。请把这些结构化答案当作本轮用户输入，"
-        "输出 reply + draft；除非仍缺少发布或匹配的关键信息，才继续 reply + clarify。\n"
+        "用户已完成澄清卡片选择。请把这些结构化答案当作本轮用户输入。\n"
         f"<clarification_answers_json>{json.dumps(payload, ensure_ascii=False)}</clarification_answers_json>"
     )
 
