@@ -5,7 +5,7 @@ struct ChatRoomDetailView: View {
     let roomId: String
     @State private var inputText = ""
     @State private var showMembers = false
-    @State private var showPartnerProfile = false
+    @State private var selectedProfileUser: User?
     @State private var showAgentDialogue = false
     @State private var pollingTask: Task<Void, Never>?
     @State private var voteStatus: VoteStatus?
@@ -51,14 +51,12 @@ struct ChatRoomDetailView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
                     if let partner = room?.participants.first(where: { !$0.isAgent && $0.id != dataStore.currentUser.id }) {
-                        Button { showPartnerProfile = true } label: {
-                            AvatarView(
-                                imageData: partner.avatarImageData,
-                                emoji: partner.avatarEmoji,
-                                size: 28,
-                                backgroundColor: AppTheme.primaryColor.opacity(0.1)
-                            )
-                        }
+                        ProfileAvatarButton(
+                            user: partner,
+                            currentUserId: dataStore.currentUser.id,
+                            size: 28,
+                            backgroundColor: AppTheme.primaryColor.opacity(0.1)
+                        )
                     }
 
                     Button {
@@ -70,14 +68,12 @@ struct ChatRoomDetailView: View {
                 }
             }
         }
-        .sheet(isPresented: $showPartnerProfile) {
-            if let partner = room?.participants.first(where: { !$0.isAgent && $0.id != dataStore.currentUser.id }) {
-                PartnerProfileView(partner: partner)
-            }
+        .sheet(item: $selectedProfileUser) { user in
+            PartnerProfileView(partner: user)
         }
         .sheet(isPresented: $showMembers) {
             if let room {
-                ChatRoomMembersView(room: room)
+                ChatRoomMembersView(room: room, currentUserId: dataStore.currentUser.id)
                     .presentationDetents([.medium])
             }
         }
@@ -133,7 +129,9 @@ struct ChatRoomDetailView: View {
                             if index == 0 || !Calendar.current.isDate(message.timestamp, inSameDayAs: room.messages[index - 1].timestamp) {
                                 DateSeparator(date: message.timestamp)
                             }
-                            MessageBubbleView(message: message)
+                            MessageBubbleView(message: message) { userId in
+                                openProfile(forUserId: userId, in: room)
+                            }
                                 .id(message.id)
                         }
                     }
@@ -155,13 +153,14 @@ struct ChatRoomDetailView: View {
         VStack(spacing: 8) {
             HStack(spacing: -8) {
                 ForEach(room.participants.filter { !$0.isAgent }) { user in
-                    AvatarView(
-                        imageData: user.avatarImageData,
-                        emoji: user.avatarEmoji,
+                    ProfileAvatarButton(
+                        user: user,
+                        currentUserId: dataStore.currentUser.id,
                         size: 44,
-                        backgroundColor: AppTheme.primaryColor.opacity(0.1)
+                        backgroundColor: AppTheme.primaryColor.opacity(0.1),
+                        strokeColor: .white,
+                        strokeLineWidth: 2
                     )
-                    .overlay(Circle().stroke(Color.white, lineWidth: 2))
                 }
             }
 
@@ -216,7 +215,7 @@ struct ChatRoomDetailView: View {
                     .frame(width: 50)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("经纪人匹配对话")
+                        Text("个人助理匹配对话")
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundStyle(.primary)
@@ -304,7 +303,7 @@ struct ChatRoomDetailView: View {
 
             // 检测说话者标识
             var foundSpeaker: (String, Bool)?
-            for (name, isMine) in [(myName, true), (partnerName, false), ("AgentA", true), ("AgentB", false), ("经纪人A", true), ("经纪人B", false)] {
+            for (name, isMine) in [(myName, true), (partnerName, false), ("AgentA", true), ("AgentB", false), ("个人助理A", true), ("个人助理B", false)] {
                 if trimmed.hasPrefix("\(name):") || trimmed.hasPrefix("\(name)：") || trimmed.hasPrefix("**\(name)**:") || trimmed.hasPrefix("**\(name)**：") {
                     foundSpeaker = (name, isMine)
                     break
@@ -317,7 +316,7 @@ struct ChatRoomDetailView: View {
                     result.append(DialogueLine(speakerName: currentSpeaker, content: currentContent.trimmingCharacters(in: .whitespacesAndNewlines), isMyAgent: currentIsMyAgent))
                 }
                 // 开始新的说话段
-                currentSpeaker = speaker == "AgentA" || speaker == "经纪人A" ? myName : (speaker == "AgentB" || speaker == "经纪人B" ? partnerName : speaker)
+                currentSpeaker = speaker == "AgentA" || speaker == "个人助理A" ? myName : (speaker == "AgentB" || speaker == "个人助理B" ? partnerName : speaker)
                 currentIsMyAgent = isMine
                 // 提取冒号后的内容
                 let separators = ["\(speaker):", "\(speaker)：", "**\(speaker)**:", "**\(speaker)**："]
@@ -468,12 +467,21 @@ struct ChatRoomDetailView: View {
         inputText = ""
         dataStore.sendMessageInRoom(roomId, text: text)
     }
+
+    private func openProfile(forUserId userId: String, in room: ChatRoom) {
+        guard userId != dataStore.currentUser.id,
+              let user = room.participants.first(where: { !$0.isAgent && $0.id == userId }) else {
+            return
+        }
+        selectedProfileUser = user
+    }
 }
 
 // MARK: - Members View
 
 struct ChatRoomMembersView: View {
     let room: ChatRoom
+    let currentUserId: String
 
     var body: some View {
         NavigationStack {
@@ -481,9 +489,9 @@ struct ChatRoomMembersView: View {
                 Section("参与者") {
                     ForEach(room.participants) { member in
                         HStack(spacing: 12) {
-                            AvatarView(
-                                imageData: member.avatarImageData,
-                                emoji: member.avatarEmoji,
+                            ProfileAvatarButton(
+                                user: member,
+                                currentUserId: currentUserId,
                                 size: 44,
                                 backgroundColor: member.isAgent ? AppTheme.agentColor.opacity(0.12) : AppTheme.primaryColor.opacity(0.08)
                             )

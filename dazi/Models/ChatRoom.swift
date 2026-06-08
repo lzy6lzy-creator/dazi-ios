@@ -3,6 +3,7 @@ import Foundation
 struct ChatRoom: Identifiable, Codable, Sendable {
     let id: String
     var eventId: String
+    var eventIds: [String]
     var eventTitle: String
     var participants: [User]
     var matchSummary: String
@@ -16,6 +17,7 @@ struct ChatRoom: Identifiable, Codable, Sendable {
     init(
         id: String,
         eventId: String,
+        eventIds: [String] = [],
         eventTitle: String,
         participants: [User],
         matchSummary: String,
@@ -28,6 +30,7 @@ struct ChatRoom: Identifiable, Codable, Sendable {
     ) {
         self.id = id
         self.eventId = eventId
+        self.eventIds = eventIds.isEmpty && !eventId.isEmpty ? [eventId] : eventIds
         self.eventTitle = eventTitle
         self.participants = participants
         self.matchSummary = matchSummary
@@ -46,23 +49,29 @@ struct ChatRoom: Identifiable, Codable, Sendable {
     /// 从服务器 API 响应初始化
     init(from api: APIChatRoomResponse) {
         self.id = api.id
-        self.eventId = ""
+        self.eventIds = [api.eventIdA, api.eventIdB].compactMap { $0 }
+        self.eventId = eventIds.first ?? ""
         self.eventTitle = api.eventTitle ?? "活动"
         self.participants = api.members.map { member in
             User(
                 id: member.role == "agent" ? "agent_\(member.userId)" : member.userId,
                 name: member.name,
                 avatarEmoji: member.avatarUrl ?? member.emoji ?? (member.role == "agent" ? "🤖" : "😊"),
-                isAgent: member.role == "agent"
+                city: member.city ?? "",
+                bio: member.bio ?? "",
+                isAgent: member.role == "agent",
+                gender: member.gender ?? "",
+                birthYear: member.birthYear ?? 0,
+                birthDate: member.birthDate ?? ""
             )
         }
         self.matchSummary = api.matchSummary ?? ""
-        self.agentDialogueLog = ""
+        self.agentDialogueLog = api.agentDialogue ?? ""
         self.isActive = api.isActive
         self.createdAt = Self.parseDate(api.createdAt) ?? .now
         self.closedAt = api.closedAt.flatMap { Self.parseDate($0) }
         self.messages = []
-        self.hasUnread = api.lastMessage != nil
+        self.hasUnread = api.hasUnread
     }
 
     private static func parseDate(_ str: String) -> Date? {
@@ -79,5 +88,9 @@ struct ChatRoom: Identifiable, Codable, Sendable {
             return "\(eventTitle) - \(partner.name)"
         }
         return eventTitle
+    }
+
+    func containsEvent(_ eventId: String) -> Bool {
+        self.eventId == eventId || eventIds.contains(eventId)
     }
 }

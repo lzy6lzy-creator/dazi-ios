@@ -7,8 +7,14 @@ struct EventDetailView: View {
     @State private var showFeedback = false
     @State private var showCancelConfirm = false
 
+    private var matchedRoom: ChatRoom? {
+        dataStore.chatRooms.first { room in
+            room.containsEvent(event.id) || event.chatRoomId == room.id
+        }
+    }
+
     private var matchedPartner: User? {
-        if let room = dataStore.chatRooms.first(where: { $0.eventId == event.id }) {
+        if let room = matchedRoom {
             return room.participants.first(where: { !$0.isAgent && $0.id != dataStore.currentUser.id })
         }
         return nil
@@ -56,6 +62,11 @@ struct EventDetailView: View {
             Button("再想想", role: .cancel) {}
         } message: {
             Text("取消后活动将不再参与匹配")
+        }
+        .task(id: event.id) {
+            if event.status == .matched || event.status == .active {
+                await dataStore.fetchChatRoomsFromServer()
+            }
         }
     }
 
@@ -174,20 +185,41 @@ struct EventDetailView: View {
             }
 
             HStack(spacing: 12) {
-                AvatarView(
-                    imageData: matchedPartner?.avatarImageData,
-                    emoji: matchedPartner?.avatarEmoji ?? "🌸",
-                    size: 44,
-                    backgroundColor: AppTheme.secondaryColor.opacity(0.15)
-                )
+                if let matchedPartner {
+                    ProfileAvatarButton(
+                        user: matchedPartner,
+                        currentUserId: dataStore.currentUser.id,
+                        size: 44,
+                        backgroundColor: AppTheme.secondaryColor.opacity(0.15)
+                    )
+                } else {
+                    AvatarView(
+                        imageData: nil,
+                        emoji: "🌸",
+                        size: 44,
+                        backgroundColor: AppTheme.secondaryColor.opacity(0.15)
+                    )
+                }
 
                 VStack(alignment: .leading) {
                     Text(matchedPartner?.name ?? "搭子")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    Text(matchedPartner?.bio ?? "")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 6) {
+                        if let gender = matchedPartner?.gender,
+                           !gender.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            partnerInfoChip(icon: "person.fill", text: gender)
+                        }
+                        if let age = matchedPartner?.age {
+                            partnerInfoChip(icon: "birthday.cake.fill", text: "\(age)岁")
+                        }
+                    }
+                    if let bio = matchedPartner?.bio,
+                       !bio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(bio)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
         }
@@ -199,23 +231,25 @@ struct EventDetailView: View {
     }
 
     private var goToChatButton: some View {
-        Button {
-            if let room = dataStore.chatRooms.first(where: { $0.eventId == event.id }) {
+        let room = matchedRoom
+        return Button {
+            if let room {
                 dataStore.pendingChatRoomId = room.id
                 dataStore.selectedTab = 2
                 dataStore.markRoomAsRead(room.id)
                 dismiss()
             }
         } label: {
-            Label("进入聊天室", systemImage: "bubble.left.and.bubble.right.fill")
+            Label(room == nil ? "聊天室加载中" : "进入聊天室", systemImage: "bubble.left.and.bubble.right.fill")
                 .font(.headline)
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(AppTheme.secondaryColor)
+                .background(room == nil ? Color.gray.opacity(0.5) : AppTheme.secondaryColor)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         }
         .buttonStyle(PrimaryButtonStyle())
+        .disabled(room == nil)
     }
 
     private var endEventButton: some View {
@@ -239,6 +273,17 @@ struct EventDetailView: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "M月d日 EEEE HH:mm"
         return formatter.string(from: date)
+    }
+
+    private func partnerInfoChip(icon: String, text: String) -> some View {
+        Label(text, systemImage: icon)
+            .font(.caption2)
+            .fontWeight(.semibold)
+            .foregroundStyle(AppTheme.secondaryColor)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 4)
+            .background(AppTheme.secondaryColor.opacity(0.10))
+            .clipShape(RoundedRectangle(cornerRadius: 7))
     }
 }
 

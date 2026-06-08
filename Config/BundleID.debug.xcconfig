@@ -1,0 +1,7 @@
+APP_BUNDLE_ID_PREFIX = com.linke.dazi
+APP_BUNDLE_ID_SUFFIX =
+
+// Local override, keep this file in gitignore.
+#include? "BundleID.local.xcconfig"
+
+PRODUCT_BUNDLE_IDENTIFIER = $(APP_BUNDLE_ID_PREFIX)$(APP_BUNDLE_ID_SUFFIX)

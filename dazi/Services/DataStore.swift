@@ -7,6 +7,7 @@ class DataStore {
     var isRegistered: Bool = false
     var agentMessages: [Message] = []
     var events: [Event] = []
+    var plazaEvents: [PlazaEvent] = []
     var chatRooms: [ChatRoom] = []
     var passiveMatchRequests: [PassiveMatchRequest] = []
     var memories: [AgentMemory] = []
@@ -27,6 +28,9 @@ class DataStore {
     private let ws = WebSocketService.shared
     private let notifications = NotificationService.shared
     private var notifiedRoomCreationIds: Set<String> = []
+
+    private static let agentSessionDividerText = "活动已发布。下面为你开启新的对话。"
+    private static let agentSessionResetPrefix = "[SESSION_RESET_AFTER_EVENT]"
 
     init() {
         if let savedUser = profileStore.loadUser() {
@@ -52,6 +56,7 @@ class DataStore {
         User.currentUser = .placeholder
         agentMessages = []
         events = []
+        plazaEvents = []
         chatRooms = []
         passiveMatchRequests = []
         memories = []
@@ -86,6 +91,7 @@ class DataStore {
                         occupation: apiUser.occupation ?? "",
                         customInterests: apiUser.customInterests ?? "",
                         welcomeDisturb: apiUser.welcomeDisturb ?? false,
+                        profileEventVisibility: apiUser.profileEventVisibility ?? "partial",
                         agentName: apiAgent.name,
                         agentEmoji: apiAgent.emoji ?? "🤖",
                         agentPersonality: apiAgent.personality ?? "贴心、有趣"
@@ -347,6 +353,7 @@ class DataStore {
             content: apiMsg.content,
             role: role,
             senderName: sender?.name ?? (role == .system ? "系统" : "用户"),
+            senderUserId: apiMsg.senderId,
             senderAvatar: sender?.avatarEmoji ?? "😊",
             senderAvatarImageData: sender?.avatarImageData,
             timestamp: parseAgentHistoryDate(apiMsg.createdAt)
@@ -439,11 +446,19 @@ class DataStore {
     }
 
     func markRoomAsRead(_ roomId: String) {
-        if let idx = chatRooms.firstIndex(where: { $0.id == roomId }) {
-            if chatRooms[idx].hasUnread {
-                chatRooms[idx].hasUnread = false
-                unreadChatCount = max(0, unreadChatCount - 1)
-                notifications.updateBadge(unreadChatCount)
+        guard let idx = chatRooms.firstIndex(where: { $0.id == roomId }) else { return }
+
+        if chatRooms[idx].hasUnread {
+            chatRooms[idx].hasUnread = false
+            unreadChatCount = chatRooms.filter(\.hasUnread).count
+            notifications.updateBadge(unreadChatCount)
+        }
+
+        Task {
+            do {
+                try await api.markRoomAsRead(roomId: roomId)
+            } catch {
+                print("Mark room read error: \(error)")
             }
         }
     }
@@ -534,7 +549,7 @@ class DataStore {
             ? "比如周末想看电影、找人一起徒步、想吃顿好的~"
             : "比如\(currentUser.interests.prefix(3).joined(separator: "、"))？"
         return Message(
-            content: "你好\(currentUser.name)！我是\(currentUser.agentName)，你的专属搭子经纪人。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
+            content: "你好\(currentUser.name)！我是\(currentUser.agentName)，你的个人助理。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
             role: .agent,
             senderName: currentUser.agentName,
             senderAvatar: currentUser.agentEmoji,
@@ -556,8 +571,9 @@ class DataStore {
     }
 
     private func makeAgentHistoryMessage(from apiMessage: APIAgentHistoryMessage) -> Message? {
-        let content = apiMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !content.isEmpty else { return nil }
+        let rawContent = apiMessage.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawContent.isEmpty else { return nil }
+        var content = rawContent
         let role: MessageRole
         let senderName: String
         let senderAvatar: String
@@ -573,6 +589,14 @@ class DataStore {
             senderName = currentUser.agentName
             senderAvatar = currentUser.agentEmoji
             senderAvatarImageData = currentUser.agentAvatarImageData
+        case "session":
+            role = .system
+            senderName = "系统"
+            senderAvatar = "ℹ️"
+            senderAvatarImageData = nil
+            if rawContent.hasPrefix(Self.agentSessionResetPrefix) {
+                content = Self.agentSessionDividerText
+            }
         default:
             role = .system
             senderName = "系统"
@@ -717,7 +741,7 @@ class DataStore {
     }
 
     private func appendAgentSessionDividerIfNeeded() {
-        let text = "活动已发布。下面为你开启新的对话。"
+        let text = Self.agentSessionDividerText
         if agentMessages.last?.role == .system && agentMessages.last?.content == text {
             return
         }
@@ -818,6 +842,7 @@ class DataStore {
             content: payload.content,
             role: role,
             senderName: sender?.name ?? (role == .system ? "系统" : "用户"),
+            senderUserId: payload.senderId,
             senderAvatar: sender?.avatarEmoji ?? "😊",
             senderAvatarImageData: sender?.avatarImageData
         )
@@ -881,9 +906,7 @@ class DataStore {
 
     private func handleWSEventUpdate(eventId: String, status: String) {
         if let idx = events.firstIndex(where: { $0.id == eventId }) {
-            if let newStatus = EventStatus(rawValue: status) {
-                events[idx].status = newStatus
-            }
+            events[idx].status = EventStatus.fromServer(status)
         }
         // 匹配成功时拉取最新聊天室
         if status == "matched" || status == "active" {
@@ -907,10 +930,11 @@ class DataStore {
 
     func fetchAllFromServer() async {
         async let e: () = fetchEventsFromServer()
+        async let p: () = fetchPlazaEventsFromServer()
         async let c: () = fetchChatRoomsFromServer()
         async let m: () = fetchMemoriesFromServer()
         async let r: () = fetchPassiveMatchRequestsFromServer()
-        _ = await (e, c, m, r)
+        _ = await (e, p, c, m, r)
     }
 
     func fetchEventsFromServer() async {
@@ -921,6 +945,17 @@ class DataStore {
             }
         } catch {
             print("Fetch events error: \(error)")
+        }
+    }
+
+    func fetchPlazaEventsFromServer() async {
+        do {
+            let apiEvents = try await api.getPlazaEvents()
+            await MainActor.run {
+                plazaEvents = apiEvents.map { PlazaEvent(from: $0) }
+            }
+        } catch {
+            print("Fetch plaza events error: \(error)")
         }
     }
 
@@ -935,7 +970,6 @@ class DataStore {
                     // 保留已加载的本地消息
                     if let old = oldRooms.first(where: { $0.id == room.id }) {
                         room.messages = old.messages
-                        room.hasUnread = old.hasUnread
                     }
                     return room
                 }
@@ -1071,6 +1105,7 @@ class DataStore {
                 try? await Task.sleep(for: .seconds(120))
                 guard !Task.isCancelled else { break }
                 await fetchEventsFromServer()
+                await fetchPlazaEventsFromServer()
                 await fetchChatRoomsFromServer()
                 await fetchPassiveMatchRequestsFromServer()
             }

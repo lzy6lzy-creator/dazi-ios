@@ -21,6 +21,7 @@ DerivedData/
 !.env.example
 AuthKey_*.p8
 internal_test_phones.txt
+Config/BundleID.local.xcconfig
 
 # Backend local runtime state
 dazi-server/.git/

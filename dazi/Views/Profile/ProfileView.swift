@@ -155,7 +155,7 @@ struct ProfileView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    Text("你的私人搭子经纪人")
+                    Text("你的个人助理")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                 }
@@ -720,6 +720,7 @@ struct EditProfileView: View {
     @State private var selectedInterests: Set<String> = []
     @State private var customInterests = ""
     @State private var welcomeDisturb = false
+    @State private var profileEventVisibility = "partial"
     @State private var bio = ""
 
     private static let avatarOptions = [
@@ -733,6 +734,11 @@ struct EditProfileView: View {
         "电影", "徒步", "美食", "看展", "咖啡",
         "桌游", "摄影", "演出", "运动", "阅读",
         "旅行", "音乐", "烹饪", "骑行", "瑜伽",
+    ]
+    private static let eventVisibilityOptions: [(value: String, label: String, description: String)] = [
+        ("hidden", "全部隐藏", "别人看不到你的过往事件"),
+        ("partial", "部分隐藏", "只显示活动类型、月份和城市"),
+        ("public", "全部能看", "显示完整标题、时间、地点和偏好"),
     ]
     private static let defaultBirthDate: Date = {
         AppLocale.chineseCalendar.date(from: DateComponents(year: 2000, month: 1, day: 1)) ?? .now
@@ -821,6 +827,20 @@ struct EditProfileView: View {
                 Section("简介") {
                     TextField("一句话简介", text: $bio)
                 }
+
+                Section("公开主页") {
+                    Picker("过往事件可见性", selection: $profileEventVisibility) {
+                        ForEach(Self.eventVisibilityOptions, id: \.value) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+
+                    if let selectedOption = Self.eventVisibilityOptions.first(where: { $0.value == profileEventVisibility }) {
+                        Text(selectedOption.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
             .navigationTitle("编辑资料")
             .navigationBarTitleDisplayMode(.inline)
@@ -844,6 +864,7 @@ struct EditProfileView: View {
                 selectedInterests = Set(dataStore.currentUser.interests)
                 customInterests = dataStore.currentUser.customInterests
                 welcomeDisturb = dataStore.currentUser.welcomeDisturb
+                profileEventVisibility = dataStore.currentUser.profileEventVisibility
                 bio = dataStore.currentUser.bio
             }
         }
@@ -887,6 +908,7 @@ struct EditProfileView: View {
         dataStore.currentUser.interests = interests
         dataStore.currentUser.customInterests = trimmedCustomInterests
         dataStore.currentUser.welcomeDisturb = welcomeDisturb
+        dataStore.currentUser.profileEventVisibility = profileEventVisibility
         dataStore.currentUser.bio = bio
         User.currentUser = dataStore.currentUser
         UserProfileStore().saveUser(dataStore.currentUser)
@@ -904,6 +926,7 @@ struct EditProfileView: View {
                     "interests": interests,
                     "custom_interests": trimmedCustomInterests,
                     "welcome_disturb": welcomeDisturb,
+                    "profile_event_visibility": profileEventVisibility,
                 ]
                 if !trimmedName.isEmpty { data["name"] = trimmedName }
                 let _ = try await APIClient.shared.updateMe(data: data)
