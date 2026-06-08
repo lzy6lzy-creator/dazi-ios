@@ -315,6 +315,21 @@ class EventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventPlazaResponse(BaseModel):
+    id: UUID
+    title: str
+    activity_type: str
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    location: Optional[str] = None
+    city: Optional[str] = None
+    preferences: Optional[list[str]] = None
+    constraints: Optional[list[str]] = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # ── ChatRoom ──
 
 class ChatRoomMemberResponse(BaseModel):

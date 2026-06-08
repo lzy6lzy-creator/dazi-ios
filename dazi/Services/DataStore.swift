@@ -7,6 +7,7 @@ class DataStore {
     var isRegistered: Bool = false
     var agentMessages: [Message] = []
     var events: [Event] = []
+    var plazaEvents: [PlazaEvent] = []
     var chatRooms: [ChatRoom] = []
     var passiveMatchRequests: [PassiveMatchRequest] = []
     var memories: [AgentMemory] = []
@@ -55,6 +56,7 @@ class DataStore {
         User.currentUser = .placeholder
         agentMessages = []
         events = []
+        plazaEvents = []
         chatRooms = []
         passiveMatchRequests = []
         memories = []
@@ -928,10 +930,11 @@ class DataStore {
 
     func fetchAllFromServer() async {
         async let e: () = fetchEventsFromServer()
+        async let p: () = fetchPlazaEventsFromServer()
         async let c: () = fetchChatRoomsFromServer()
         async let m: () = fetchMemoriesFromServer()
         async let r: () = fetchPassiveMatchRequestsFromServer()
-        _ = await (e, c, m, r)
+        _ = await (e, p, c, m, r)
     }
 
     func fetchEventsFromServer() async {
@@ -942,6 +945,17 @@ class DataStore {
             }
         } catch {
             print("Fetch events error: \(error)")
+        }
+    }
+
+    func fetchPlazaEventsFromServer() async {
+        do {
+            let apiEvents = try await api.getPlazaEvents()
+            await MainActor.run {
+                plazaEvents = apiEvents.map { PlazaEvent(from: $0) }
+            }
+        } catch {
+            print("Fetch plaza events error: \(error)")
         }
     }
 
@@ -1091,6 +1105,7 @@ class DataStore {
                 try? await Task.sleep(for: .seconds(120))
                 guard !Task.isCancelled else { break }
                 await fetchEventsFromServer()
+                await fetchPlazaEventsFromServer()
                 await fetchChatRoomsFromServer()
                 await fetchPassiveMatchRequestsFromServer()
             }

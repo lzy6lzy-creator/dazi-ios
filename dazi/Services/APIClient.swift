@@ -290,6 +290,27 @@ struct APIEventResponse: Codable {
     }
 }
 
+struct APIPlazaEventResponse: Codable {
+    let id: String
+    let title: String
+    let activityType: String
+    let startTime: String?
+    let endTime: String?
+    let location: String?
+    let city: String?
+    let preferences: [String]?
+    let constraints: [String]?
+    let createdAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, location, city, preferences, constraints
+        case activityType = "activity_type"
+        case startTime = "start_time"
+        case endTime = "end_time"
+        case createdAt = "created_at"
+    }
+}
+
 // MARK: - Chat Room Response Types
 
 struct APIChatRoomMemberResponse: Codable {
@@ -845,6 +866,10 @@ final class APIClient {
 
     func getEvents() async throws -> [APIEventResponse] {
         try await request(method: "GET", path: "/api/v1/events")
+    }
+
+    func getPlazaEvents() async throws -> [APIPlazaEventResponse] {
+        try await request(method: "GET", path: "/api/v1/events/plaza")
     }
 
     func getEvent(id: String) async throws -> APIEventResponse {

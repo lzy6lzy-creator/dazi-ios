@@ -3,7 +3,7 @@ Event API - 活动 CRUD + 匹配触发
 """
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -12,7 +12,7 @@ from app.services.embedding_service import embedding_service
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.models.event import Event
-from app.api.schemas import EventCreate, EventUpdate, EventResponse
+from app.api.schemas import EventCreate, EventUpdate, EventResponse, EventPlazaResponse
 from app.services.match_blocklist_service import clear_event_match_state
 from app.services.matching_tasks import schedule_event_matching
 
@@ -73,6 +73,24 @@ async def list_events(
         select(Event)
         .where(Event.user_id == user_id)
         .order_by(Event.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.get("/plaza", response_model=list[EventPlazaResponse])
+async def list_event_plaza(
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(50, ge=1, le=100),
+):
+    result = await db.execute(
+        select(Event)
+        .where(
+            Event.status == "pending",
+            Event.user_id != user_id,
+        )
+        .order_by(Event.created_at.desc())
+        .limit(limit)
     )
     return result.scalars().all()
 

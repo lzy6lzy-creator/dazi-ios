@@ -3,22 +3,48 @@ import SwiftUI
 struct EventListView: View {
     @Environment(DataStore.self) private var dataStore
     @State private var emptyStateAnimating = false
+    @State private var listScope: EventListScope = .mine
     @State private var statusFilter: EventStatusFilter = .all
     @State private var dateFilter: EventDateFilter = .all
     @State private var sortOption: EventSortOption = .smart
 
     var body: some View {
         NavigationStack {
-            Group {
-                if dataStore.events.isEmpty {
-                    emptyState
-                } else {
-                    eventList
+            VStack(spacing: 0) {
+                scopePicker
+
+                switch listScope {
+                case .mine:
+                    if dataStore.events.isEmpty {
+                        emptyState
+                    } else {
+                        eventList
+                    }
+                case .plaza:
+                    plazaList
                 }
             }
             .background(AppTheme.backgroundColor)
-            .navigationTitle("我的活动")
+            .navigationTitle("活动")
+            .onChange(of: listScope) { _, newValue in
+                if newValue == .plaza && dataStore.plazaEvents.isEmpty {
+                    Task {
+                        await dataStore.fetchPlazaEventsFromServer()
+                    }
+                }
+            }
         }
+    }
+
+    private var scopePicker: some View {
+        Picker("活动范围", selection: $listScope) {
+            Text("我的活动").tag(EventListScope.mine)
+            Text("活动广场").tag(EventListScope.plaza)
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
     }
 
     private var eventList: some View {
@@ -57,6 +83,27 @@ struct EventListView: View {
                 .listStyle(.plain)
                 .refreshable {
                     await dataStore.fetchEventsFromServer()
+                }
+            }
+        }
+    }
+
+    private var plazaList: some View {
+        Group {
+            if dataStore.plazaEvents.isEmpty {
+                plazaEmptyState
+            } else {
+                List {
+                    ForEach(dataStore.plazaEvents) { event in
+                        PlazaEventCard(event: event)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    }
+                }
+                .listStyle(.plain)
+                .refreshable {
+                    await dataStore.fetchPlazaEventsFromServer()
                 }
             }
         }
@@ -192,6 +239,30 @@ struct EventListView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+
+    private var plazaEmptyState: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "square.grid.2x2")
+                .font(.system(size: 48))
+                .foregroundStyle(AppTheme.secondaryColor.opacity(0.55))
+            Text("广场暂时没有待匹配活动")
+                .font(.headline)
+            Text("等有人发布新的待匹配活动后，会匿名出现在这里")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            await dataStore.fetchPlazaEventsFromServer()
+        }
+    }
+}
+
+enum EventListScope: Hashable {
+    case mine
+    case plaza
 }
 
 enum EventStatusFilter: Hashable, CaseIterable, Identifiable {
@@ -471,6 +542,117 @@ struct EventCard: View {
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "M月d日 HH:mm"
         return formatter.string(from: date)
+    }
+}
+
+struct PlazaEventCard: View {
+    let event: PlazaEvent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: AppTheme.activityTypeIcon(event.activityType))
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.activityTypeColor(event.activityType))
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.activityTypeColor(event.activityType).opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(event.title)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+
+                    HStack(spacing: 8) {
+                        Label("匿名发布", systemImage: "person.crop.circle.badge.questionmark")
+                        Text(event.activityType)
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+
+            HStack(spacing: 16) {
+                Label(formatDate(event.startTime), systemImage: "clock")
+                Label(locationText, systemImage: "mappin")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            tagRows
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+    }
+
+    private var tagRows: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !event.preferences.isEmpty {
+                tagLine(title: "偏好", values: event.preferences)
+            }
+            if !event.constraints.isEmpty {
+                tagLine(title: "约束", values: event.constraints)
+            }
+        }
+    }
+
+    private func tagLine(title: String, values: [String]) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(title)
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .frame(width: 30, alignment: .leading)
+
+            FlowTagLine(values: Array(values.prefix(4)))
+        }
+    }
+
+    private var locationText: String {
+        let parts = [event.city, event.location].filter { !$0.isEmpty }
+        return parts.isEmpty ? "地点待定" : parts.joined(separator: " · ")
+    }
+
+    private func formatDate(_ date: Date?) -> String {
+        guard let date else { return "时间待定" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.dateFormat = "M月d日 HH:mm"
+        return formatter.string(from: date)
+    }
+}
+
+struct FlowTagLine: View {
+    let values: [String]
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                tags
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                tags
+            }
+        }
+    }
+
+    private var tags: some View {
+        ForEach(values, id: \.self) { value in
+            Text(value)
+                .font(.caption2)
+                .fontWeight(.medium)
+                .foregroundStyle(AppTheme.primaryColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(AppTheme.primaryColor.opacity(0.1))
+                .clipShape(Capsule())
+        }
     }
 }
 

@@ -114,3 +114,38 @@ struct Event: Identifiable, Codable, Sendable {
         return formatter.date(from: str)
     }
 }
+
+struct PlazaEvent: Identifiable, Codable, Sendable {
+    let id: String
+    var activityType: String
+    var title: String
+    var startTime: Date?
+    var endTime: Date?
+    var location: String
+    var city: String
+    var preferences: [String]
+    var constraints: [String]
+    var createdAt: Date
+
+    init(from api: APIPlazaEventResponse) {
+        self.id = api.id
+        self.activityType = api.activityType
+        self.title = api.title
+        self.startTime = Self.parseDate(api.startTime)
+        self.endTime = Self.parseDate(api.endTime)
+        self.location = api.location ?? ""
+        self.city = api.city ?? ""
+        self.preferences = api.preferences ?? []
+        self.constraints = api.constraints ?? []
+        self.createdAt = Self.parseDate(api.createdAt) ?? .now
+    }
+
+    private static func parseDate(_ str: String?) -> Date? {
+        guard let str else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = formatter.date(from: str) { return d }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: str)
+    }
+}
