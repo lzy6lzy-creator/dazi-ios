@@ -6,7 +6,6 @@ from app.services.agent_stream_parser import (
     AgentStreamParser,
     QuestionJSONStreamExtractor,
     parse_conversation_tag_payload,
-    parse_draft_tag_payload,
 )
 
 
@@ -87,17 +86,6 @@ class AgentStreamParserTests(unittest.TestCase):
 
         self.assertEqual(result["action"], "chat")
         self.assertEqual(result["reply"], "能啊，测试成功。")
-
-    def test_parse_draft_tag_payload_extracts_reply_and_draft(self):
-        payload = (
-            "<draft_reply>草稿整理好了。</draft_reply>"
-            "<draft_json>{\"title\":\"今晚羽毛球\",\"activity_type\":\"羽毛球\"}</draft_json>"
-        )
-
-        result = parse_draft_tag_payload(payload)
-
-        self.assertEqual(result["reply"], "草稿整理好了。")
-        self.assertEqual(result["draft"]["title"], "今晚羽毛球")
 
 
 if __name__ == "__main__":

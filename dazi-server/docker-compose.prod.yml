@@ -63,6 +63,7 @@ services:
       APNS_BUNDLE_ID: ${APNS_BUNDLE_ID:-com.linke.dazi}
     volumes:
       - .:/code/runtime-config
+      - /opt/dazi-secrets:/code/runtime-secrets:ro
     depends_on:
       db:
         condition: service_healthy

@@ -8,29 +8,10 @@ from app.services.clarification_service import (
     merge_clarification_answers,
     normalize_conversation_payload,
     normalize_clarification_payload,
-    normalize_draft_payload,
 )
 
 
 class ClarificationServiceTests(unittest.TestCase):
-    def test_normalize_draft_payload_accepts_reply_and_draft(self):
-        result = normalize_draft_payload({
-            "reply": "我整理好了，确认后就发布。",
-            "draft": {
-                "title": "周六羽毛球",
-                "activity_type": "羽毛球",
-                "location": "上海市徐汇区",
-                "start_time": "2026-06-06T19:00:00+08:00",
-                "end_time": "2026-06-06T21:00:00+08:00",
-                "preferences": ["女生优先", "中等水平"],
-                "constraints": [],
-            },
-        })
-
-        self.assertEqual(result["reply"], "我整理好了，确认后就发布。")
-        self.assertEqual(result["draft"]["activity_type"], "羽毛球")
-        self.assertEqual(result["draft"]["preferences"], ["女生优先", "中等水平"])
-
     def test_normalize_payload_keeps_compact_valid_questions(self):
         payload = {
             "reply": "我把需要确认的点整理成卡片。",
@@ -572,22 +553,6 @@ class ClarificationServiceTests(unittest.TestCase):
         self.assertEqual(merged["age_filter_max"], 32)
         self.assertEqual(merged["age_filter_mode"], "preference")
         self.assertIn("年龄偏好 23-32 岁", merged["preferences"])
-
-    def test_normalize_draft_payload_preserves_age_filter_fields(self):
-        result = normalize_draft_payload({
-            "reply": "草稿好了。",
-            "draft": {
-                "title": "咖啡",
-                "activity_type": "咖啡",
-                "age_filter_min": 23,
-                "age_filter_max": 32,
-                "age_filter_mode": "preference",
-            },
-        })
-
-        self.assertEqual(result["draft"]["age_filter_min"], 23)
-        self.assertEqual(result["draft"]["age_filter_max"], 32)
-        self.assertEqual(result["draft"]["age_filter_mode"], "preference")
 
     def test_normalize_conversation_payload_preserves_draft_and_questions(self):
         payload = {

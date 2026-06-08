@@ -1435,10 +1435,11 @@ async function inviteBetaSignup(id) {
   }));
   if (!data) return;
   updateBetaSignupRow(data);
-  const asc = data.app_store_connect || {};
-  const suffix = asc.beta_tester_status === 'waiting_for_user_acceptance'
-    ? '，等待对方接受 App Store Connect 邀请'
-    : '，已加入内部测试组';
+  const suffix = isInInternalTfGroup(data)
+    ? '，已加入内部测试组'
+    : hasAcceptedAscInvite(data)
+      ? '，对方已接受，等待拉入 TF 组'
+      : '，等待对方接受 App Store Connect 邀请';
   showToast(`已记录邀请状态${suffix}`);
 }
 

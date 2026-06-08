@@ -108,12 +108,21 @@ class BetaSignupStaticTests(unittest.TestCase):
         self.assertIn("isInInternalTfGroup", admin_html)
         self.assertIn("hasAcceptedAscInvite", admin_html)
         self.assertIn("betaSignupPrimaryActionLabel", admin_html)
+        self.assertIn("对方已接受，等待拉入 TF 组", admin_html)
         self.assertIn("拉入 TF 组", admin_html)
         self.assertIn("<th style=\"width:10%;\">ASC</th>", admin_html)
         self.assertIn("/api/admin/beta-signups/invite-internal-all", admin_html)
         self.assertIn("/api/admin/beta-signups/sync-asc-status", admin_html)
         self.assertIn("一键邀请全部", admin_html)
         self.assertIn("同步 ASC 状态", admin_html)
+
+    def test_asc_private_key_uses_dedicated_secret_mount(self):
+        compose = read_text("docker-compose.prod.yml")
+        env_example = read_text(".env.example")
+
+        self.assertIn("/opt/dazi-secrets:/code/runtime-secrets:ro", compose)
+        self.assertIn("ASC_PRIVATE_KEY_PATH=/code/runtime-secrets/AuthKey_XXXXXX.p8", env_example)
+        self.assertNotIn("ASC_PRIVATE_KEY_PATH=/code/runtime-config/AuthKey_XXXXXX.p8", env_example)
 
 
 if __name__ == "__main__":

@@ -102,16 +102,6 @@ def normalize_conversation_payload(
     }
 
 
-def normalize_draft_payload(payload: Any) -> dict:
-    """Normalize LLM draft-generation output into a safe reply plus draft."""
-    if not isinstance(payload, dict):
-        return {"reply": "", "draft": {}}
-    return {
-        "reply": str(payload.get("reply") or "").strip(),
-        "draft": _sanitize_draft(payload.get("draft")),
-    }
-
-
 def merge_clarification_answers(
     *,
     draft: dict,

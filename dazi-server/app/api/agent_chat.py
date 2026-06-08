@@ -9,6 +9,7 @@ Agent Chat API - 与 AI Agent 对话
 """
 from __future__ import annotations
 
+import json
 import logging
 from collections.abc import AsyncIterator, Iterator
 from datetime import datetime, timedelta, timezone
@@ -31,7 +32,6 @@ from app.services.agent_stream_parser import (
     AgentStreamParser,
     QuestionJSONStreamExtractor,
     parse_conversation_tag_payload,
-    parse_draft_tag_payload,
 )
 from app.services.matching_tasks import schedule_event_matching
 from app.services.match_blocklist_service import clear_event_match_state
@@ -42,7 +42,6 @@ from app.services.clarification_service import (
     ConversationQuestionNormalizer,
     merge_clarification_answers,
     normalize_conversation_payload,
-    normalize_draft_payload,
 )
 from app.api.schemas import AgentChatRequest, AgentChatResponse, ClarificationAnswerRequest
 
@@ -235,29 +234,24 @@ async def answer_clarification(
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    """提交结构化澄清卡片答案，并合成活动草稿。"""
-    user_result = await db.execute(select(User).where(User.id == user_id))
-    user = user_result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=404, detail="用户不存在")
+    """提交结构化澄清卡片答案，并继续交给主对话编排器。"""
+    context = await _build_clarification_conversation_context(req=req, user_id=user_id, db=db)
+    payload = await _collect_conversation_payload(context["messages"])
+    decision = normalize_conversation_payload(payload)
+    if decision.get("action") == "draft":
+        decision["draft"] = _merge_draft_seed_with_model_draft(
+            context["deterministic_draft"],
+            decision.get("draft") or {},
+        )
 
-    uid_str = str(user_id)
-    session = await ChatHistoryCache.get_clarification_session(
-        uid_str,
-        req.clarification_session_id,
-    )
-    if not session:
-        raise HTTPException(status_code=404, detail="澄清卡片已过期，请重新描述需求")
-
-    answers = [answer.model_dump(exclude_none=True) for answer in req.answers]
-    return await _complete_clarification_session(
-        user=user,
-        uid_str=uid_str,
-        session_id=req.clarification_session_id,
-        session=session,
-        answers=answers,
-        free_text=req.free_text,
-        background_tasks=background_tasks,
+    return await _apply_conversation_decision(
+        user=context["user"],
+        uid_str=context["uid_str"],
+        message=context["clarification_answer_message"],
+        persisted_user_message=context["user_answer_text"],
+        decision=decision,
+        pending_clarification=context["pending_clarification"],
+        current_location=context["current_location"],
         db=db,
     )
 
@@ -271,43 +265,17 @@ async def answer_clarification_stream(
 ):
     async def generate() -> AsyncIterator[str]:
         try:
-            context = await _build_clarification_draft_context(req=req, user_id=user_id, db=db)
-            prompt = PromptBuilder.build_event_draft_prompt(**context["prompt_args"])
-            parser = AgentStreamParser(visible_tags={"draft_reply"})
-            visible_text_emitted = False
-            async for chunk in agent_server.stream_chat(
-                [{"role": "system", "content": prompt}],
-                purpose="draft",
-                temperature=0.3,
-                max_tokens=2048,
-            ):
-                for visible in parser.feed(chunk):
-                    visible_text_emitted = True
-                    yield sse_event("draft_delta", {"text": visible})
-
-            payload = normalize_draft_payload(parse_draft_tag_payload(parser.raw_text))
-            payload["draft"] = _merge_stream_draft_with_structured_answers(
-                context["deterministic_draft"],
-                payload["draft"],
-            )
-            await _apply_stream_draft_state(
-                user=context["user"],
-                uid_str=context["uid_str"],
-                session_id=req.clarification_session_id,
-                user_answer_text=context["user_answer_text"],
-                reply=payload["reply"],
-                draft=payload["draft"],
+            context = await _build_clarification_conversation_context(req=req, user_id=user_id, db=db)
+            async for event in _stream_conversation_events(
+                context=context,
+                message=context["clarification_answer_message"],
+                persisted_user_message=context["user_answer_text"],
+                deterministic_draft=context["deterministic_draft"],
                 db=db,
-            )
-            if not await _commit_db_write(db, context="streaming clarification draft"):
-                yield sse_event("error", {"message": "草稿保存失败，请稍后重试"})
-                yield sse_event("done", {})
-                return
-            for event_name, body in _events_from_draft_payload(
-                payload=payload,
-                include_reply=not visible_text_emitted,
+                commit_context="streaming clarification conversation",
+                save_error_message="保存失败，请稍后重试",
             ):
-                yield sse_event(event_name, body)
+                yield event
         except Exception:
             logger.exception("Streaming clarification answer failed for user %s", user_id)
             yield sse_event("error", {"message": "草稿生成失败，请稍后重试"})
@@ -359,12 +327,13 @@ async def _build_agent_chat_context(*, req: AgentChatRequest, user_id: UUID, db:
     existing_draft = await ChatHistoryCache.get_event_draft(uid_str)
     editing_event_id = await ChatHistoryCache.get_editing_event(uid_str)
     latest_clarification = await ChatHistoryCache.get_latest_clarification_session(uid_str)
-    conversation_state = _build_conversation_state(
+    pending_context_message = _build_pending_context_message(
         existing_draft=existing_draft,
         pending_clarification=latest_clarification,
         editing_event_id=editing_event_id,
     )
-    system_prompt = PromptBuilder.build_conversation_orchestrator_prompt(
+    system_prompt = PromptBuilder.build_conversation_orchestrator_prompt()
+    runtime_context = PromptBuilder.build_conversation_context_message(
         user_name=user.name,
         user_city=user.city or "",
         current_location=current_location or "",
@@ -372,9 +341,13 @@ async def _build_agent_chat_context(*, req: AgentChatRequest, user_id: UUID, db:
         user_bio=user.bio or "",
         birth_date=user.birth_date.isoformat() if user.birth_date else None,
         memories=[(m.type, m.content) for m in memories],
-        conversation_state=conversation_state,
     )
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "system", "content": runtime_context},
+    ]
+    if pending_context_message:
+        messages.append({"role": "system", "content": pending_context_message})
     messages.extend(history)
     messages.append({"role": "user", "content": req.message})
     return {
@@ -400,7 +373,81 @@ async def _collect_conversation_payload(messages: list[dict[str, str]]) -> dict:
     return parse_conversation_tag_payload(raw)
 
 
-async def _build_clarification_draft_context(
+async def _stream_conversation_events(
+    *,
+    context: dict,
+    message: str,
+    db: AsyncSession,
+    commit_context: str,
+    save_error_message: str,
+    persisted_user_message: str | None = None,
+    deterministic_draft: dict | None = None,
+) -> AsyncIterator[str]:
+    parser = AgentStreamParser(visible_tags={"reply"})
+    question_extractor = QuestionJSONStreamExtractor()
+    question_normalizer = ConversationQuestionNormalizer()
+    clarify_stream_session_id = str(uuid4())
+    streamed_question_ids: set[str] = set()
+    visible_text_emitted = False
+
+    async for chunk in agent_server.stream_chat(
+        context["messages"],
+        purpose="conversation",
+        temperature=0.3,
+        max_tokens=2048,
+    ):
+        for visible in parser.feed(chunk):
+            visible_text_emitted = True
+            yield sse_event("reply_delta", {"text": visible})
+        for raw_question in question_extractor.feed(chunk):
+            question = _normalize_stream_question(raw_question, question_normalizer)
+            if not question:
+                continue
+            question_id = str(question.get("id") or "")
+            if not question_id or question_id in streamed_question_ids:
+                continue
+            streamed_question_ids.add(question_id)
+            yield sse_event(
+                "clarify_question_delta",
+                {
+                    "session_id": clarify_stream_session_id,
+                    "question": question,
+                },
+            )
+
+    decision = normalize_conversation_payload(
+        parse_conversation_tag_payload(parser.raw_text),
+        question_normalizer=question_normalizer,
+    )
+    if decision.get("action") == "draft" and deterministic_draft:
+        decision["draft"] = _merge_draft_seed_with_model_draft(
+            deterministic_draft,
+            decision.get("draft") or {},
+        )
+
+    response = await _apply_conversation_decision(
+        user=context["user"],
+        uid_str=context["uid_str"],
+        message=message,
+        persisted_user_message=persisted_user_message,
+        decision=decision,
+        pending_clarification=context["pending_clarification"],
+        current_location=context["current_location"],
+        db=db,
+        session_id_override=clarify_stream_session_id,
+    )
+    if not await _commit_db_write(db, context=commit_context):
+        yield sse_event("error", {"message": save_error_message})
+        yield sse_event("done", {})
+        return
+    for event_name, payload in _events_from_agent_response(
+        response,
+        include_reply=not visible_text_emitted,
+    ):
+        yield sse_event(event_name, payload)
+
+
+async def _build_clarification_conversation_context(
     *,
     req: ClarificationAnswerRequest,
     user_id: UUID,
@@ -428,43 +475,28 @@ async def _build_clarification_draft_context(
         free_text=req.free_text,
     )
     user_answer_text = _clarification_answers_to_text(session.get("questions") or [], answers, req.free_text)
-    return {
-        "user": user,
-        "uid_str": uid_str,
-        "session": session,
-        "user_answer_text": user_answer_text,
-        "deterministic_draft": deterministic_draft,
-        "prompt_args": {
-            "user_name": user.name,
-            "current_location": str(session.get("current_location") or user.city or ""),
-            "original_message": str(session.get("original_message") or ""),
-            "draft_seed": deterministic_draft,
-            "questions": session.get("questions") or [],
-            "answers": answers,
-            "free_text": req.free_text,
-        },
-    }
-
-
-async def _apply_stream_draft_state(
-    *,
-    user: User,
-    uid_str: str,
-    session_id: str,
-    user_answer_text: str,
-    reply: str,
-    draft: dict,
-    db: AsyncSession,
-) -> None:
-    if not draft:
-        raise HTTPException(status_code=422, detail="草稿生成失败")
-    await ChatHistoryCache.clear_clarification_session(uid_str, session_id)
-    await ChatHistoryCache.set_event_draft(uid_str, draft)
-    await ChatHistoryCache.append_message(uid_str, "user", user_answer_text)
-    await ChatHistoryCache.append_message(uid_str, "assistant", reply)
-    db.add(AgentChatMessage(user_id=user.id, role="user", content=user_answer_text))
-    db.add(AgentChatMessage(user_id=user.id, role="assistant", content=reply))
-    await db.flush()
+    clarification_answer_message = _build_clarification_answer_user_message(
+        session_id=req.clarification_session_id,
+        session=session,
+        merged_draft_seed=deterministic_draft,
+        answers=answers,
+        free_text=req.free_text,
+        answer_text=user_answer_text,
+    )
+    context = await _build_agent_chat_context(
+        req=AgentChatRequest(
+            message=clarification_answer_message,
+            current_location=str(session.get("current_location") or user.city or ""),
+        ),
+        user_id=user_id,
+        db=db,
+    )
+    context["session"] = session
+    context["answers"] = answers
+    context["user_answer_text"] = user_answer_text
+    context["deterministic_draft"] = deterministic_draft
+    context["clarification_answer_message"] = clarification_answer_message
+    return context
 
 
 def _events_from_conversation_decision(*, decision: dict, session_id: str | None) -> Iterator[tuple[str, dict]]:
@@ -479,19 +511,11 @@ def _events_from_conversation_decision(*, decision: dict, session_id: str | None
     yield "done", {}
 
 
-def _events_from_draft_payload(*, payload: dict, include_reply: bool = False) -> Iterator[tuple[str, dict]]:
-    if include_reply and payload.get("reply"):
-        yield "draft_delta", {"text": payload["reply"]}
-    if payload.get("draft"):
-        yield "draft_ready", {"event_draft_pending": True}
-    yield "done", {}
-
-
-def _merge_stream_draft_with_structured_answers(
+def _merge_draft_seed_with_model_draft(
     structured_draft: dict | None,
     llm_draft: dict | None,
 ) -> dict:
-    """Keep deterministic card answers when the streaming draft model omits them."""
+    """Keep deterministic card answers when the conversation model omits them."""
     structured = structured_draft if isinstance(structured_draft, dict) else {}
     llm = llm_draft if isinstance(llm_draft, dict) else {}
     merged = dict(structured)
@@ -548,42 +572,6 @@ def _events_from_agent_response(
     yield "done", {}
 
 
-async def _complete_clarification_session(
-    *,
-    user: User,
-    uid_str: str,
-    session_id: str,
-    session: dict,
-    answers: list[dict],
-    free_text: str | None,
-    background_tasks: BackgroundTasks,
-    db: AsyncSession,
-) -> AgentChatResponse:
-    merged = merge_clarification_answers(
-        draft=session.get("draft") or {},
-        questions=session.get("questions") or [],
-        answers=answers,
-        user_birth_date=user.birth_date,
-        free_text=free_text,
-    )
-    await ChatHistoryCache.clear_clarification_session(uid_str, session_id)
-
-    user_answer_text = _clarification_answers_to_text(session.get("questions") or [], answers, free_text)
-    await ChatHistoryCache.set_event_draft(uid_str, merged)
-    reply = _draft_confirmation_reply(merged)
-
-    await ChatHistoryCache.append_message(uid_str, "user", user_answer_text)
-    await ChatHistoryCache.append_message(uid_str, "assistant", reply)
-    db.add(AgentChatMessage(user_id=user.id, role="user", content=user_answer_text))
-    db.add(AgentChatMessage(user_id=user.id, role="assistant", content=reply))
-    await db.flush()
-
-    return AgentChatResponse(
-        reply=reply,
-        event_draft_pending=True,
-    )
-
-
 async def _load_agent_chat_history(*, user_id: UUID, uid_str: str, db: AsyncSession) -> list[dict]:
     history = await ChatHistoryCache.get_history(uid_str)
     if history:
@@ -633,20 +621,18 @@ async def _get_agent_chat_session_start(*, user_id: UUID, uid_str: str, db: Asyn
     return marker_time
 
 
-def _build_conversation_state(
+def _build_pending_context_message(
     *,
     existing_draft: dict | None,
     pending_clarification: dict | None,
     editing_event_id: str | None,
-) -> str:
-    import json as json_lib
-
+) -> str | None:
     parts = []
     if editing_event_id:
         parts.append(f"正在编辑活动，event_id={editing_event_id}")
     if existing_draft:
         parts.append("当前已有待确认活动草稿：")
-        parts.append(json_lib.dumps(existing_draft, ensure_ascii=False))
+        parts.append(json.dumps(existing_draft, ensure_ascii=False))
     if pending_clarification:
         state = {
             "reply": pending_clarification.get("reply"),
@@ -654,8 +640,36 @@ def _build_conversation_state(
             "questions": pending_clarification.get("questions") or [],
         }
         parts.append("当前有待回答的澄清卡片：")
-        parts.append(json_lib.dumps(state, ensure_ascii=False))
-    return "\n".join(parts) if parts else "无待处理状态"
+        parts.append(json.dumps(state, ensure_ascii=False))
+    if not parts:
+        return None
+    return "## 当前待处理数据\n" + "\n".join(parts)
+
+
+def _build_clarification_answer_user_message(
+    *,
+    session_id: str,
+    session: dict,
+    merged_draft_seed: dict,
+    answers: list[dict],
+    free_text: str | None,
+    answer_text: str,
+) -> str:
+    payload = {
+        "session_id": session_id,
+        "original_message": session.get("original_message") or "",
+        "draft_seed_before_answers": session.get("draft") or {},
+        "merged_draft_seed": merged_draft_seed,
+        "questions": session.get("questions") or [],
+        "answers": answers,
+        "free_text": free_text,
+        "answer_text": answer_text,
+    }
+    return (
+        "用户已完成澄清卡片选择。请把这些结构化答案当作本轮用户输入，"
+        "输出 reply + draft；除非仍缺少发布或匹配的关键信息，才继续 reply + clarify。\n"
+        f"<clarification_answers_json>{json.dumps(payload, ensure_ascii=False)}</clarification_answers_json>"
+    )
 
 
 async def _persist_agent_exchange(
@@ -684,6 +698,7 @@ async def _apply_conversation_decision(
     user: User,
     uid_str: str,
     message: str,
+    persisted_user_message: str | None = None,
     decision: dict,
     pending_clarification: dict | None,
     current_location: str | None,
@@ -695,6 +710,7 @@ async def _apply_conversation_decision(
     reply = decision.get("reply") or "我在，你再跟我说说。"
     draft = decision.get("draft") or {}
     questions = decision.get("questions") or []
+    stored_user_message = persisted_user_message or message
 
     if action == "cancel":
         await _clear_pending_clarification_if_any(uid_str, pending_clarification)
@@ -703,7 +719,7 @@ async def _apply_conversation_decision(
         await _persist_agent_exchange(
             user_id=user.id,
             uid_str=uid_str,
-            user_message=message,
+            user_message=stored_user_message,
             assistant_reply=reply,
             db=db,
         )
@@ -726,7 +742,7 @@ async def _apply_conversation_decision(
         await _persist_agent_exchange(
             user_id=user.id,
             uid_str=uid_str,
-            user_message=message,
+            user_message=stored_user_message,
             assistant_reply=reply,
             db=db,
         )
@@ -745,7 +761,7 @@ async def _apply_conversation_decision(
         await _persist_agent_exchange(
             user_id=user.id,
             uid_str=uid_str,
-            user_message=message,
+            user_message=stored_user_message,
             assistant_reply=reply,
             db=db,
         )
@@ -757,7 +773,7 @@ async def _apply_conversation_decision(
     await _persist_agent_exchange(
         user_id=user.id,
         uid_str=uid_str,
-        user_message=message,
+        user_message=stored_user_message,
         assistant_reply=reply,
         db=db,
     )

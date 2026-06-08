@@ -115,24 +115,6 @@ def parse_conversation_tag_payload(text: str) -> dict[str, Any]:
     }
 
 
-def parse_draft_tag_payload(text: str) -> dict[str, Any]:
-    if not _has_any_tag(text, {"draft_reply", "draft_json"}):
-        fallback = _json_object(text)
-        if isinstance(fallback, dict):
-            return {
-                "reply": fallback.get("reply") or fallback.get("draft_reply") or "",
-                "draft": fallback.get("draft") or {},
-            }
-        return {
-            "reply": text.strip(),
-            "draft": {},
-        }
-    return {
-        "reply": _tag(text, "draft_reply") or "",
-        "draft": _json_tag(text, "draft_json", default={}),
-    }
-
-
 def _tag(text: str, name: str) -> str | None:
     match = re.search(rf"<{name}>(.*?)</{name}>", text, re.S)
     if not match:

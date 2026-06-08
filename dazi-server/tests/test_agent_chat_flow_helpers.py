@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from app.api.agent_chat import _apply_conversation_decision
+from app.api.agent_chat import _build_clarification_answer_user_message
 from app.api.agent_chat import _can_publish_existing_draft_without_llm
 from app.api.agent_chat import _build_memory_source_after_publish
 from app.api.agent_chat import _editing_event_intro_reply
@@ -19,6 +20,32 @@ from app.api.agent_chat import SESSION_RESET_ROLE
 
 
 class AgentChatFlowHelperTests(unittest.IsolatedAsyncioTestCase):
+    def test_clarification_answer_user_message_carries_structured_card_payload(self):
+        message = _build_clarification_answer_user_message(
+            session_id="session-1",
+            session={
+                "original_message": "今晚想吃火锅",
+                "draft": {"activity_type": "火锅"},
+                "questions": [{"id": "time", "title": "时间"}],
+            },
+            merged_draft_seed={
+                "activity_type": "火锅",
+                "location": "徐汇",
+                "preferences": ["中辣"],
+            },
+            answers=[{"question_id": "time", "custom_value": {"start_time": "2026-06-08T19:00:00+08:00"}}],
+            free_text="鸳鸯锅也可以",
+            answer_text="时间：2026-06-08 19:00",
+        )
+
+        self.assertIn("用户已完成澄清卡片选择", message)
+        self.assertIn("<clarification_answers_json>", message)
+        self.assertIn('"session_id": "session-1"', message)
+        self.assertIn('"merged_draft_seed"', message)
+        self.assertIn('"question_id": "time"', message)
+        self.assertIn("鸳鸯锅也可以", message)
+        self.assertIn("</clarification_answers_json>", message)
+
     def test_can_publish_existing_draft_on_direct_confirmation(self):
         draft = {"title": "今晚火锅", "activity_type": "火锅"}
 

@@ -714,11 +714,15 @@ async def invite_beta_signup_record(signup: BetaSignup, client: AppStoreConnectC
         email=signup.email,
         name=signup.name,
     )
-    signup.status = beta_signup_status_after_invite(asc_result)
+    asc_status = await client.get_internal_tester_status(signup.email)
+    synced_status, _ = sync_beta_signup_status_from_asc(signup, asc_status)
+    invite_status = beta_signup_status_after_invite(asc_result)
+    signup.status = "accepted" if invite_status == "accepted" else synced_status
     signup.updated_at = datetime.now(timezone.utc)
     payload = beta_signup_payload(signup)
     payload["phone_status"] = phone_status
-    payload["app_store_connect"] = asc_result
+    payload["app_store_connect"] = asc_status
+    payload["app_store_connect_invite_result"] = asc_result
     return payload
 
 
