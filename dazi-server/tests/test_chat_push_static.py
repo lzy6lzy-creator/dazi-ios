@@ -44,6 +44,38 @@ class ChatPushStaticTests(unittest.TestCase):
         self.assertIn("except Exception", nearby)
         self.assertIn("logger.warning", nearby)
 
+    def test_push_notification_failure_does_not_abort_vote_rejection(self):
+        text = (ROOT / "app" / "api" / "chat.py").read_text(encoding="utf-8")
+
+        submit_vote_body = text.split("async def submit_vote", 1)[1].split(
+            '@router.get("/rooms/{room_id}/vote-status"',
+            1,
+        )[0]
+        push_call = "await _push_message_to_room(room_id, close_msg, db)"
+        push_index = submit_vote_body.index(push_call)
+        nearby = submit_vote_body[max(0, push_index - 250):push_index + 350]
+
+        self.assertIn("try:", nearby)
+        self.assertIn(push_call, nearby)
+        self.assertIn("except Exception", nearby)
+        self.assertIn("logger.warning", nearby)
+
+    def test_push_notification_failure_does_not_abort_vote_match(self):
+        text = (ROOT / "app" / "api" / "chat.py").read_text(encoding="utf-8")
+
+        submit_vote_body = text.split("async def submit_vote", 1)[1].split(
+            '@router.get("/rooms/{room_id}/vote-status"',
+            1,
+        )[0]
+        push_call = "await _push_message_to_room(room_id, match_msg, db)"
+        push_index = submit_vote_body.index(push_call)
+        nearby = submit_vote_body[max(0, push_index - 250):push_index + 350]
+
+        self.assertIn("try:", nearby)
+        self.assertIn(push_call, nearby)
+        self.assertIn("except Exception", nearby)
+        self.assertIn("logger.warning", nearby)
+
 
 if __name__ == "__main__":
     unittest.main()

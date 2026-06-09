@@ -342,6 +342,10 @@ struct APIChatRoomResponse: Codable {
     let eventTitle: String?
     let matchSummary: String?
     let agentDialogue: String?
+    let phase: String
+    let a2aCandidateRank: Int?
+    let a2aResult: String?
+    let isAnonymous: Bool
     let isActive: Bool
     let createdAt: String
     let closedAt: String?
@@ -356,6 +360,10 @@ struct APIChatRoomResponse: Codable {
         case eventTitle = "event_title"
         case matchSummary = "match_summary"
         case agentDialogue = "agent_dialogue"
+        case phase
+        case a2aCandidateRank = "a2a_candidate_rank"
+        case a2aResult = "a2a_result"
+        case isAnonymous = "is_anonymous"
         case isActive = "is_active"
         case createdAt = "created_at"
         case closedAt = "closed_at"
@@ -371,6 +379,10 @@ struct APIChatRoomResponse: Codable {
         eventTitle = try container.decodeIfPresent(String.self, forKey: .eventTitle)
         matchSummary = try container.decodeIfPresent(String.self, forKey: .matchSummary)
         agentDialogue = try container.decodeIfPresent(String.self, forKey: .agentDialogue)
+        phase = try container.decodeIfPresent(String.self, forKey: .phase) ?? "matched"
+        a2aCandidateRank = try container.decodeIfPresent(Int.self, forKey: .a2aCandidateRank)
+        a2aResult = try container.decodeIfPresent(String.self, forKey: .a2aResult)
+        isAnonymous = try container.decodeIfPresent(Bool.self, forKey: .isAnonymous) ?? false
         isActive = try container.decode(Bool.self, forKey: .isActive)
         createdAt = try container.decode(String.self, forKey: .createdAt)
         closedAt = try container.decodeIfPresent(String.self, forKey: .closedAt)
@@ -387,13 +399,16 @@ struct APIChatMessageResponse: Codable {
     let senderType: String
     let content: String
     let mentions: [String]?
+    let visibility: String?
+    let recipientUserId: String?
     let createdAt: String
 
     enum CodingKeys: String, CodingKey {
-        case id, content, mentions
+        case id, content, mentions, visibility
         case roomId = "room_id"
         case senderId = "sender_id"
         case senderType = "sender_type"
+        case recipientUserId = "recipient_user_id"
         case createdAt = "created_at"
     }
 }
@@ -574,8 +589,34 @@ final class APIClient {
         }
 
         let (data, response) = try await session.data(for: req)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.networkError("Invalid response")
+        }
+
+        if httpResponse.statusCode == 401 {
+            // Try token refresh
+            if authenticated, let _ = refreshToken {
+                try await doRefreshToken()
+                var retryReq = req
+                retryReq.setValue(
+                    "Bearer \(accessToken ?? authTokenOverride ?? "")",
+                    forHTTPHeaderField: "Authorization"
+                )
+                let (retryData, retryResp) = try await session.data(for: retryReq)
+                guard let retryHttp = retryResp as? HTTPURLResponse else {
+                    throw APIError.networkError("Invalid response")
+                }
+                guard (200...299).contains(retryHttp.statusCode) else {
+                    let retryErrorBody = String(data: retryData, encoding: .utf8) ?? "Unknown"
+                    throw APIError.serverError(retryHttp.statusCode, retryErrorBody)
+                }
+                return (try? JSONSerialization.jsonObject(with: retryData) as? [String: Any]) ?? [:]
+            }
+            throw APIError.unauthorized
+        }
+
+        guard (200...299).contains(httpResponse.statusCode) else {
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             let errorBody = String(data: data, encoding: .utf8) ?? "Unknown"
             throw APIError.serverError(code, errorBody)

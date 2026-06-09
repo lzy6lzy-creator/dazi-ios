@@ -146,14 +146,14 @@ class PushNotificationService:
             return PushSendResult(token=token, success=False, reason="not_configured")
 
         url = f"/3/device/{token}"
-        headers = {
-            "authorization": f"bearer {self._provider_auth_token()}",
-            "apns-topic": self.bundle_id,
-            "apns-push-type": "alert",
-            "apns-priority": "10",
-        }
 
         try:
+            headers = {
+                "authorization": f"bearer {self._provider_auth_token()}",
+                "apns-topic": self.bundle_id,
+                "apns-push-type": "alert",
+                "apns-priority": "10",
+            }
             async with httpx.AsyncClient(
                 base_url=apns_base_url_for_environment(environment),
                 http2=True,

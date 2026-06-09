@@ -8,13 +8,14 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import date, datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event, MatchLog, MatchBlocklist
-from app.models.chat import ChatRoom, ChatRoomMember
+from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage
 from app.models.user import Agent, User
 from app.api.ws import manager as ws_manager
 from app.services.a2a_matcher import a2a_matcher
@@ -41,13 +42,18 @@ logger = logging.getLogger(__name__)
 
 MATCH_THRESHOLD = VECTOR_MATCH_THRESHOLD
 SEARCH_K = 30           # 向量搜索 top-k，为 Top3 A2A 保留足够候选
+ROOM_PHASE_A2A_NEGOTIATING = "a2a_negotiating"
+ROOM_PHASE_MATCHED = "matched"
+ROOM_PHASE_CLOSED = "closed"
+VISIBILITY_PUBLIC_ROOM = "public_room"
+VISIBILITY_SYSTEM = "system"
 
 
 class MatchingService:
     def __init__(self, evaluator=a2a_matcher):
         self.evaluator = evaluator
 
-    async def match_event(self, event_id: UUID, db: AsyncSession) -> dict | None:
+    async def match_event(self, event_id: UUID, db: AsyncSession) -> Optional[dict]:
         """主入口：对单个事件执行匹配"""
         result = await db.execute(
             select(Event).where(Event.id == event_id).with_for_update()
@@ -111,13 +117,47 @@ class MatchingService:
                 return None
 
             all_evaluations = []
+            a2a_room_ids: dict[UUID, uuid.UUID] = {}
             for round_index, window in enumerate(windows, start=1):
                 evaluations = []
-                for candidate in window:
+                for candidate_rank, candidate in enumerate(window, start=1):
                     candidate_event = candidate_by_id.get(candidate.event_id)
                     if candidate_event is None:
                         continue
-                    evaluation = await self.evaluator.evaluate(event, candidate_event, db)
+                    room_id = await self._create_a2a_negotiating_room(
+                        event,
+                        candidate_event,
+                        candidate_rank,
+                        db,
+                    )
+                    a2a_room_ids[candidate_event.id] = room_id
+
+                    async def publish_agent_turn(side: str, message: str, *, current_room_id=room_id, current_candidate=candidate_event):
+                        sender_id = event.user_id if side == "A" else current_candidate.user_id
+                        msg = ChatMessage(
+                            room_id=current_room_id,
+                            sender_id=sender_id,
+                            sender_type="agent",
+                            content=f"Agent{side}: {message}",
+                            visibility=VISIBILITY_PUBLIC_ROOM,
+                        )
+                        db.add(msg)
+                        await db.flush()
+                        await db.commit()
+                        await self._broadcast_room_message(current_room_id, msg, db)
+
+                    try:
+                        evaluation = await self.evaluator.evaluate(
+                            event,
+                            candidate_event,
+                            db,
+                            room_id=room_id,
+                            on_public_message=publish_agent_turn,
+                        )
+                    except TypeError as exc:
+                        if "unexpected keyword" not in str(exc):
+                            raise
+                        evaluation = await self.evaluator.evaluate(event, candidate_event, db)
                     evaluations.append(evaluation)
                     all_evaluations.append(evaluation)
                     db.add(MatchLog(
@@ -136,12 +176,13 @@ class MatchingService:
                 if not winner:
                     continue
 
-                matched = await self._try_commit_a2a_winner(event, winner, evaluations, db)
+                matched = await self._try_commit_a2a_winner(event, winner, evaluations, db, a2a_room_ids)
                 if matched:
                     return matched
 
             if all_evaluations:
                 await self._blocklist_evaluated_pairs(event, all_evaluations, db)
+                await self._close_rejected_a2a_rooms(all_evaluations, a2a_room_ids, db)
             event.status = "pending"
             event.match_round += 1
             return None
@@ -274,7 +315,8 @@ class MatchingService:
         winner: A2AEvaluation,
         evaluations: list[A2AEvaluation],
         db: AsyncSession,
-    ) -> dict | None:
+        a2a_room_ids: Optional[dict[UUID, uuid.UUID]] = None,
+    ) -> Optional[dict]:
         accepted = sorted(
             [
                 evaluation for evaluation in evaluations
@@ -316,12 +358,29 @@ class MatchingService:
                 result="accepted",
             ))
 
-            chat_room_id = await self._create_chat_room(
-                event,
-                best_event,
-                evaluation.summary,
-                evaluation.dialogue_log,
-                db,
+            a2a_room_ids = a2a_room_ids or {}
+            negotiating_room_id = a2a_room_ids.get(best_event.id)
+            if negotiating_room_id:
+                chat_room_id = await self._promote_a2a_room(
+                    negotiating_room_id,
+                    event,
+                    best_event,
+                    evaluation.summary,
+                    evaluation.dialogue_log,
+                    db,
+                )
+            else:
+                chat_room_id = await self._create_chat_room(
+                    event,
+                    best_event,
+                    evaluation.summary,
+                    evaluation.dialogue_log,
+                    db,
+                )
+            await self._close_superseded_a2a_rooms(
+                event_ids={event.id, best_event.id},
+                winning_room_id=chat_room_id,
+                db=db,
             )
 
             return {
@@ -433,7 +492,7 @@ class MatchingService:
             "total_passed": sum(1 for c in detailed if c["passed"]),
         }
 
-    async def _matched_event_for_preview(self, event: Event, db: AsyncSession) -> dict | None:
+    async def _matched_event_for_preview(self, event: Event, db: AsyncSession) -> Optional[dict]:
         if not event.matched_event_id:
             return None
 
@@ -567,7 +626,7 @@ class MatchingService:
         }
 
     async def _create_chat_room(self, event_a: Event, event_b: Event,
-                                match_summary: str, agent_dialogue: str | None,
+                                match_summary: str, agent_dialogue: Optional[str],
                                 db: AsyncSession) -> uuid.UUID:
         """创建聊天室 + 添加成员"""
         room = ChatRoom(
@@ -575,32 +634,13 @@ class MatchingService:
             event_id_b=event_b.id,
             match_summary=match_summary,
             agent_dialogue=agent_dialogue,
+            phase=ROOM_PHASE_MATCHED,
+            a2a_result="matched",
         )
         db.add(room)
         await db.flush()
 
-        # 添加两个用户为成员（event_a 的用户为 owner）
-        for uid, is_owner in [(event_a.user_id, True), (event_b.user_id, False)]:
-            db.add(ChatRoomMember(
-                room_id=room.id,
-                user_id=uid,
-                role="user",
-                is_owner=is_owner,
-            ))
-
-        # 添加两个 Agent 为成员
-        for user_id in [event_a.user_id, event_b.user_id]:
-            agent_result = await db.execute(
-                select(Agent).where(Agent.user_id == user_id)
-            )
-            agent = agent_result.scalar_one_or_none()
-            if agent:
-                db.add(ChatRoomMember(
-                    room_id=room.id,
-                    user_id=user_id,       # agent 所属用户的 ID
-                    agent_id=agent.id,     # agent 自己的 ID
-                    role="agent",
-                ))
+        await self._add_chat_room_members(room.id, event_a, event_b, db)
 
         # WebSocket 通知双方用户匹配成功
         for uid, eid in [(event_a.user_id, event_a.id), (event_b.user_id, event_b.id)]:
@@ -629,6 +669,230 @@ class MatchingService:
             logger.warning("Room created but push notification failed: %s", exc)
 
         return room.id
+
+    async def _create_a2a_negotiating_room(
+        self,
+        event_a: Event,
+        event_b: Event,
+        candidate_rank: int,
+        db: AsyncSession,
+    ) -> uuid.UUID:
+        room = ChatRoom(
+            event_id_a=event_a.id,
+            event_id_b=event_b.id,
+            match_summary="AI 正在替双方确认是否适合搭。",
+            agent_dialogue="",
+            phase=ROOM_PHASE_A2A_NEGOTIATING,
+            a2a_candidate_rank=candidate_rank,
+            a2a_result="negotiating",
+        )
+        db.add(room)
+        await db.flush()
+        await self._add_chat_room_members(room.id, event_a, event_b, db)
+
+        system_msg = ChatMessage(
+            room_id=room.id,
+            sender_id=event_a.user_id,
+            sender_type="system",
+            content="AI 正在替双方确认是否适合搭。当前对方匿名，你可以补充信息，但只会告诉你的 AI。",
+            visibility=VISIBILITY_SYSTEM,
+        )
+        db.add(system_msg)
+        await db.flush()
+        await db.commit()
+        await self._broadcast_room_message(room.id, system_msg, db)
+
+        for uid in [event_a.user_id, event_b.user_id]:
+            await ws_manager.send_to_user(str(uid), {
+                "type": "room_created",
+                "room_id": str(room.id),
+                "phase": ROOM_PHASE_A2A_NEGOTIATING,
+            })
+
+        return room.id
+
+    async def _promote_a2a_room(
+        self,
+        room_id: uuid.UUID,
+        event_a: Event,
+        event_b: Event,
+        match_summary: str,
+        agent_dialogue: Optional[str],
+        db: AsyncSession,
+    ) -> uuid.UUID:
+        room = await db.get(ChatRoom, room_id)
+        if not room:
+            return await self._create_chat_room(event_a, event_b, match_summary, agent_dialogue, db)
+
+        room.phase = ROOM_PHASE_MATCHED
+        room.a2a_result = "matched"
+        room.match_summary = match_summary
+        room.agent_dialogue = agent_dialogue
+        room.is_active = True
+
+        system_msg = ChatMessage(
+            room_id=room.id,
+            sender_id=event_a.user_id,
+            sender_type="system",
+            content="AI 协商已匹配成功，聊天室现在开放正常聊天。",
+            visibility=VISIBILITY_SYSTEM,
+        )
+        db.add(system_msg)
+        await db.flush()
+        await db.commit()
+        await self._broadcast_room_message(room.id, system_msg, db)
+
+        for uid, eid in [(event_a.user_id, event_a.id), (event_b.user_id, event_b.id)]:
+            await ws_manager.send_to_user(str(uid), {
+                "type": "event_update",
+                "event_id": str(eid),
+                "status": "matched",
+            })
+            await ws_manager.send_to_user(str(uid), {
+                "type": "room_created",
+                "room_id": str(room.id),
+                "phase": ROOM_PHASE_MATCHED,
+            })
+
+        try:
+            await push_notification_service.send_to_users(
+                db,
+                [event_a.user_id, event_b.user_id],
+                title="匹配成功，聊天室已创建",
+                body="AI 已完成协商，新的搭子聊天室已开启。",
+                data={
+                    "type": "room_created",
+                    "room_id": str(room.id),
+                },
+            )
+        except Exception as exc:
+            logger.warning("A2A room promoted but push notification failed: %s", exc)
+
+        return room.id
+
+    async def _add_chat_room_members(self, room_id: uuid.UUID, event_a: Event, event_b: Event, db: AsyncSession) -> None:
+        for uid, is_owner in [(event_a.user_id, True), (event_b.user_id, False)]:
+            db.add(ChatRoomMember(
+                room_id=room_id,
+                user_id=uid,
+                role="user",
+                is_owner=is_owner,
+            ))
+
+        for user_id in [event_a.user_id, event_b.user_id]:
+            agent_result = await db.execute(select(Agent).where(Agent.user_id == user_id))
+            agent = agent_result.scalar_one_or_none()
+            if agent:
+                db.add(ChatRoomMember(
+                    room_id=room_id,
+                    user_id=user_id,
+                    agent_id=agent.id,
+                    role="agent",
+                ))
+
+    async def _close_rejected_a2a_rooms(
+        self,
+        evaluations: list[A2AEvaluation],
+        a2a_room_ids: dict[UUID, uuid.UUID],
+        db: AsyncSession,
+    ) -> None:
+        for evaluation in evaluations:
+            room_id = a2a_room_ids.get(evaluation.candidate_event_id)
+            if not room_id:
+                continue
+            room = await db.get(ChatRoom, room_id)
+            if room and room.phase == ROOM_PHASE_A2A_NEGOTIATING:
+                await self._close_a2a_room(
+                    room,
+                    result="rejected",
+                    content="这组 AI 协商没有匹配成功，本次候选已结束。",
+                    db=db,
+                )
+
+    async def _close_superseded_a2a_rooms(
+        self,
+        *,
+        event_ids: set[uuid.UUID],
+        winning_room_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> None:
+        result = await db.execute(
+            select(ChatRoom).where(
+                ChatRoom.phase == ROOM_PHASE_A2A_NEGOTIATING,
+                ChatRoom.id != winning_room_id,
+                or_(
+                    ChatRoom.event_id_a.in_(event_ids),
+                    ChatRoom.event_id_b.in_(event_ids),
+                ),
+            )
+        )
+        for room in result.scalars().all():
+            await self._close_a2a_room(
+                room,
+                result="lost_to_other_candidate",
+                content="已匹配到其他搭子，本次 AI 协商结束。",
+                db=db,
+            )
+
+    async def _close_a2a_room(self, room: ChatRoom, *, result: str, content: str, db: AsyncSession) -> None:
+        room.phase = ROOM_PHASE_CLOSED
+        room.a2a_result = result
+        room.is_active = False
+        room.closed_at = datetime.now(timezone.utc)
+        sender_id = await self._room_system_sender(room, db)
+        if not sender_id:
+            return
+        msg = ChatMessage(
+            room_id=room.id,
+            sender_id=sender_id,
+            sender_type="system",
+            content=content,
+            visibility=VISIBILITY_SYSTEM,
+        )
+        db.add(msg)
+        await db.flush()
+        await db.commit()
+        await self._broadcast_room_message(room.id, msg, db)
+
+    async def _room_system_sender(self, room: ChatRoom, db: AsyncSession) -> Optional[uuid.UUID]:
+        for event_id in [room.event_id_a, room.event_id_b]:
+            if not event_id:
+                continue
+            event = await db.get(Event, event_id)
+            if event:
+                return event.user_id
+        result = await db.execute(
+            select(ChatRoomMember.user_id)
+            .where(ChatRoomMember.room_id == room.id, ChatRoomMember.role == "user")
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _broadcast_room_message(self, room_id: uuid.UUID, msg: ChatMessage, db: AsyncSession) -> None:
+        members_r = await db.execute(
+            select(ChatRoomMember).where(
+                ChatRoomMember.room_id == room_id,
+                ChatRoomMember.role == "user",
+            )
+        )
+        user_ids = [str(member.user_id) for member in members_r.scalars().all()]
+        if not user_ids:
+            return
+        await ws_manager.broadcast_to_users(user_ids, {
+            "type": "new_message",
+            "room_id": str(room_id),
+            "message": {
+                "id": str(msg.id),
+                "room_id": str(msg.room_id),
+                "sender_id": str(msg.sender_id),
+                "sender_type": msg.sender_type,
+                "content": msg.content,
+                "mentions": msg.mentions,
+                "visibility": msg.visibility,
+                "recipient_user_id": str(msg.recipient_user_id) if msg.recipient_user_id else None,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+            },
+        })
 
 
 matching_service = MatchingService()

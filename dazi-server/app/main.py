@@ -17,7 +17,7 @@ from app.core.redis import close_redis
 from app.core.log_buffer import log_buffer
 from app.services.agent_server import agent_server
 from app.services.embedding_service import embedding_service
-from app.services.scheduler import match_scheduler
+from app.services.scheduler import beta_invite_scheduler, match_scheduler
 
 # 导入所有 model 以确保建表时能发现它们
 from app.models.user import User, Agent, AgentMemory, EventMemory, MemoryEvidence, AgentChatMessage, PushDeviceToken  # noqa: F401
@@ -84,10 +84,12 @@ async def lifespan(app: FastAPI):
 
     # 启动定时匹配任务（每小时扫描 pending 事件）
     match_scheduler.start()
+    beta_invite_scheduler.start()
 
     yield
     # 关闭时清理资源
     await match_scheduler.stop()
+    await beta_invite_scheduler.stop()
     await agent_server.close()
     await embedding_service.close()
     await close_redis()
@@ -110,6 +112,13 @@ async def _ensure_runtime_schema(conn) -> None:
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_mode VARCHAR(20)"))
     await conn.execute(text("ALTER TABLE chat_room_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ DEFAULT NOW()"))
     await conn.execute(text("ALTER TABLE chat_room_members ALTER COLUMN last_read_at DROP DEFAULT"))
+    await conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS phase VARCHAR(30) DEFAULT 'matched'"))
+    await conn.execute(text("UPDATE chat_rooms SET phase = 'matched' WHERE phase IS NULL"))
+    await conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS a2a_candidate_rank INTEGER"))
+    await conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS a2a_result VARCHAR(40)"))
+    await conn.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS visibility VARCHAR(30) DEFAULT 'public_room'"))
+    await conn.execute(text("UPDATE chat_messages SET visibility = 'public_room' WHERE visibility IS NULL"))
+    await conn.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS recipient_user_id UUID REFERENCES users(id) ON DELETE CASCADE"))
     await conn.execute(text("ALTER TABLE match_logs ADD COLUMN IF NOT EXISTS score_breakdown JSONB"))
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS key VARCHAR(100)"))
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS category VARCHAR(40)"))

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import logging
 import json
+from typing import Optional
 from uuid import UUID
 
+from sqlalchemy import select
+
+from app.models.chat import ChatMessage
 from app.services.agent_server import agent_server
 from app.services.matching_policy import A2AEvaluation, A2A_MATCH_THRESHOLD
 
@@ -94,7 +98,7 @@ def _score_breakdown(value) -> list[dict]:
     return rows
 
 
-def _format_dialogue(dialogue) -> str | None:
+def _format_dialogue(dialogue) -> Optional[str]:
     if not isinstance(dialogue, list):
         return None
     lines = []
@@ -109,7 +113,15 @@ def _format_dialogue(dialogue) -> str | None:
 
 
 class A2AMatcher:
-    async def evaluate(self, source, candidate, db) -> A2AEvaluation:
+    async def evaluate(
+        self,
+        source,
+        candidate,
+        db,
+        *,
+        room_id: Optional[UUID] = None,
+        on_public_message=None,
+    ) -> A2AEvaluation:
         try:
             from app.services.prompt_builder import PromptBuilder
 
@@ -123,17 +135,28 @@ class A2AMatcher:
                 ("B", "根据公开对话补问或收束；不要继续发散。"),
             ]
             for side, task in turns:
+                self_private = dict(context["private"][side])
+                if room_id:
+                    additions = await self._room_private_additions(
+                        room_id=room_id,
+                        user_id=source.user_id if side == "A" else candidate.user_id,
+                        db=db,
+                    )
+                    if additions:
+                        self_private["room_user_additions"] = additions
                 payload = self._build_agent_turn_payload(
                     side=side,
                     task=task,
                     public_events=context["public_events"],
                     dialogue=dialogue,
-                    self_private=context["private"][side],
+                    self_private=self_private,
                 )
                 result = await self._call_a2a_json(prompt, payload)
                 message = str(result.get("message") or "").strip()
                 if message:
                     dialogue.append({"speaker": side, "content": message})
+                    if on_public_message:
+                        await on_public_message(side, message)
 
             judge_payload = self._build_judge_payload(
                 public_events=context["public_events"],
@@ -180,6 +203,24 @@ class A2AMatcher:
                 ),
             },
         }
+
+    @staticmethod
+    async def _room_private_additions(room_id: UUID, user_id: UUID, db) -> list[str]:
+        result = await db.execute(
+            select(ChatMessage.content)
+            .where(
+                ChatMessage.room_id == room_id,
+                ChatMessage.sender_id == user_id,
+                ChatMessage.visibility == "private_to_agent",
+            )
+            .order_by(ChatMessage.created_at.asc())
+            .limit(8)
+        )
+        return [
+            str(content).strip()
+            for content in result.scalars().all()
+            if str(content).strip()
+        ]
 
     @staticmethod
     async def _call_a2a_json(prompt: str, payload: dict) -> dict:

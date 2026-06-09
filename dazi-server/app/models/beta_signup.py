@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from sqlalchemy import ARRAY, Index, String, Text, TIMESTAMP
 from sqlalchemy.dialects.postgresql import UUID
@@ -21,15 +22,15 @@ class BetaSignup(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     email: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
-    contact: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    city: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    device: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    activity_interests: Mapped[list[str] | None] = mapped_column(ARRAY(String), default=list)
-    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    city: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    device: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    activity_interests: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String), default=list)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(40), default="homepage")
     status: Mapped[str] = mapped_column(String(30), default="new", index=True)
-    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),

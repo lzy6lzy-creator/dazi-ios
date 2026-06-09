@@ -2,6 +2,7 @@
 Event API - 活动 CRUD + 匹配触发
 """
 from uuid import UUID
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +20,7 @@ from app.services.matching_tasks import schedule_event_matching
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
 
-def _single_location(location: str | None, legacy_city: str | None = None) -> str | None:
+def _single_location(location: Optional[str], legacy_city: Optional[str] = None) -> Optional[str]:
     location_value = location.strip() if isinstance(location, str) and location.strip() else None
     city_value = legacy_city.strip() if isinstance(legacy_city, str) and legacy_city.strip() else None
     return location_value or city_value

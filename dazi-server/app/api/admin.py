@@ -11,6 +11,7 @@ import csv
 import io
 import logging
 from pathlib import Path
+from typing import Optional
 from uuid import UUID
 from datetime import datetime, timezone
 
@@ -49,7 +50,7 @@ router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(ve
 
 BETA_SIGNUP_STATUSES = {"new", "updated", "approved", "invited", "accepted", "rejected", "archived"}
 FEEDBACK_STATUSES = {"new", "reviewed", "resolved", "archived"}
-BULK_INVITE_SKIP_STATUSES = {"accepted", "rejected"}
+BULK_INVITE_SKIP_STATUSES = {"accepted", "rejected", "invited"}
 ASC_SYNC_MANUAL_STATUSES = {"rejected", "archived"}
 
 
@@ -61,7 +62,7 @@ class FeedbackStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=30)
 
 
-def append_internal_test_phone(phone: str | None, *, name: str, email: str) -> str:
+def append_internal_test_phone(phone: Optional[str], *, name: str, email: str) -> str:
     if not phone:
         return "missing"
     phones_path = Path(settings.INTERNAL_TEST_PHONES_FILE)
@@ -106,7 +107,7 @@ def should_bulk_invite_beta_signup(signup: BetaSignup) -> bool:
     return status not in BULK_INVITE_SKIP_STATUSES and bool((signup.email or "").strip())
 
 
-def admin_event_detail_payload(event: Event, user: User | None = None) -> dict:
+def admin_event_detail_payload(event: Event, user: Optional[User] = None) -> dict:
     return {
         "id": str(event.id),
         "user_id": str(event.user_id),
@@ -220,7 +221,7 @@ async def list_all_users(db: AsyncSession = Depends(get_db)):
 
 @router.get("/events")
 async def list_all_events(
-    status: str | None = None,
+    status: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """查看所有事件（可按状态过滤）"""
@@ -623,7 +624,7 @@ async def list_all_rooms(db: AsyncSession = Depends(get_db)):
 # ── 日志查看 ──
 
 @router.get("/logs")
-async def get_logs(limit: int = 200, level: str | None = None):
+async def get_logs(limit: int = 200, level: Optional[str] = None):
     """获取最近的应用日志"""
     return log_buffer.get_logs(limit=limit, level=level)
 
@@ -655,7 +656,7 @@ def beta_signup_payload(signup: BetaSignup) -> dict:
     }
 
 
-def beta_signup_query(status: str | None = None, q: str | None = None):
+def beta_signup_query(status: Optional[str] = None, q: Optional[str] = None):
     query = select(BetaSignup)
     if status:
         query = query.where(BetaSignup.status == status)
@@ -675,8 +676,8 @@ def beta_signup_query(status: str | None = None, q: str | None = None):
 
 @router.get("/beta-signups")
 async def list_beta_signups(
-    status: str | None = None,
-    q: str | None = None,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
     limit: int = 300,
     db: AsyncSession = Depends(get_db),
 ):
@@ -726,15 +727,9 @@ async def invite_beta_signup_record(signup: BetaSignup, client: AppStoreConnectC
     return payload
 
 
-@router.post("/beta-signups/invite-internal-all")
-async def invite_all_beta_signups_internal(
-    db: AsyncSession = Depends(get_db),
-):
-    """批量邀请所有未入组、未拒绝的内测报名。每条记录独立处理，失败不打断整批。"""
-    try:
-        client = AppStoreConnectClient.from_settings(settings)
-    except AppStoreConnectConfigError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+async def invite_all_beta_signups_internal_task(db: AsyncSession) -> dict:
+    """执行一次“邀请全部”流程，返回处理汇总。"""
+    client = AppStoreConnectClient.from_settings(settings)
 
     result = await db.execute(beta_signup_query())
     signups = result.scalars().all()
@@ -745,21 +740,45 @@ async def invite_all_beta_signups_internal(
     skipped = 0
 
     for signup in signups:
-        if not should_bulk_invite_beta_signup(signup):
-            skipped += 1
-            results.append({
-                "id": str(signup.id),
-                "email": signup.email,
-                "name": signup.name,
-                "status": signup.status,
-                "skipped": True,
-                "reason": "已入组或已拒绝",
-                "signup": beta_signup_payload(signup),
-            })
-            continue
-
-        processed += 1
         try:
+            if not (signup.email or "").strip():
+                skipped += 1
+                results.append({
+                    "id": str(signup.id),
+                    "email": signup.email,
+                    "name": signup.name,
+                    "status": signup.status,
+                    "skipped": True,
+                    "reason": "缺少邮箱",
+                    "signup": beta_signup_payload(signup),
+                })
+                continue
+
+            asc_status = await client.get_internal_tester_status(signup.email)
+            new_status, reason = sync_beta_signup_status_from_asc(signup, asc_status)
+            old_status = signup.status
+            if new_status != old_status:
+                signup.status = new_status
+                signup.updated_at = datetime.now(timezone.utc)
+
+            if not should_bulk_invite_beta_signup(signup):
+                skipped += 1
+                payload = beta_signup_payload(signup)
+                payload["app_store_connect"] = asc_status
+                results.append({
+                    "id": str(signup.id),
+                    "email": signup.email,
+                    "name": signup.name,
+                    "status": signup.status,
+                    "skipped": True,
+                    "reason": reason,
+                    "signup": payload,
+                    "app_store_connect": asc_status,
+                    "app_store_connect_reason": reason,
+                })
+                continue
+
+            processed += 1
             payload = await invite_beta_signup_record(signup, client)
             succeeded += 1
             results.append({
@@ -772,17 +791,6 @@ async def invite_all_beta_signups_internal(
                 "app_store_connect": payload.get("app_store_connect"),
                 "phone_status": payload.get("phone_status"),
             })
-        except HTTPException as exc:
-            failed += 1
-            results.append({
-                "id": str(signup.id),
-                "email": signup.email,
-                "name": signup.name,
-                "status": signup.status,
-                "ok": False,
-                "error": exc.detail,
-                "signup": beta_signup_payload(signup),
-            })
         except AppStoreConnectError as exc:
             failed += 1
             results.append({
@@ -792,6 +800,17 @@ async def invite_all_beta_signups_internal(
                 "status": signup.status,
                 "ok": False,
                 "error": str(exc),
+                "signup": beta_signup_payload(signup),
+            })
+        except HTTPException as exc:
+            failed += 1
+            results.append({
+                "id": str(signup.id),
+                "email": signup.email,
+                "name": signup.name,
+                "status": signup.status,
+                "ok": False,
+                "error": exc.detail,
                 "signup": beta_signup_payload(signup),
             })
 
@@ -804,6 +823,17 @@ async def invite_all_beta_signups_internal(
         "skipped": skipped,
         "results": results,
     }
+
+
+@router.post("/beta-signups/invite-internal-all")
+async def invite_all_beta_signups_internal(
+    db: AsyncSession = Depends(get_db),
+):
+    """批量邀请所有未入组、未拒绝的内测报名。每条记录独立处理，失败不打断整批。"""
+    try:
+        return await invite_all_beta_signups_internal_task(db)
+    except AppStoreConnectConfigError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/beta-signups/sync-asc-status")
@@ -889,8 +919,8 @@ async def invite_beta_signup_internal(
 
 @router.get("/beta-signups.csv")
 async def export_beta_signups_csv(
-    status: str | None = None,
-    q: str | None = None,
+    status: Optional[str] = None,
+    q: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """导出官网内测报名，方便整理 TestFlight 邀请邮箱。"""
@@ -950,9 +980,9 @@ def feedback_payload(feedback: SiteFeedback) -> dict:
 
 
 def feedback_query(
-    status: str | None = None,
-    category: str | None = None,
-    q: str | None = None,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    q: Optional[str] = None,
 ):
     query = select(SiteFeedback)
     if status:
@@ -974,9 +1004,9 @@ def feedback_query(
 
 @router.get("/feedback")
 async def list_feedback(
-    status: str | None = None,
-    category: str | None = None,
-    q: str | None = None,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    q: Optional[str] = None,
     limit: int = 300,
     db: AsyncSession = Depends(get_db),
 ):
@@ -1010,9 +1040,9 @@ async def update_feedback_status(
 
 @router.get("/feedback.csv")
 async def export_feedback_csv(
-    status: str | None = None,
-    category: str | None = None,
-    q: str | None = None,
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    q: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """导出官网反馈，方便集中整理。"""
@@ -1270,8 +1300,8 @@ async def cleanup_test_data(db: AsyncSession = Depends(get_db)):
 @router.get("/test/match-preview-all")
 async def match_preview_all(
     limit: int = 50,
-    activity_type: str | None = None,
-    city: str | None = None,
+    activity_type: Optional[str] = None,
+    city: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """批量预览所有 pending 事件的匹配候选（向量搜索）"""
@@ -1396,7 +1426,7 @@ from app.models.prompt import PromptTemplate
 
 class PromptUpdateBody(PydanticBaseModel):
     content: str
-    description: str | None = None
+    description: Optional[str] = None
 
 
 @router.get("/prompts")

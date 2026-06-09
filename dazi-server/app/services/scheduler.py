@@ -114,4 +114,64 @@ class MatchScheduler:
                 logger.error(f"Scheduled matching run failed: {e}")
 
 
+class BetaInviteScheduler:
+    """每小时自动执行一次内测报名的邀请流程。"""
+
+    def __init__(self):
+        self._task: asyncio.Task | None = None
+        self._run_lock = asyncio.Lock()
+
+    def start(self):
+        self._task = asyncio.create_task(self._run_loop())
+        logger.info("Beta invite scheduler started, hourly")
+
+    async def stop(self):
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+        logger.info("Beta invite scheduler stopped")
+
+    async def _run_loop(self):
+        while True:
+            now = datetime.now().astimezone()
+            target = next_hourly_run_at(now)
+            wait_seconds = (target - now).total_seconds()
+            logger.info(f"Next beta invite run at {target.isoformat()}, waiting {wait_seconds:.0f}s")
+
+            await asyncio.sleep(wait_seconds)
+            await self._run_invite_all()
+
+    async def _run_invite_all(self):
+        from app.core.database import async_session
+        from app.api.admin import invite_all_beta_signups_internal_task
+        from app.services.app_store_connect import AppStoreConnectConfigError
+
+        if self._run_lock.locked():
+            logger.info("Scheduled beta invite run skipped because a previous run is still active")
+            return
+
+        async with self._run_lock:
+            logger.info("Starting scheduled beta invite run...")
+            try:
+                async with async_session() as db:
+                    result = await invite_all_beta_signups_internal_task(db)
+                    await db.commit()
+                logger.info(
+                    "Scheduled beta invite complete: total=%s, processed=%s, succeeded=%s, failed=%s, skipped=%s",
+                    result.get("total"),
+                    result.get("processed"),
+                    result.get("succeeded"),
+                    result.get("failed"),
+                    result.get("skipped"),
+                )
+            except AppStoreConnectConfigError as exc:
+                logger.error(f"Scheduled beta invite skipped due to config: {exc}")
+            except Exception as exc:
+                logger.error(f"Scheduled beta invite run failed: {exc}")
+
+
 match_scheduler = MatchScheduler()
+beta_invite_scheduler = BetaInviteScheduler()

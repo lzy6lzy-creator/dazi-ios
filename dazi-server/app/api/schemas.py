@@ -352,6 +352,10 @@ class ChatRoomResponse(BaseModel):
     event_title: Optional[str] = None
     match_summary: Optional[str] = None
     agent_dialogue: Optional[str] = None
+    phase: str = "matched"
+    a2a_candidate_rank: Optional[int] = None
+    a2a_result: Optional[str] = None
+    is_anonymous: bool = False
     is_active: bool
     created_at: datetime
     closed_at: Optional[datetime] = None
@@ -398,6 +402,8 @@ class MessageResponse(BaseModel):
     sender_type: str
     content: str
     mentions: Optional[list[str]] = None
+    visibility: str = "public_room"
+    recipient_user_id: Optional[UUID] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

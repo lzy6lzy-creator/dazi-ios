@@ -70,6 +70,19 @@ class HomepageStaticTests(unittest.TestCase):
         for emoji in ["✨", "🤖", "💬", "🔒", "😫", "😰", "🎯"]:
             self.assertNotIn(emoji, html)
 
+    def test_homepage_uses_app_icon_as_favicon(self):
+        html = self.homepage()
+        server_icon = ROOT / "app/static/assets/app-icon.png"
+        site_icon = ROOT / "site/assets/app-icon.png"
+        app_icon = ROOT.parent / "dazi/Assets.xcassets/AppIcon.appiconset/AppIcon-ios-marketing-1024x1024@1x.png"
+
+        self.assertIn('<link rel="icon" type="image/png" href="/static/assets/app-icon.png">', html)
+        self.assertIn('<link rel="apple-touch-icon" href="/static/assets/app-icon.png">', html)
+        self.assertTrue(server_icon.exists())
+        self.assertTrue(site_icon.exists())
+        self.assertEqual(server_icon.read_bytes(), site_icon.read_bytes())
+        self.assertEqual(server_icon.read_bytes(), app_icon.read_bytes())
+
     def test_text_fits_static_page_without_viewport_font_scaling(self):
         html = self.homepage()
 

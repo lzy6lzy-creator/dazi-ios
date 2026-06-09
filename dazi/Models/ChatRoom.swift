@@ -8,6 +8,10 @@ struct ChatRoom: Identifiable, Codable, Sendable {
     var participants: [User]
     var matchSummary: String
     var agentDialogueLog: String
+    var phase: String?
+    var a2aCandidateRank: Int?
+    var a2aResult: String?
+    var isAnonymous: Bool?
     var isActive: Bool
     var createdAt: Date
     var closedAt: Date?
@@ -22,6 +26,10 @@ struct ChatRoom: Identifiable, Codable, Sendable {
         participants: [User],
         matchSummary: String,
         agentDialogueLog: String = "",
+        phase: String? = "matched",
+        a2aCandidateRank: Int? = nil,
+        a2aResult: String? = nil,
+        isAnonymous: Bool? = false,
         isActive: Bool,
         createdAt: Date,
         closedAt: Date? = nil,
@@ -35,6 +43,10 @@ struct ChatRoom: Identifiable, Codable, Sendable {
         self.participants = participants
         self.matchSummary = matchSummary
         self.agentDialogueLog = agentDialogueLog
+        self.phase = phase
+        self.a2aCandidateRank = a2aCandidateRank
+        self.a2aResult = a2aResult
+        self.isAnonymous = isAnonymous
         self.isActive = isActive
         self.createdAt = createdAt
         self.closedAt = closedAt
@@ -67,6 +79,10 @@ struct ChatRoom: Identifiable, Codable, Sendable {
         }
         self.matchSummary = api.matchSummary ?? ""
         self.agentDialogueLog = api.agentDialogue ?? ""
+        self.phase = api.phase
+        self.a2aCandidateRank = api.a2aCandidateRank
+        self.a2aResult = api.a2aResult
+        self.isAnonymous = api.isAnonymous
         self.isActive = api.isActive
         self.createdAt = Self.parseDate(api.createdAt) ?? .now
         self.closedAt = api.closedAt.flatMap { Self.parseDate($0) }
@@ -83,6 +99,12 @@ struct ChatRoom: Identifiable, Codable, Sendable {
     }
 
     var displayTitle: String {
+        if isNegotiating {
+            if let rank = a2aCandidateRank {
+                return "匿名搭子候选 \(rank) · AI 协商中"
+            }
+            return "匿名搭子 · AI 协商中"
+        }
         let userNames = participants.filter { !$0.isAgent && $0.id != User.currentUser.id }
         if let partner = userNames.first {
             return "\(eventTitle) - \(partner.name)"
@@ -92,5 +114,13 @@ struct ChatRoom: Identifiable, Codable, Sendable {
 
     func containsEvent(_ eventId: String) -> Bool {
         self.eventId == eventId || eventIds.contains(eventId)
+    }
+
+    var isNegotiating: Bool {
+        phase == "a2a_negotiating"
+    }
+
+    var isMatchedRoom: Bool {
+        (phase ?? "matched") == "matched"
     }
 }

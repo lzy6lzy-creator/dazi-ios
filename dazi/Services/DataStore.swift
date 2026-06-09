@@ -259,7 +259,12 @@ class DataStore {
         guard let idx = chatRooms.firstIndex(where: { $0.id == roomId }) else { return }
 
         // 乐观地先在本地显示用户消息
-        let msg = Message.userMessage(text)
+        let isNegotiating = chatRooms[idx].isNegotiating
+        let msg = Message.userMessage(
+            text,
+            visibility: isNegotiating ? "private_to_agent" : "public_room",
+            recipientUserId: isNegotiating ? currentUser.id : nil
+        )
         let optimisticMessageId = msg.id
         chatRooms[idx].messages.append(msg)
 
@@ -290,7 +295,7 @@ class DataStore {
                 await MainActor.run {
                     if let i = chatRooms.firstIndex(where: { $0.id == roomId }) {
                         chatRooms[i].messages.removeAll { $0.id == optimisticMessageId }
-                        let errorMsg = Message.systemMessage("消息发送失败，请重试")
+                        let errorMsg = Message.systemMessage(isNegotiating ? "补充发送失败，请重试" : "消息发送失败，请重试")
                         chatRooms[i].messages.append(errorMsg)
                     }
                 }
@@ -356,7 +361,9 @@ class DataStore {
             senderUserId: apiMsg.senderId,
             senderAvatar: sender?.avatarEmoji ?? "😊",
             senderAvatarImageData: sender?.avatarImageData,
-            timestamp: parseAgentHistoryDate(apiMsg.createdAt)
+            timestamp: parseAgentHistoryDate(apiMsg.createdAt),
+            visibility: apiMsg.visibility ?? "public_room",
+            recipientUserId: apiMsg.recipientUserId
         )
     }
 

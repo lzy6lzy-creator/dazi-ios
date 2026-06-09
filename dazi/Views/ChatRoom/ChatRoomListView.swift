@@ -52,9 +52,19 @@ struct ChatRoomListView: View {
                 }
             }
 
-            if !activeRooms.isEmpty {
-                Section("进行中") {
-                    ForEach(activeRooms) { room in
+            if !negotiatingRooms.isEmpty {
+                Section("AI 协商中") {
+                    ForEach(negotiatingRooms) { room in
+                        NavigationLink(destination: ChatRoomDetailView(roomId: room.id)) {
+                            ChatRoomRow(room: room)
+                        }
+                    }
+                }
+            }
+
+            if !matchedRooms.isEmpty {
+                Section("已匹配聊天室") {
+                    ForEach(matchedRooms) { room in
                         NavigationLink(destination: ChatRoomDetailView(roomId: room.id)) {
                             ChatRoomRow(room: room)
                         }
@@ -80,8 +90,12 @@ struct ChatRoomListView: View {
         }
     }
 
-    private var activeRooms: [ChatRoom] {
-        dataStore.chatRooms.filter(\.isActive)
+    private var negotiatingRooms: [ChatRoom] {
+        dataStore.chatRooms.filter { $0.isActive && $0.isNegotiating }
+    }
+
+    private var matchedRooms: [ChatRoom] {
+        dataStore.chatRooms.filter { $0.isActive && !$0.isNegotiating }
     }
 
     private var closedRooms: [ChatRoom] {
@@ -101,7 +115,7 @@ struct ChatRoomListView: View {
                 .font(.title3)
                 .fontWeight(.medium)
 
-            Text("当你的活动匹配成功后，聊天室会自动创建")
+            Text("当 AI 开始协商或活动匹配成功后，聊天室会自动出现")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -227,6 +241,16 @@ struct ChatRoomRow: View {
                         Circle()
                             .fill(AppTheme.primaryColor)
                             .frame(width: 10, height: 10)
+                    }
+
+                    if room.isNegotiating {
+                        Text("AI 协商中")
+                            .font(.caption2)
+                            .foregroundStyle(AppTheme.agentColor)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppTheme.agentColor.opacity(0.12))
+                            .clipShape(Capsule())
                     }
 
                     if !room.isActive {

@@ -120,6 +120,8 @@ struct Message: Identifiable, Codable, Sendable {
     var clarificationSessionId: String?
     var clarificationQuestions: [ClarificationQuestion]
     var clarificationSubmitted: Bool
+    var visibility: String?
+    var recipientUserId: String?
 
     init(
         id: String = UUID().uuidString,
@@ -135,7 +137,9 @@ struct Message: Identifiable, Codable, Sendable {
         confirmButtonsTapped: Bool = false,
         clarificationSessionId: String? = nil,
         clarificationQuestions: [ClarificationQuestion] = [],
-        clarificationSubmitted: Bool = false
+        clarificationSubmitted: Bool = false,
+        visibility: String? = "public_room",
+        recipientUserId: String? = nil
     ) {
         self.id = id
         self.content = content
@@ -151,9 +155,15 @@ struct Message: Identifiable, Codable, Sendable {
         self.clarificationSessionId = clarificationSessionId
         self.clarificationQuestions = clarificationQuestions
         self.clarificationSubmitted = clarificationSubmitted
+        self.visibility = visibility
+        self.recipientUserId = recipientUserId
     }
 
-    static func userMessage(_ content: String) -> Message {
+    static func userMessage(
+        _ content: String,
+        visibility: String = "public_room",
+        recipientUserId: String? = nil
+    ) -> Message {
         let u = User.currentUser
         return Message(
             content: content,
@@ -161,7 +171,9 @@ struct Message: Identifiable, Codable, Sendable {
             senderName: u.name,
             senderUserId: u.id,
             senderAvatar: u.avatarEmoji,
-            senderAvatarImageData: u.avatarImageData
+            senderAvatarImageData: u.avatarImageData,
+            visibility: visibility,
+            recipientUserId: recipientUserId
         )
     }
 

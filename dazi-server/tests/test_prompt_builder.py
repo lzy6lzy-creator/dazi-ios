@@ -17,9 +17,9 @@ class PromptBuilderTests(unittest.TestCase):
     def test_conversation_orchestrator_prompt_is_static_without_runtime_state(self):
         prompt = PromptBuilder.build_conversation_orchestrator_prompt()
 
-        self.assertIn("## 输入内容说明", prompt)
-        self.assertIn("## 输出组合", prompt)
-        self.assertIn("## 固定输出格式", prompt)
+        self.assertIn("# 输入结构说明", prompt)
+        self.assertIn("# 输出模式和组件规定", prompt)
+        self.assertIn("# 固定输出格式示例", prompt)
         self.assertIn("<reply>", prompt)
         self.assertIn("<question_json>", prompt)
         self.assertNotIn("## 动态上下文", prompt)
@@ -27,7 +27,7 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertNotIn("conversation_state", prompt)
         self.assertNotIn("<draft_reply>", prompt)
         self.assertNotIn("当前位置：上海 徐汇区", prompt)
-        self.assertLess(prompt.index("## 输入内容说明"), prompt.index("## 输出组合"))
+        self.assertLess(prompt.index("# 输入结构说明"), prompt.index("# 输出模式和组件规定"))
 
     def test_conversation_context_message_carries_runtime_profile_and_memory(self):
         context = PromptBuilder.build_conversation_context_message(
@@ -54,9 +54,9 @@ class PromptBuilderTests(unittest.TestCase):
         self.assertIn("<action>draft</action>", prompt)
         self.assertIn("<action>cancel</action>", prompt)
         self.assertNotIn("chat|clarify|draft|cancel", prompt)
-        self.assertIn("reply + clarify", prompt)
-        self.assertIn("reply + draft", prompt)
-        self.assertIn("reply + cancel", prompt)
+        self.assertIn("输出组件：<reply> + <action> + <draft_json> + <question_json>", prompt)
+        self.assertIn("输出组件：<reply> + <action> + <draft_json>", prompt)
+        self.assertIn("输出组件：<reply> + <action>", prompt)
         self.assertNotIn("id=city", prompt)
         self.assertNotIn("draft.city", prompt)
 
@@ -71,8 +71,8 @@ class PromptBuilderTests(unittest.TestCase):
     def test_conversation_orchestrator_prompt_keeps_input_description_static(self):
         prompt = PromptBuilder.build_conversation_orchestrator_prompt()
 
-        self.assertIn("用户最新输入会作为本轮 user message 提供", prompt)
-        self.assertLess(prompt.index("用户最新输入会作为本轮 user message 提供"), prompt.index("## 输出组合"))
+        self.assertIn("用户本轮输入", prompt)
+        self.assertLess(prompt.index("用户本轮输入"), prompt.index("# 输出模式和组件规定"))
 
     def test_draft_prompt_builder_is_removed(self):
         self.assertFalse(hasattr(PromptBuilder, "build_event_draft_prompt"))

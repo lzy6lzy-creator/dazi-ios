@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import unittest
 from pathlib import Path
 
@@ -51,6 +52,23 @@ class PushNotificationTests(unittest.TestCase):
         )
 
         self.assertFalse(service.is_configured)
+
+    def test_missing_private_key_reports_failed_send_instead_of_raising(self):
+        service = PushNotificationService(
+            key_id="KEY123",
+            team_id="TEAM123",
+            private_key_path="/tmp/dazi-missing-apns-key.p8",
+            bundle_id="com.linke.dazi",
+        )
+
+        result = asyncio.run(service.send_to_token(
+            token="device-token",
+            environment="production",
+            payload={"aps": {"alert": {"title": "hi", "body": "there"}}},
+        ))
+
+        self.assertFalse(result.success)
+        self.assertIn("does not exist", result.reason)
 
     def test_device_token_request_normalizes_platform_and_environment(self):
         request = PushDeviceTokenRequest(

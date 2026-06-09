@@ -17,6 +17,11 @@ class BetaSignupStaticTests(unittest.TestCase):
 
         self.assertIn('id="betaSignupForm"', html)
         self.assertIn("/api/v1/beta-signups", html)
+        self.assertIn(
+            "留下 TestFlight 邀请信息，我们会优先邀请适合早期体验的用户。"
+            "通过 TestFlight 测试需要先下载 TestFlight app，并注意查收 Apple ID 邮箱通知。",
+            html,
+        )
         self.assertIn("Apple ID 邮箱", html)
         self.assertIn('name="name"', html)
         self.assertIn('name="email"', html)
@@ -99,7 +104,9 @@ class BetaSignupStaticTests(unittest.TestCase):
 
         self.assertIn('@router.post("/beta-signups/invite-internal-all")', admin_api)
         self.assertIn('@router.post("/beta-signups/sync-asc-status")', admin_api)
-        self.assertIn('BULK_INVITE_SKIP_STATUSES = {"accepted", "rejected"}', admin_api)
+        self.assertIn("BULK_INVITE_SKIP_STATUSES", admin_api)
+        for status in ('"accepted"', '"invited"', '"rejected"'):
+            self.assertIn(status, admin_api)
         self.assertIn("sync_beta_signup_status_from_asc", admin_api)
         self.assertIn("payload[\"app_store_connect\"] = asc_status", admin_api)
         self.assertIn("inviteAllBetaSignups", admin_html)

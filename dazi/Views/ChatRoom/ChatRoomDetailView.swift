@@ -19,6 +19,7 @@ struct ChatRoomDetailView: View {
     /// 除自己以外的其他参与者，用于 @ 候选
     private var mentionCandidates: [User] {
         guard let room else { return [] }
+        if room.isNegotiating { return [] }
         return room.participants.filter { $0.id != dataStore.currentUser.id }
     }
 
@@ -31,7 +32,7 @@ struct ChatRoomDetailView: View {
                     ChatInputBar(
                         text: $inputText,
                         isInputFocused: $isInputFocused,
-                        placeholder: "输入消息... @ 可呼叫其他人",
+                        placeholder: room.isNegotiating ? "补充给你的 AI，不会发给对方" : "输入消息... @ 可呼叫其他人",
                         mentionCandidates: mentionCandidates
                     ) {
                         sendMessage()
@@ -50,7 +51,9 @@ struct ChatRoomDetailView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
-                    if let partner = room?.participants.first(where: { !$0.isAgent && $0.id != dataStore.currentUser.id }) {
+                    if let currentRoom = room,
+                       !currentRoom.isNegotiating,
+                       let partner = currentRoom.participants.first(where: { !$0.isAgent && $0.id != dataStore.currentUser.id }) {
                         ProfileAvatarButton(
                             user: partner,
                             currentUserId: dataStore.currentUser.id,
@@ -87,8 +90,10 @@ struct ChatRoomDetailView: View {
                 }
             }
             // 加载投票状态
-            Task {
-                await loadVoteStatus()
+            if room?.isNegotiating != true {
+                Task {
+                    await loadVoteStatus()
+                }
             }
             // 消息轮询 fallback（WebSocket 不稳定时保证消息可达）
             pollingTask = Task {
@@ -114,8 +119,12 @@ struct ChatRoomDetailView: View {
                 VStack(spacing: 8) {
                     matchSummaryHeader(room: room)
 
+                    if room.isNegotiating {
+                        negotiatingBanner
+                    }
+
                     // 投票区域
-                    if room.isActive {
+                    if room.isActive && !room.isNegotiating {
                         voteSection
                     }
 
@@ -164,16 +173,41 @@ struct ChatRoomDetailView: View {
                 }
             }
 
-            Text("匹配成功")
+            Text(room.isNegotiating ? "AI 协商中" : "匹配成功")
                 .font(.headline)
 
-            Text(room.matchSummary)
+            Text(room.isNegotiating ? "当前对方匿名。你可以旁观双方 AI 协商，也可以补充信息给自己的 AI。" : room.matchSummary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
         }
         .padding(.vertical, 16)
+    }
+
+    private var negotiatingBanner: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "sparkles")
+                .font(.subheadline)
+                .foregroundStyle(AppTheme.agentColor)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("这是 AI 与 AI 的协商阶段")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("对方用户暂时匿名。你发出的内容只会告诉你的 AI，由它决定是否转述成活动条件。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(AppTheme.agentColor.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+        .padding(.horizontal, 12)
     }
 
     // MARK: - Agent 对话历史卡片
@@ -428,11 +462,49 @@ struct ChatRoomDetailView: View {
                 await loadVoteStatus()
             } catch {
                 await MainActor.run {
-                    dataStore.showToast("投票失败，请重试", type: .error)
+                    dataStore.showToast(voteErrorMessage(from: error), type: .error)
                 }
+                await MainActor.run {
+                    isVoting = false
+                }
+                await loadVoteStatus()
+                return
             }
             await MainActor.run { isVoting = false }
         }
+    }
+
+    private func voteErrorMessage(from error: Error) -> String {
+        guard let apiError = error as? APIError else {
+            return "投票失败，请重试"
+        }
+
+        if case .serverError(_, let body) = apiError,
+           let detail = extractVoteErrorDetail(from: body),
+           !detail.isEmpty {
+            return detail
+        }
+
+        return apiError.errorDescription ?? "投票失败，请重试"
+    }
+
+    private func extractVoteErrorDetail(from body: String) -> String? {
+        guard
+            let data = body.data(using: .utf8),
+            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            return nil
+        }
+        if let detail = json["detail"] as? String, !detail.isEmpty {
+            return detail
+        }
+        if let details = json["detail"] as? [[String: Any]],
+           let first = details.first,
+           let msg = first["msg"] as? String,
+           !msg.isEmpty {
+            return msg
+        }
+        return nil
     }
 
     private func loadVoteStatus() async {
@@ -469,7 +541,9 @@ struct ChatRoomDetailView: View {
     }
 
     private func openProfile(forUserId userId: String, in room: ChatRoom) {
-        guard userId != dataStore.currentUser.id,
+        guard !room.isNegotiating,
+              room.isAnonymous != true,
+              userId != dataStore.currentUser.id,
               let user = room.participants.first(where: { !$0.isAgent && $0.id == userId }) else {
             return
         }

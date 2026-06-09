@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
@@ -36,6 +37,38 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
+ROOM_PHASE_A2A_NEGOTIATING = "a2a_negotiating"
+ROOM_PHASE_MATCHED = "matched"
+ROOM_PHASE_CLOSED = "closed"
+VISIBILITY_PUBLIC_ROOM = "public_room"
+VISIBILITY_PRIVATE_TO_AGENT = "private_to_agent"
+VISIBILITY_SYSTEM = "system"
+
+
+def _message_visible_to_user(msg: ChatMessage, user_id: UUID) -> bool:
+    visibility = getattr(msg, "visibility", None) or VISIBILITY_PUBLIC_ROOM
+    if visibility in {VISIBILITY_PUBLIC_ROOM, VISIBILITY_SYSTEM}:
+        return True
+    if visibility == VISIBILITY_PRIVATE_TO_AGENT:
+        return msg.recipient_user_id == user_id
+    return False
+
+
+def _room_is_anonymous_for_user(room: ChatRoom, user_id: UUID) -> bool:
+    if room.phase == ROOM_PHASE_A2A_NEGOTIATING:
+        return True
+    return room.phase == ROOM_PHASE_CLOSED and room.a2a_result in {
+        "rejected",
+        "lost_to_other_candidate",
+        "superseded",
+    }
+
+
+def _anonymous_candidate_name(rank: Optional[int]) -> str:
+    if rank:
+        return f"匿名搭子候选 {rank}"
+    return "匿名搭子"
+
 
 async def _broadcast_message_to_room(room_id: UUID, msg: ChatMessage, db: AsyncSession):
     """通过 WebSocket 向聊天室所有 user 成员广播新消息"""
@@ -45,7 +78,11 @@ async def _broadcast_message_to_room(room_id: UUID, msg: ChatMessage, db: AsyncS
             ChatRoomMember.role == "user",
         )
     )
-    user_ids = [str(m.user_id) for m in members_r.scalars().all()]
+    user_ids = [
+        str(m.user_id)
+        for m in members_r.scalars().all()
+        if _message_visible_to_user(msg, m.user_id)
+    ]
     payload = {
         "type": "new_message",
         "room_id": str(room_id),
@@ -56,6 +93,8 @@ async def _broadcast_message_to_room(room_id: UUID, msg: ChatMessage, db: AsyncS
             "sender_type": msg.sender_type,
             "content": msg.content,
             "mentions": msg.mentions,
+            "visibility": getattr(msg, "visibility", None) or VISIBILITY_PUBLIC_ROOM,
+            "recipient_user_id": str(msg.recipient_user_id) if msg.recipient_user_id else None,
             "created_at": msg.created_at.isoformat() if msg.created_at else None,
         },
     }
@@ -67,7 +106,7 @@ async def _push_message_to_room(
     msg: ChatMessage,
     db: AsyncSession,
     *,
-    exclude_user_ids: set[UUID] | None = None,
+    exclude_user_ids: Optional[set[UUID]] = None,
 ) -> None:
     members_r = await db.execute(
         select(ChatRoomMember).where(
@@ -80,6 +119,7 @@ async def _push_message_to_room(
         member.user_id
         for member in members_r.scalars().all()
         if member.user_id not in exclude_user_ids
+        and _message_visible_to_user(msg, member.user_id)
     ]
     if not user_ids:
         return
@@ -117,6 +157,14 @@ async def _room_has_unread(member: ChatRoomMember, db: AsyncSession) -> bool:
         .where(
             ChatMessage.room_id == member.room_id,
             ChatMessage.created_at > member.last_read_at,
+            or_(
+                ChatMessage.visibility.is_(None),
+                ChatMessage.visibility.in_([VISIBILITY_PUBLIC_ROOM, VISIBILITY_SYSTEM]),
+                and_(
+                    ChatMessage.visibility == VISIBILITY_PRIVATE_TO_AGENT,
+                    ChatMessage.recipient_user_id == member.user_id,
+                ),
+            ),
             or_(
                 ChatMessage.sender_type != "user",
                 ChatMessage.sender_id != member.user_id,
@@ -173,7 +221,7 @@ def _truncate_push_text(text: str, limit: int = 90) -> str:
 
 def _mentioned_room_agents(
     message: str,
-    explicit_mentions: list[str] | None,
+    explicit_mentions: Optional[list[str]],
     agent_names: list[str],
 ) -> list[str]:
     names = list(dict.fromkeys(name for name in agent_names if name))
@@ -212,7 +260,7 @@ async def _room_agent_names(room_id: UUID, db: AsyncSession) -> list[str]:
     return [name for name in result.scalars().all() if name]
 
 
-def _format_room_event_context(event: Event | None, label: str, self_user_id: UUID) -> str:
+def _format_room_event_context(event: Optional[Event], label: str, self_user_id: UUID) -> str:
     """Format one public event for room-agent context."""
     if not event:
         return f"{label}: 未找到事件"
@@ -258,7 +306,14 @@ async def _room_agent_reply(messages: list[dict[str, str]]) -> str:
     return _extract_room_agent_reply(raw_reply)
 
 
-def _chat_room_member_response(member: ChatRoomMember, user: User | None = None, agent: Agent | None = None) -> ChatRoomMemberResponse:
+def _chat_room_member_response(
+    member: ChatRoomMember,
+    user: Optional[User] = None,
+    agent: Optional[Agent] = None,
+    *,
+    anonymize: bool = False,
+    candidate_rank: Optional[int] = None,
+) -> ChatRoomMemberResponse:
     if member.role == "agent":
         return ChatRoomMemberResponse(
             user_id=member.user_id,
@@ -266,6 +321,19 @@ def _chat_room_member_response(member: ChatRoomMember, user: User | None = None,
             role="agent",
             emoji=agent.emoji if agent else None,
             avatar_url=agent.avatar_url if agent else None,
+        )
+    if anonymize:
+        return ChatRoomMemberResponse(
+            user_id=member.user_id,
+            name=_anonymous_candidate_name(candidate_rank),
+            role="user",
+            emoji="❔",
+            avatar_url=None,
+            gender=None,
+            birth_year=None,
+            birth_date=None,
+            bio=None,
+            city=None,
         )
     return ChatRoomMemberResponse(
         user_id=member.user_id,
@@ -331,12 +399,31 @@ async def list_my_rooms(
             else:
                 user_r = await db.execute(select(User).where(User.id == m.user_id))
                 user = user_r.scalar_one_or_none()
-                members.append(_chat_room_member_response(m, user=user))
+                anonymize = (
+                    m.user_id != user_id
+                    and _room_is_anonymous_for_user(room, user_id)
+                )
+                members.append(_chat_room_member_response(
+                    m,
+                    user=user,
+                    anonymize=anonymize,
+                    candidate_rank=room.a2a_candidate_rank,
+                ))
 
         # 加载最新一条消息
         last_msg_r = await db.execute(
             select(ChatMessage)
             .where(ChatMessage.room_id == room.id)
+            .where(
+                or_(
+                    ChatMessage.visibility.is_(None),
+                    ChatMessage.visibility.in_([VISIBILITY_PUBLIC_ROOM, VISIBILITY_SYSTEM]),
+                    and_(
+                        ChatMessage.visibility == VISIBILITY_PRIVATE_TO_AGENT,
+                        ChatMessage.recipient_user_id == user_id,
+                    ),
+                )
+            )
             .order_by(ChatMessage.created_at.desc())
             .limit(1)
         )
@@ -349,6 +436,10 @@ async def list_my_rooms(
             event_title=event_title,
             match_summary=room.match_summary,
             agent_dialogue=room.agent_dialogue,
+            phase=room.phase or ROOM_PHASE_MATCHED,
+            a2a_candidate_rank=room.a2a_candidate_rank,
+            a2a_result=room.a2a_result,
+            is_anonymous=_room_is_anonymous_for_user(room, user_id),
             is_active=room.is_active,
             created_at=room.created_at,
             closed_at=room.closed_at,
@@ -414,7 +505,7 @@ async def get_room_messages(
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     limit: int = 50,
-    before_id: UUID | None = None,
+    before_id: Optional[UUID] = None,
 ):
     """获取聊天室消息（分页）"""
     # 验证是聊天室成员
@@ -431,6 +522,16 @@ async def get_room_messages(
     query = (
         select(ChatMessage)
         .where(ChatMessage.room_id == room_id)
+        .where(
+            or_(
+                ChatMessage.visibility.is_(None),
+                ChatMessage.visibility.in_([VISIBILITY_PUBLIC_ROOM, VISIBILITY_SYSTEM]),
+                and_(
+                    ChatMessage.visibility == VISIBILITY_PRIVATE_TO_AGENT,
+                    ChatMessage.recipient_user_id == user_id,
+                ),
+            )
+        )
         .order_by(ChatMessage.created_at.desc())
         .limit(limit)
     )
@@ -495,6 +596,21 @@ async def send_message(
     if not room or not room.is_active:
         raise HTTPException(status_code=400, detail="聊天室已关闭")
 
+    if room.phase == ROOM_PHASE_A2A_NEGOTIATING:
+        msg = ChatMessage(
+            room_id=room_id,
+            sender_id=user_id,
+            sender_type="user",
+            content=data.content,
+            mentions=[],
+            visibility=VISIBILITY_PRIVATE_TO_AGENT,
+            recipient_user_id=user_id,
+        )
+        db.add(msg)
+        await db.flush()
+        await _broadcast_message_to_room(room_id, msg, db)
+        return msg
+
     agent_names = await _room_agent_names(room_id, db)
     mentioned_agent_names = _mentioned_room_agents(data.content, data.mentions, agent_names)
 
@@ -505,6 +621,7 @@ async def send_message(
         sender_type="user",
         content=data.content,
         mentions=mentioned_agent_names or data.mentions,
+        visibility=VISIBILITY_PUBLIC_ROOM,
     )
     db.add(msg)
     await db.flush()
@@ -554,6 +671,7 @@ async def close_room(
 
     from datetime import datetime, timezone
     room.is_active = False
+    room.phase = ROOM_PHASE_CLOSED
     room.closed_at = datetime.now(timezone.utc)
 
     # 添加系统消息
@@ -562,6 +680,7 @@ async def close_room(
         sender_id=user_id,
         sender_type="system",
         content="活动已结束，聊天室已关闭。感谢参与！",
+        visibility=VISIBILITY_SYSTEM,
     )
     db.add(close_msg)
     await db.flush()
@@ -593,6 +712,11 @@ async def submit_vote(
     if not member_r.scalar_one_or_none():
         raise HTTPException(status_code=403, detail="你不是该聊天室成员")
 
+    room_r = await db.execute(select(ChatRoom).where(ChatRoom.id == room_id))
+    room = room_r.scalar_one_or_none()
+    if not room or room.phase != ROOM_PHASE_MATCHED:
+        raise HTTPException(status_code=400, detail="AI 协商阶段不能投票")
+
     # 检查是否已投票
     existing_r = await db.execute(
         select(ChatRoomVote).where(
@@ -612,10 +736,9 @@ async def submit_vote(
     from datetime import datetime, timezone, timedelta
     if data.vote == "bu_da":
         # 任一方不搭 → 关闭聊天室
-        room_r = await db.execute(select(ChatRoom).where(ChatRoom.id == room_id))
-        room = room_r.scalar_one_or_none()
         if room:
             room.is_active = False
+            room.phase = ROOM_PHASE_CLOSED
             room.closed_at = datetime.now(timezone.utc)
 
             # 系统消息
@@ -624,11 +747,15 @@ async def submit_vote(
                 sender_id=user_id,
                 sender_type="system",
                 content="有人选择了「不搭」，聊天室已关闭。",
+                visibility=VISIBILITY_SYSTEM,
             )
             db.add(close_msg)
             await db.flush()
             await _broadcast_message_to_room(room_id, close_msg, db)
-            await _push_message_to_room(room_id, close_msg, db)
+            try:
+                await _push_message_to_room(room_id, close_msg, db)
+            except Exception as exc:
+                logger.warning("Vote rejection saved but push notification failed for room %s: %s", room_id, exc)
 
             # 事件回退
             await _handle_vote_rejection(room, db)
@@ -661,11 +788,15 @@ async def submit_vote(
                 sender_id=user_id,
                 sender_type="system",
                 content="双方都选择了「搭」！活动确认，祝你们玩得开心！🎉",
+                visibility=VISIBILITY_SYSTEM,
             )
             db.add(match_msg)
             await db.flush()
             await _broadcast_message_to_room(room_id, match_msg, db)
-            await _push_message_to_room(room_id, match_msg, db)
+            try:
+                await _push_message_to_room(room_id, match_msg, db)
+            except Exception as exc:
+                logger.warning("Vote match saved but push notification failed for room %s: %s", room_id, exc)
 
             # 通知双方
             members_r = await db.execute(
