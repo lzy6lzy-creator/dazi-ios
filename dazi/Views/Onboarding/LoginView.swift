@@ -17,6 +17,7 @@ struct LoginView: View {
     private enum Field { case phone, code }
 
     private let api = APIClient.shared
+    private let internalTestCode = "121212"
 
     var body: some View {
         ZStack {
@@ -225,12 +226,27 @@ struct LoginView: View {
         Task {
             do {
                 let _ = try await api.sendVerificationCode(phone: phone)
-                codeSent = true
-                startCountdown()
+                await MainActor.run {
+                    code = internalTestCode
+                    codeSent = true
+                    startCountdown()
+                }
             } catch {
-                errorMessage = "发送失败，请检查网络"
+                await MainActor.run {
+                    errorMessage = messageForSendCodeError(error)
+                }
             }
         }
+    }
+
+    private func messageForSendCodeError(_ error: Error) -> String {
+        if case APIError.serverError(let statusCode, let body) = error, statusCode == 403 {
+            if body.contains("未加入内部测试白名单") {
+                return "该手机号未加入内部测试白名单，请先联系管理员开通内测资格"
+            }
+            return "该手机号暂未加入内部测试白名单"
+        }
+        return "发送失败，请检查网络"
     }
 
     private func startCountdown() {
