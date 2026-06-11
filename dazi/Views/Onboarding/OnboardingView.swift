@@ -406,7 +406,7 @@ struct OnboardingView: View {
                     agentIntroRow(
                         icon: "bubble.left.and.text.bubble.right",
                         title: "自由表达，精准理解",
-                        detail: "放心说出偏好，用具体的事件找到合适的人"
+                        detail: "用具体的事件找到合适的人"
                     )
                     agentIntroExamples
                 }
@@ -414,7 +414,7 @@ struct OnboardingView: View {
                 agentIntroRow(
                     icon: "hand.wave",
                     title: "预先沟通，省去重复尬聊",
-                    detail: "Agent之间先交流，代你提前问出在意的点，避免重复破冰寒暄"
+                    detail: "Agent提前交流，代你问出在意的点"
                 )
             }
             .padding(.horizontal, 8)
@@ -480,7 +480,7 @@ struct OnboardingView: View {
                 .foregroundStyle(AppTheme.primaryColor)
                 .frame(width: 34, height: 34)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 8) {
                 Text(title)
                     .font(.body)
                     .fontWeight(.semibold)

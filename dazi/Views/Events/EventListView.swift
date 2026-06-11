@@ -90,6 +90,9 @@ struct EventListView: View {
                             }
                         }
                     }
+                    Spacer().frame(height: 80)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -112,6 +115,9 @@ struct EventListView: View {
                             .listRowSeparator(.hidden)
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                     }
+                    Spacer().frame(height: 80)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
@@ -189,9 +195,9 @@ struct EventListView: View {
                 .fontWeight(.semibold)
             Image(systemName: "chevron.down")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppTheme.primaryColor.opacity(0.6))
         }
-        .foregroundStyle(.primary)
+        .foregroundStyle(AppTheme.primaryColor)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(AppTheme.cardBackground)

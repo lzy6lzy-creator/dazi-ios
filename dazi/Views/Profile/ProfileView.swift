@@ -21,6 +21,7 @@ struct ProfileView: View {
                     memorySection
                     aboutSection
                     logoutSection
+                    Spacer().frame(height: 80)
                 }
                 .padding()
             }
@@ -71,50 +72,70 @@ struct ProfileView: View {
     }
 
     private var profileHeader: some View {
-        ZStack(alignment: .topTrailing) {
-            CompassMotif()
-                .frame(width: 150, height: 150)
-                .offset(x: 30, y: -10)
+        VStack(spacing: 12) {
+            AvatarView(
+                imageData: dataStore.currentUser.avatarImageData,
+                emoji: dataStore.currentUser.avatarEmoji,
+                size: 80,
+                backgroundColor: AppTheme.primaryColor.opacity(0.1)
+            )
 
-            HStack(alignment: .center, spacing: 16) {
-                AvatarView(
-                    imageData: dataStore.currentUser.avatarImageData,
-                    emoji: dataStore.currentUser.avatarEmoji,
-                    size: 68,
-                    backgroundColor: AppTheme.primaryColor.opacity(0.1)
-                )
+            Text(dataStore.currentUser.name)
+                .font(.title2)
+                .fontWeight(.bold)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(dataStore.currentUser.name)
-                        .font(.system(size: 22, weight: .bold))
-
-                    let infoLine = [
-                        dataStore.currentUser.city.isEmpty ? dataStore.locationManager.locationString : dataStore.currentUser.city,
-                        dataStore.currentUser.birthYear > 0 ? "\(dataStore.currentUser.birthYear)" : nil,
-                        dataStore.currentUser.occupation.isEmpty ? nil : dataStore.currentUser.occupation
-                    ].compactMap { $0 }.joined(separator: " · ")
-
-                    if !infoLine.isEmpty {
-                        Text(infoLine)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if !dataStore.currentUser.bio.isEmpty {
-                        Text(dataStore.currentUser.bio)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 2)
-                    }
+            HStack(spacing: 8) {
+                if !dataStore.currentUser.gender.isEmpty {
+                    Text(dataStore.currentUser.gender)
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(AppTheme.primaryColor.opacity(0.1))
+                        .clipShape(Capsule())
                 }
 
-                Spacer()
+                if let age = dataStore.currentUser.age {
+                    Text("\(age)岁")
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 2)
+                        .background(AppTheme.secondaryColor.opacity(0.1))
+                        .clipShape(Capsule())
+                }
             }
-            .padding(22)
+
+            HStack(spacing: 4) {
+                Image(systemName: "mappin")
+                    .font(.caption)
+                Text(dataStore.currentUser.city.isEmpty ? dataStore.locationManager.locationString : dataStore.currentUser.city)
+                    .font(.subheadline)
+            }
+            .foregroundStyle(.secondary)
+
+            if !dataStore.currentUser.bio.isEmpty {
+                Text(dataStore.currentUser.bio)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !dataStore.currentUser.interests.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(dataStore.currentUser.interests, id: \.self) { interest in
+                        Text(interest)
+                            .font(.caption2)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(AppTheme.agentColor.opacity(0.1))
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(.top, 4)
+            }
         }
         .frame(maxWidth: .infinity)
+        .padding(24)
         .background(AppTheme.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusXL))
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
     }
 
@@ -1088,7 +1109,7 @@ private struct CompassMotif: View {
             let outerCircle = Path(ellipseIn: CGRect(x: cx - r * 0.92, y: cy - r * 0.92, width: r * 1.84, height: r * 1.84))
             context.stroke(outerCircle, with: .color(color), lineWidth: 1.4)
 
-            var dashCircle = Path(ellipseIn: CGRect(x: cx - r * 0.82, y: cy - r * 0.82, width: r * 1.64, height: r * 1.64))
+            let dashCircle = Path(ellipseIn: CGRect(x: cx - r * 0.82, y: cy - r * 0.82, width: r * 1.64, height: r * 1.64))
             let dashStyle = StrokeStyle(lineWidth: 1.2, dash: [1.2, 5.4])
             context.stroke(dashCircle, with: .color(color), style: dashStyle)
 

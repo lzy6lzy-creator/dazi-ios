@@ -13,10 +13,8 @@ struct ChatInputBar: View {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    /// 检测是否刚输入了 @
     private var shouldShowMentions: Bool {
         guard !mentionCandidates.isEmpty else { return false }
-        // 当文本以 @ 结尾，或者最后一个 @ 后面没有空格时显示
         if let lastAt = text.lastIndex(of: "@") {
             let afterAt = text[text.index(after: lastAt)...]
             return !afterAt.contains(" ") && !afterAt.contains("\n")
@@ -26,19 +24,16 @@ struct ChatInputBar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // @ 提及候选人列表
             if showMentionList && !mentionCandidates.isEmpty {
                 mentionListView
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 TextField(placeholder, text: $text, axis: .vertical)
                     .focused(isInputFocused)
                     .lineLimit(1...5)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(AppTheme.agentBubbleColor)
-                    .clipShape(RoundedRectangle(cornerRadius: 22))
                     .onChange(of: text) { _, newValue in
                         showMentionList = shouldShowMentions
                     }
@@ -48,7 +43,7 @@ struct ChatInputBar: View {
                     onSend()
                 }) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 34))
+                        .font(.system(size: 32))
                         .foregroundStyle(
                             trimmedText.isEmpty
                                 ? Color.gray.opacity(0.4)
@@ -59,58 +54,61 @@ struct ChatInputBar: View {
                 }
                 .disabled(trimmedText.isEmpty)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.trailing, 6)
+            .background(AppTheme.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 24))
+            .overlay(
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.06), radius: 8, y: 2)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
         }
-        .background(AppTheme.cardBackground)
     }
 
     private var mentionListView: some View {
-        VStack(spacing: 0) {
-            Divider()
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(mentionCandidates) { user in
-                        Button {
-                            insertMention(user)
-                        } label: {
-                            HStack(spacing: 6) {
-                                AvatarView(
-                                    imageData: user.avatarImageData,
-                                    emoji: user.avatarEmoji,
-                                    size: 28,
-                                    backgroundColor: user.isAgent ? AppTheme.agentColor.opacity(0.12) : AppTheme.primaryColor.opacity(0.08)
-                                )
-                                Text(user.name)
-                                    .font(.subheadline)
-                                    .fontWeight(.medium)
-                                if user.isAgent {
-                                    Text("AI")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 1)
-                                        .background(AppTheme.agentColor)
-                                        .clipShape(Capsule())
-                                }
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(mentionCandidates) { user in
+                    Button {
+                        insertMention(user)
+                    } label: {
+                        HStack(spacing: 6) {
+                            AvatarView(
+                                imageData: user.avatarImageData,
+                                emoji: user.avatarEmoji,
+                                size: 28,
+                                backgroundColor: user.isAgent ? AppTheme.agentColor.opacity(0.12) : AppTheme.primaryColor.opacity(0.08)
+                            )
+                            Text(user.name)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            if user.isAgent {
+                                Text("AI")
+                                    .font(.system(size: 8, weight: .bold))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(AppTheme.agentColor)
+                                    .clipShape(Capsule())
                             }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(AppTheme.agentBubbleColor)
-                            .clipShape(Capsule())
                         }
-                        .buttonStyle(.plain)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(AppTheme.agentBubbleColor)
+                        .clipShape(Capsule())
                     }
+                    .buttonStyle(.plain)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private func insertMention(_ user: User) {
-        // 替换最后一个 @ 及其后的内容为 @name + 空格
         if let lastAt = text.lastIndex(of: "@") {
             text = String(text[..<lastAt]) + "@\(user.name) "
         } else {

@@ -82,12 +82,12 @@ private struct CoinTab: View {
             }
             .frame(width: 40, height: 40)
             .offset(y: isActive ? -2 : 0)
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: .topLeading) {
                 if isActive {
                     Image(systemName: "sparkle")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(AppTheme.warmAccent)
-                        .offset(x: 8, y: -6)
+                        .offset(x: -8, y: -6)
                         .opacity(sparklePulse ? 0.4 : 1)
                         .scaleEffect(sparklePulse ? 0.7 : 1)
                         .onAppear {
