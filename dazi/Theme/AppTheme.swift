@@ -2,17 +2,20 @@ import SwiftUI
 
 enum AppTheme {
     // MARK: - Colors (Brand)
-    static let primaryColor = Color(red: 1.0, green: 0.42, blue: 0.21)
+    static let primaryColor = Color(red: 0.243, green: 0.510, blue: 0.345) // #3E8258
     static let secondaryColor = Color(red: 0.29, green: 0.56, blue: 0.85)
-    static let agentColor = Color(red: 0.55, green: 0.36, blue: 0.96)
+    static let agentColor = Color(red: 0.271, green: 0.706, blue: 0.769) // #45B4C4
+    static let warmAccent = Color(red: 1.0, green: 0.42, blue: 0.21) // #FF6B36
+    static let surfaceCream = Color(red: 0.984, green: 0.973, blue: 0.945) // #FBF8F1
+    static let primaryLight = Color(red: 0.243, green: 0.510, blue: 0.345).opacity(0.18)
 
     // MARK: - Colors (Adaptive)
-    static let backgroundColor = Color(UIColor.systemGroupedBackground)
-    static let cardBackground = Color(UIColor.secondarySystemGroupedBackground)
-    static let agentBubbleColor = Color(UIColor.tertiarySystemFill)
-    static let userBubbleColor = Color(red: 1.0, green: 0.42, blue: 0.21)
-    static let partnerBubbleColor = Color(red: 0.91, green: 0.95, blue: 1.0)
-    static let systemBubbleColor = Color(UIColor.quaternarySystemFill)
+    static let backgroundColor = Color(red: 0.984, green: 0.973, blue: 0.945) // #FBF8F1
+    static let cardBackground = Color.white
+    static let agentBubbleColor = Color(red: 0.965, green: 0.945, blue: 0.902) // #F6F1E6
+    static let userBubbleColor = Color(red: 0.243, green: 0.510, blue: 0.345) // #3E8258
+    static let partnerBubbleColor = Color(red: 0.894, green: 0.941, blue: 0.988) // #E4F0FC 暖蓝
+    static let systemBubbleColor = Color(red: 0.949, green: 0.937, blue: 0.918) // #F2EFEA 暖灰
 
     // MARK: - Spacing
     static let spacingXS: CGFloat = 4

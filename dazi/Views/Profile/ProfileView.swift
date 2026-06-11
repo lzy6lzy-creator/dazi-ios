@@ -15,6 +15,7 @@ struct ProfileView: View {
                 VStack(spacing: 20) {
                     profileHeader
                     agentCard
+                    interestsSection
                     statsCard
                     gallerySection
                     memorySection
@@ -27,7 +28,18 @@ struct ProfileView: View {
             .navigationTitle("我的")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showEditProfile = true } label: {
+                    Menu {
+                        Button {
+                            showEditProfile = true
+                        } label: {
+                            Label("编辑个人资料", systemImage: "person.crop.circle")
+                        }
+                        Button {
+                            showEditAgent = true
+                        } label: {
+                            Label("编辑Agent资料", systemImage: "brain.head.profile")
+                        }
+                    } label: {
                         Image(systemName: "pencil.line")
                             .font(.subheadline)
                     }
@@ -59,118 +71,91 @@ struct ProfileView: View {
     }
 
     private var profileHeader: some View {
-        VStack(spacing: 12) {
-            AvatarView(
-                imageData: dataStore.currentUser.avatarImageData,
-                emoji: dataStore.currentUser.avatarEmoji,
-                size: 80,
-                backgroundColor: AppTheme.primaryColor.opacity(0.1)
-            )
+        ZStack(alignment: .topTrailing) {
+            CompassMotif()
+                .frame(width: 150, height: 150)
+                .offset(x: 30, y: -10)
 
-            Text(dataStore.currentUser.name)
-                .font(.title2)
-                .fontWeight(.bold)
+            HStack(alignment: .center, spacing: 16) {
+                AvatarView(
+                    imageData: dataStore.currentUser.avatarImageData,
+                    emoji: dataStore.currentUser.avatarEmoji,
+                    size: 68,
+                    backgroundColor: AppTheme.primaryColor.opacity(0.1)
+                )
 
-            HStack(spacing: 8) {
-                if !dataStore.currentUser.gender.isEmpty {
-                    Text(dataStore.currentUser.gender)
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(AppTheme.primaryColor.opacity(0.1))
-                        .clipShape(Capsule())
-                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(dataStore.currentUser.name)
+                        .font(.system(size: 22, weight: .bold))
 
-                if let age = dataStore.currentUser.age {
-                    Text("\(age)岁")
-                        .font(.caption)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 2)
-                        .background(AppTheme.secondaryColor.opacity(0.1))
-                        .clipShape(Capsule())
-                }
-            }
+                    let infoLine = [
+                        dataStore.currentUser.city.isEmpty ? dataStore.locationManager.locationString : dataStore.currentUser.city,
+                        dataStore.currentUser.birthYear > 0 ? "\(dataStore.currentUser.birthYear)" : nil,
+                        dataStore.currentUser.occupation.isEmpty ? nil : dataStore.currentUser.occupation
+                    ].compactMap { $0 }.joined(separator: " · ")
 
-            HStack(spacing: 4) {
-                Image(systemName: "mappin")
-                    .font(.caption)
-                Text(dataStore.currentUser.city.isEmpty ? dataStore.locationManager.locationString : dataStore.currentUser.city)
-                    .font(.subheadline)
-            }
-            .foregroundStyle(.secondary)
+                    if !infoLine.isEmpty {
+                        Text(infoLine)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
 
-            if !dataStore.currentUser.bio.isEmpty {
-                Text(dataStore.currentUser.bio)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            if !dataStore.currentUser.interests.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(dataStore.currentUser.interests, id: \.self) { interest in
-                        Text(interest)
-                            .font(.caption2)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(AppTheme.agentColor.opacity(0.1))
-                            .clipShape(Capsule())
+                    if !dataStore.currentUser.bio.isEmpty {
+                        Text(dataStore.currentUser.bio)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(.top, 2)
                     }
                 }
-                .padding(.top, 4)
+
+                Spacer()
             }
+            .padding(22)
         }
         .frame(maxWidth: .infinity)
-        .padding(24)
         .background(AppTheme.cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusXL))
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
     }
 
     private var agentCard: some View {
-        Button { showEditAgent = true } label: {
-            HStack(spacing: 14) {
-                AvatarView(
-                    imageData: dataStore.currentUser.agentAvatarImageData,
-                    emoji: dataStore.currentUser.agentEmoji,
-                    size: 56,
-                    backgroundColor: AppTheme.agentColor.opacity(0.12)
-                )
+        HStack(spacing: 14) {
+            AvatarView(
+                imageData: dataStore.currentUser.agentAvatarImageData,
+                emoji: dataStore.currentUser.agentEmoji,
+                size: 56,
+                backgroundColor: AppTheme.agentColor.opacity(0.12)
+            )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(dataStore.currentUser.agentName)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(dataStore.currentUser.agentName)
+                        .font(.headline)
 
-                        Text("AI")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppTheme.agentColor)
-                            .clipShape(Capsule())
-                    }
-
-                    Text("性格：\(dataStore.currentUser.agentPersonality)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("你的个人助理")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    Text("AI")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(AppTheme.agentColor)
+                        .clipShape(Capsule())
                 }
 
-                Spacer()
-
-                Image(systemName: "chevron.right")
+                Text("性格：\(dataStore.currentUser.agentPersonality)")
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("你的找搭子 Agent")
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
-            .padding(16)
-            .background(AppTheme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
-            .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+
+            Spacer()
         }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
     }
 
     private var statsCard: some View {
@@ -187,13 +172,38 @@ struct ProfileView: View {
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
     }
 
+    private var interestsSection: some View {
+        Group {
+            if !dataStore.currentUser.interests.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("兴趣")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+
+                    FlowLayout(spacing: 8) {
+                        ForEach(dataStore.currentUser.interests, id: \.self) { interest in
+                            Text(interest)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(AppTheme.primaryColor)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(AppTheme.primaryColor.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var gallerySection: some View {
         let displayedItems = dataStore.galleryItems.filter(\.isDisplayed)
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "photo.on.rectangle.angled")
                     .foregroundStyle(AppTheme.primaryColor)
-                Text("过往事件相册")
+                Text("过往活动相册")
                     .font(.headline)
                 Spacer()
                 Button { showEditGallery = true } label: {
@@ -736,7 +746,7 @@ struct EditProfileView: View {
         "旅行", "音乐", "烹饪", "骑行", "瑜伽",
     ]
     private static let eventVisibilityOptions: [(value: String, label: String, description: String)] = [
-        ("hidden", "全部隐藏", "别人看不到你的过往事件"),
+        ("hidden", "全部隐藏", "别人看不到你的过往活动"),
         ("partial", "部分隐藏", "只显示活动类型、月份和城市"),
         ("public", "全部能看", "显示完整标题、时间、地点和偏好"),
     ]
@@ -829,7 +839,7 @@ struct EditProfileView: View {
                 }
 
                 Section("公开主页") {
-                    Picker("过往事件可见性", selection: $profileEventVisibility) {
+                    Picker("过往活动可见性", selection: $profileEventVisibility) {
                         ForEach(Self.eventVisibilityOptions, id: \.value) { option in
                             Text(option.label).tag(option.value)
                         }
@@ -885,7 +895,7 @@ struct EditProfileView: View {
                 .foregroundStyle(isSelected ? .white : .primary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
-                .background(isSelected ? AppTheme.primaryColor : Color(.systemGray6))
+                .background(isSelected ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
                 .clipShape(RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
@@ -997,7 +1007,7 @@ struct EditAgentView: View {
                                     .foregroundStyle(agentPersonality == p ? .white : .primary)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
-                                    .background(agentPersonality == p ? AppTheme.agentColor : Color(.systemGray6))
+                                    .background(agentPersonality == p ? AppTheme.agentColor : AppTheme.systemBubbleColor)
                                     .clipShape(Capsule())
                             }
                         }
@@ -1064,5 +1074,55 @@ struct ConfidenceBar: View {
                 .fill(AppTheme.agentColor)
                 .frame(width: 40 * value, height: 4)
         }
+    }
+}
+
+private struct CompassMotif: View {
+    var body: some View {
+        Canvas { context, size in
+            let color = AppTheme.primaryColor.opacity(0.12)
+            let cx = size.width / 2
+            let cy = size.height / 2
+            let r = min(size.width, size.height) / 2
+
+            let outerCircle = Path(ellipseIn: CGRect(x: cx - r * 0.92, y: cy - r * 0.92, width: r * 1.84, height: r * 1.84))
+            context.stroke(outerCircle, with: .color(color), lineWidth: 1.4)
+
+            var dashCircle = Path(ellipseIn: CGRect(x: cx - r * 0.82, y: cy - r * 0.82, width: r * 1.64, height: r * 1.64))
+            let dashStyle = StrokeStyle(lineWidth: 1.2, dash: [1.2, 5.4])
+            context.stroke(dashCircle, with: .color(color), style: dashStyle)
+
+            let innerCircle = Path(ellipseIn: CGRect(x: cx - r * 0.46, y: cy - r * 0.46, width: r * 0.92, height: r * 0.92))
+            context.stroke(innerCircle, with: .color(color), lineWidth: 1.4)
+
+            var star = Path()
+            let pts: [(CGFloat, CGFloat)] = [
+                (0, -r * 0.82), (r * 0.1, -r * 0.1), (r * 0.82, 0), (r * 0.1, r * 0.1),
+                (0, r * 0.82), (-r * 0.1, r * 0.1), (-r * 0.82, 0), (-r * 0.1, -r * 0.1)
+            ]
+            star.move(to: CGPoint(x: cx + pts[0].0, y: cy + pts[0].1))
+            for i in 1..<pts.count {
+                star.addLine(to: CGPoint(x: cx + pts[i].0, y: cy + pts[i].1))
+            }
+            star.closeSubpath()
+            context.stroke(star, with: .color(color), lineWidth: 1.6)
+
+            for i in 0..<8 {
+                let angle = Double(i) * .pi / 4
+                let dx = CGFloat(cos(angle))
+                let dy = CGFloat(sin(angle))
+                var tick = Path()
+                tick.move(to: CGPoint(x: cx + dx * r * 0.48, y: cy + dy * r * 0.48))
+                tick.addLine(to: CGPoint(x: cx + dx * r * 0.56, y: cy + dy * r * 0.56))
+                context.stroke(tick, with: .color(color), lineWidth: 1)
+            }
+
+            let hubCircle = Path(ellipseIn: CGRect(x: cx - r * 0.13, y: cy - r * 0.13, width: r * 0.26, height: r * 0.26))
+            context.stroke(hubCircle, with: .color(color), lineWidth: 1.2)
+
+            let dot = Path(ellipseIn: CGRect(x: cx - r * 0.06, y: cy - r * 0.06, width: r * 0.12, height: r * 0.12))
+            context.fill(dot, with: .color(color))
+        }
+        .allowsHitTesting(false)
     }
 }

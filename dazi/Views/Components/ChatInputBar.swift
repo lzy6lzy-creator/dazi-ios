@@ -37,7 +37,7 @@ struct ChatInputBar: View {
                     .lineLimit(1...5)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color(.systemGray6))
+                    .background(AppTheme.agentBubbleColor)
                     .clipShape(RoundedRectangle(cornerRadius: 22))
                     .onChange(of: text) { _, newValue in
                         showMentionList = shouldShowMentions
@@ -62,7 +62,7 @@ struct ChatInputBar: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
         }
-        .background(Color(.systemBackground))
+        .background(AppTheme.cardBackground)
     }
 
     private var mentionListView: some View {
@@ -96,7 +96,7 @@ struct ChatInputBar: View {
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(Color(.systemGray6))
+                            .background(AppTheme.agentBubbleColor)
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)

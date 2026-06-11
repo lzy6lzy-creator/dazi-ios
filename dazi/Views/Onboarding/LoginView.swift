@@ -74,6 +74,11 @@ struct LoginView: View {
                         .foregroundStyle(LoginPalette.accent)
                     Text("搭不搭")
                         .foregroundStyle(LoginPalette.primaryText)
+                    SparkleShape()
+                        .fill(LoginPalette.accent.opacity(0.5))
+                        .frame(width: 22, height: 22)
+                        .offset(y: -8)
+                        .padding(.leading, 6)
                 }
                 .font(.system(size: 36, weight: .semibold, design: .default))
 
@@ -283,17 +288,17 @@ struct LoginView: View {
 }
 
 private enum LoginPalette {
-    static let background = Color(red: 0.99, green: 0.98, blue: 0.96)
+    static let background = Color(red: 0.984, green: 0.973, blue: 0.945) // #FBF8F1
     static let primaryText = Color(red: 0.11, green: 0.14, blue: 0.18)
     static let secondaryText = Color(red: 0.43, green: 0.46, blue: 0.50)
     static let tertiaryText = Color(red: 0.62, green: 0.64, blue: 0.67)
-    static let accent = Color(red: 0.91, green: 0.34, blue: 0.23)
-    static let accentSoft = Color(red: 1.0, green: 0.93, blue: 0.90)
-    static let fieldBackground = Color(red: 0.97, green: 0.96, blue: 0.94)
-    static let focusedFieldBackground = Color(red: 1.0, green: 0.985, blue: 0.97)
+    static let accent = Color(red: 0.243, green: 0.510, blue: 0.345) // #0A7D6B
+    static let accentSoft = Color(red: 0.839, green: 0.937, blue: 0.902) // #D6EFE6
+    static let fieldBackground = Color(red: 0.957, green: 0.945, blue: 0.918) // #F4F1EA
+    static let focusedFieldBackground = Color(red: 0.976, green: 0.969, blue: 0.953)
     static let divider = Color.black.opacity(0.10)
     static let cardStroke = Color.black.opacity(0.06)
-    static let focusStroke = Color(red: 0.91, green: 0.34, blue: 0.23).opacity(0.35)
+    static let focusStroke = Color(red: 0.243, green: 0.510, blue: 0.345).opacity(0.35)
     static let disabledButton = Color(red: 0.80, green: 0.79, blue: 0.77)
 }
 
@@ -315,18 +320,48 @@ private struct MatchingMotif: View {
                 )
             }
 
-            context.stroke(first, with: .color(LoginPalette.accent.opacity(0.12)), lineWidth: 1)
-            context.stroke(second, with: .color(Color.black.opacity(0.06)), lineWidth: 1)
+            context.stroke(first, with: .color(LoginPalette.accent.opacity(0.18)), lineWidth: 1)
+            context.stroke(second, with: .color(LoginPalette.accent.opacity(0.08)), lineWidth: 1)
 
             context.fill(
                 Path(ellipseIn: CGRect(x: size.width * 0.60, y: size.height * 0.18, width: 8, height: 8)),
-                with: .color(LoginPalette.accent.opacity(0.85))
+                with: .color(LoginPalette.accent.opacity(0.7))
             )
             context.fill(
                 Path(ellipseIn: CGRect(x: size.width * 0.86, y: size.height * 0.50, width: 8, height: 8)),
-                with: .color(Color.black.opacity(0.16))
+                with: .color(LoginPalette.accent.opacity(0.3))
             )
         }
         .allowsHitTesting(false)
+    }
+}
+
+private struct SparkleShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let cx = rect.midX
+        let cy = rect.midY
+        var path = Path()
+        path.move(to: CGPoint(x: cx, y: rect.minY))
+        path.addCurve(
+            to: CGPoint(x: rect.maxX, y: cy),
+            control1: CGPoint(x: cx + rect.width * 0.04, y: cy - rect.height * 0.16),
+            control2: CGPoint(x: cx + rect.width * 0.16, y: cy - rect.height * 0.04)
+        )
+        path.addCurve(
+            to: CGPoint(x: cx, y: rect.maxY),
+            control1: CGPoint(x: cx + rect.width * 0.16, y: cy + rect.height * 0.04),
+            control2: CGPoint(x: cx + rect.width * 0.04, y: cy + rect.height * 0.16)
+        )
+        path.addCurve(
+            to: CGPoint(x: rect.minX, y: cy),
+            control1: CGPoint(x: cx - rect.width * 0.04, y: cy + rect.height * 0.16),
+            control2: CGPoint(x: cx - rect.width * 0.16, y: cy + rect.height * 0.04)
+        )
+        path.addCurve(
+            to: CGPoint(x: cx, y: rect.minY),
+            control1: CGPoint(x: cx - rect.width * 0.16, y: cy - rect.height * 0.04),
+            control2: CGPoint(x: cx - rect.width * 0.04, y: cy - rect.height * 0.16)
+        )
+        return path
     }
 }

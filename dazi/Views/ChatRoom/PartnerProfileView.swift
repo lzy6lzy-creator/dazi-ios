@@ -182,21 +182,21 @@ struct PartnerProfileView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    sectionTitle(icon: "photo.on.rectangle.angled", title: "过往事件", tint: AppTheme.primaryColor)
+                    sectionTitle(icon: "photo.on.rectangle.angled", title: "过往活动", tint: AppTheme.primaryColor)
                     Spacer()
                     Text(visibilityLabel(profileEventVisibility))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(Color(.systemGray6))
+                        .background(AppTheme.systemBubbleColor)
                         .clipShape(RoundedRectangle(cornerRadius: 7))
                 }
 
                 if profileEventVisibility == "hidden" {
-                    emptyEventText("对方已隐藏过往事件")
+                    emptyEventText("对方已隐藏过往活动")
                 } else if pastEvents.isEmpty {
-                    emptyEventText("还没有可展示的过往事件")
+                    emptyEventText("还没有可展示的过往活动")
                 } else {
                     VStack(spacing: 10) {
                         ForEach(pastEvents, id: \.id) { event in
@@ -256,7 +256,7 @@ struct PartnerProfileView: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color(.systemGray6))
+                                .background(AppTheme.systemBubbleColor)
                                 .clipShape(RoundedRectangle(cornerRadius: 7))
                         }
                     }
@@ -264,7 +264,7 @@ struct PartnerProfileView: View {
             }
         }
         .padding(12)
-        .background(Color(.systemGray6).opacity(0.55))
+        .background(AppTheme.systemBubbleColor.opacity(0.55))
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 

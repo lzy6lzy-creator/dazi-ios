@@ -15,6 +15,7 @@ struct OnboardingView: View {
     @State private var selectedInterests: Set<String> = []
     @State private var customInterests = ""
     @State private var occupation = ""
+    @State private var selectedOccupation: String?
     @State private var welcomeDisturb = false
     @State private var bio = ""
     @State private var agentName = ""
@@ -24,23 +25,44 @@ struct OnboardingView: View {
     @State private var isAnimating = false
 
     enum OnboardingStep: Int, CaseIterable {
-        case name, avatar, gender, birthYear, occupation, interests, bio, agentSetup, ready
+        case name, avatar, genderAndBirth, occupation, interests, bio, agentIntro, agentSetup, ready
     }
-
-    private static let userAvatarOptions = [
-        "😊", "😎", "🤗", "🥰", "😄", "🤓",
-        "🦊", "🐱", "🐶", "🐼", "🦁", "🐨",
-        "🌟", "🌈", "🔥", "💎", "🎵", "🎮",
-    ]
-
-    private static let agentAvatarOptions = [
-        "🤖", "✨", "🔮", "🧠", "💡", "🌟",
-        "🦄", "🐙", "🎯", "🫧", "⚡", "🍀",
-    ]
 
     private static let personalityOptions = [
         "贴心、有趣", "理性、高效", "幽默、搞怪",
         "温柔、细心", "直爽、干脆", "可爱、活泼",
+    ]
+
+    private static let occupationPresets = [
+        "学生", "互联网", "金融", "设计",
+        "医疗", "教育", "自由职业", "其他",
+    ]
+
+    private static let interestItems: [(String, String)] = [
+        ("电影", "film"),
+        ("徒步", "figure.hiking"),
+        ("美食", "fork.knife"),
+        ("看展", "paintpalette"),
+        ("咖啡", "cup.and.saucer"),
+        ("桌游", "dice"),
+        ("摄影", "camera"),
+        ("演出", "music.mic"),
+        ("运动", "sportscourt"),
+        ("阅读", "book"),
+        ("旅行", "airplane"),
+        ("音乐", "headphones"),
+        ("烹饪", "frying.pan"),
+        ("骑行", "bicycle"),
+        ("瑜伽", "figure.yoga"),
+        ("露营", "tent"),
+        ("潜水", "water.waves"),
+        ("滑雪", "figure.skiing.downhill"),
+        ("剧本杀", "theatermasks"),
+        ("电竞", "gamecontroller"),
+        ("播客", "radio"),
+        ("手作", "scissors"),
+        ("逛集市", "bag"),
+        ("City Walk", "figure.walk"),
     ]
 
     private static let defaultBirthDate: Date = {
@@ -75,7 +97,7 @@ struct OnboardingView: View {
             AppTheme.backgroundColor.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                if step != .ready {
+                if step != .ready && step != .agentIntro {
                     progressBar
                 }
 
@@ -85,11 +107,11 @@ struct OnboardingView: View {
                     switch step {
                     case .name: nameStep
                     case .avatar: avatarStep
-                    case .gender: genderStep
-                    case .birthYear: birthYearStep
+                    case .genderAndBirth: genderAndBirthStep
                     case .occupation: occupationStep
                     case .interests: interestsStep
                     case .bio: bioStep
+                    case .agentIntro: agentIntroStep
                     case .agentSetup: agentSetupStep
                     case .ready: readyStep
                     }
@@ -101,7 +123,7 @@ struct OnboardingView: View {
 
                 Spacer()
 
-                if step != .ready {
+                if step != .ready && step != .agentIntro {
                     navigationButtons
                 }
             }
@@ -116,9 +138,11 @@ struct OnboardingView: View {
     // MARK: - Progress Bar
 
     private var progressBar: some View {
-        let totalSteps = OnboardingStep.allCases.count - 2
-        let currentStep = step.rawValue
-        let progress = Double(currentStep) / Double(totalSteps)
+        let stepsWithBar = OnboardingStep.allCases.filter { $0 != .ready && $0 != .agentIntro }
+        let totalSteps = stepsWithBar.count
+        let currentIndex = stepsWithBar.firstIndex(of: step) ?? 0
+        let progress = Double(currentIndex) / Double(totalSteps - 1)
+        let starSize: CGFloat = 20
 
         return GeometryReader { geo in
             ZStack(alignment: .leading) {
@@ -127,14 +151,19 @@ struct OnboardingView: View {
                     .frame(height: 6)
 
                 RoundedRectangle(cornerRadius: 3)
-                    .fill(AppTheme.primaryColor)
+                    .fill(AppTheme.primaryLight)
                     .frame(width: geo.size.width * progress, height: 6)
-                    .animation(.spring(duration: 0.4), value: progress)
+
+                FourPointStar()
+                    .fill(AppTheme.primaryColor)
+                    .frame(width: starSize, height: starSize)
+                    .offset(x: geo.size.width * progress - starSize / 2)
             }
+            .animation(.spring(duration: 0.4), value: progress)
         }
-        .frame(height: 6)
+        .frame(height: starSize)
         .padding(.top, 8)
-        .padding(.bottom, 20)
+        .padding(.bottom, 16)
     }
 
     // MARK: - Steps
@@ -147,7 +176,7 @@ struct OnboardingView: View {
                 .font(.title2)
                 .multilineTextAlignment(.center)
                 .padding()
-                .background(Color(.systemGray6))
+                .background(AppTheme.systemBubbleColor)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         }
     }
@@ -159,21 +188,49 @@ struct OnboardingView: View {
             AvatarPickerView(
                 imageData: $avatarImageData,
                 emoji: $avatarEmoji,
-                emojiOptions: Self.userAvatarOptions,
+                emojiOptions: [],
                 size: 100,
-                accentColor: AppTheme.primaryColor
+                accentColor: AppTheme.primaryColor,
+                gridHeight: 180
             )
         }
     }
 
-    private var genderStep: some View {
-        VStack(spacing: 16) {
-            stepHeader(title: "你的性别", subtitle: "帮助我们更好地匹配", icon: "figure.stand")
+    // MARK: - Gender + Birth (merged)
 
-            HStack(spacing: 16) {
-                genderButton(label: "男", value: "男", icon: "figure.stand")
-                genderButton(label: "女", value: "女", icon: "figure.stand.dress")
-                genderButton(label: "暂时保密", value: "暂时保密", icon: "questionmark")
+    private var genderAndBirthStep: some View {
+        VStack(spacing: 0) {
+            stepHeader(title: "基本信息", subtitle: "帮助我们更好地匹配", icon: "person.crop.circle")
+
+            Spacer().frame(height: 28)
+
+            VStack(spacing: 12) {
+                Text("性别")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    genderButton(label: "男", value: "男", icon: "sun.max")
+                    genderButton(label: "女", value: "女", icon: "moon.stars")
+                    genderButton(label: "保密", value: "暂时保密", icon: "sparkles")
+                }
+            }
+
+            Spacer().frame(height: 32)
+
+            VStack(spacing: 12) {
+                Text("生日")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                DatePicker("", selection: $birthDate, in: birthDateRange, displayedComponents: .date)
+                    .datePickerStyle(.wheel)
+                    .labelsHidden()
+                    .environment(\.locale, AppLocale.chinese)
+                    .environment(\.calendar, AppLocale.chineseCalendar)
+                    .frame(height: 140)
+                    .clipped()
+                    .onChange(of: birthDate) {
+                        birthYear = selectedBirthYear
+                    }
             }
         }
     }
@@ -182,74 +239,102 @@ struct OnboardingView: View {
         Button {
             gender = value
         } label: {
-            VStack(spacing: 8) {
+            VStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.title)
+                    .font(.title2)
                 Text(label)
                     .font(.subheadline)
                     .fontWeight(.medium)
             }
             .foregroundStyle(gender == value ? .white : .primary)
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 20)
-            .background(gender == value ? AppTheme.primaryColor : Color(.systemGray6))
+            .padding(.vertical, 16)
+            .background(gender == value ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         }
     }
 
-    private var birthYearStep: some View {
-        VStack(spacing: 16) {
-            stepHeader(title: "出生日期", subtitle: "用于年龄匹配，不会公开显示", icon: "calendar.badge.clock")
-
-            DatePicker("出生日期", selection: $birthDate, in: birthDateRange, displayedComponents: .date)
-                .datePickerStyle(.wheel)
-                .labelsHidden()
-                .environment(\.locale, AppLocale.chinese)
-                .environment(\.calendar, AppLocale.chineseCalendar)
-                .frame(height: 150)
-                .onChange(of: birthDate) {
-                    birthYear = selectedBirthYear
-                }
-        }
-    }
+    // MARK: - Occupation
 
     private var occupationStep: some View {
         VStack(spacing: 16) {
-            stepHeader(title: "你的职业", subtitle: "可选，帮助更精准匹配", icon: "briefcase")
+            stepHeader(
+                title: "☀️ 工作时间在忙什么",
+                subtitle: "让搭子们认识你",
+                icon: nil
+            )
 
-            TextField("例如：产品经理、设计师、学生", text: $occupation)
+            Spacer().frame(height: 8)
+
+            FlowLayout(spacing: 10) {
+                ForEach(Self.occupationPresets, id: \.self) { preset in
+                    occupationChip(preset)
+                }
+            }
+
+            TextField("或者直接输入...", text: $occupation)
                 .font(.body)
                 .padding()
-                .background(Color(.systemGray6))
+                .background(AppTheme.systemBubbleColor)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+                .onChange(of: occupation) {
+                    if !occupation.isEmpty {
+                        selectedOccupation = nil
+                    }
+                }
         }
     }
 
+    private func occupationChip(_ preset: String) -> some View {
+        let isSelected = selectedOccupation == preset
+        return Button {
+            if isSelected {
+                selectedOccupation = nil
+                occupation = ""
+            } else {
+                selectedOccupation = preset
+                occupation = preset
+            }
+        } label: {
+            Text(preset)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(isSelected ? .white : .primary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(isSelected ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
+                .clipShape(Capsule())
+        }
+    }
+
+    // MARK: - Interests
+
     private var interestsStep: some View {
-        let allInterests = [
-            "电影", "徒步", "美食", "看展", "咖啡",
-            "桌游", "摄影", "演出", "运动", "阅读",
-            "旅行", "音乐", "烹饪", "骑行", "瑜伽",
-        ]
+        VStack(spacing: 16) {
+            stepHeader(
+                title: "🌙 休息时间喜欢做点什么",
+                subtitle: "让搭子们认识你 (至少选1个)",
+                icon: nil
+            )
 
-        return VStack(spacing: 16) {
-            stepHeader(title: "你喜欢什么？", subtitle: "选择你感兴趣的活动（至少1个）", icon: "heart.text.square")
-
-            FlowLayout(spacing: 10) {
-                ForEach(allInterests, id: \.self) { interest in
-                    interestChip(interest)
+            ScrollView {
+                FlowLayout(spacing: 10) {
+                    ForEach(Self.interestItems, id: \.0) { item in
+                        interestChip(item.0, icon: item.1)
+                    }
                 }
             }
+            .frame(maxHeight: 240)
 
             TextField("补充其他爱好（可选）", text: $customInterests)
                 .font(.subheadline)
                 .padding(12)
-                .background(Color(.systemGray6))
+                .background(AppTheme.systemBubbleColor)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
 
             Toggle(isOn: $welcomeDisturb) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("对未知惊喜保持开放")
+                    Text("欢迎惊喜")
                         .font(.subheadline)
                         .fontWeight(.medium)
                     Text("开启后，即使你没有发布活动，也可能被匹配到")
@@ -258,10 +343,12 @@ struct OnboardingView: View {
                 }
             }
             .tint(AppTheme.primaryColor)
+            .padding(.horizontal, 4)
         }
+        .padding(.horizontal, 4)
     }
 
-    private func interestChip(_ interest: String) -> some View {
+    private func interestChip(_ interest: String, icon: String) -> some View {
         let isSelected = selectedInterests.contains(interest)
         return Button {
             if isSelected {
@@ -270,16 +357,22 @@ struct OnboardingView: View {
                 selectedInterests.insert(interest)
             }
         } label: {
-            Text(interest)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(isSelected ? .white : .primary)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(isSelected ? AppTheme.primaryColor : Color(.systemGray6))
-                .clipShape(Capsule())
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                Text(interest)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(isSelected ? .white : .primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(isSelected ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
+            .clipShape(Capsule())
         }
     }
+
+    // MARK: - Bio
 
     private var bioStep: some View {
         VStack(spacing: 16) {
@@ -288,14 +381,122 @@ struct OnboardingView: View {
             TextField("例如：喜欢探索城市的新居民", text: $bio)
                 .font(.body)
                 .padding()
-                .background(Color(.systemGray6))
+                .background(AppTheme.systemBubbleColor)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         }
     }
 
+    // MARK: - Agent Intro
+
+    private var agentIntroStep: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            VStack(spacing: 12) {
+                Text("🐙")
+                    .font(.system(size: 52))
+
+                Text("你的找搭子 Agent")
+                    .font(.title2)
+                    .fontWeight(.bold)
+            }
+
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    agentIntroRow(
+                        icon: "bubble.left.and.text.bubble.right",
+                        title: "自由表达，精准理解",
+                        detail: "放心说出偏好，用具体的事件找到合适的人"
+                    )
+                    agentIntroExamples
+                }
+
+                agentIntroRow(
+                    icon: "hand.wave",
+                    title: "预先沟通，省去重复尬聊",
+                    detail: "Agent之间先交流，代你提前问出在意的点，避免重复破冰寒暄"
+                )
+            }
+            .padding(.horizontal, 8)
+
+            Spacer()
+
+            HStack {
+                Button("上一步") {
+                    withAnimation {
+                        step = .bio
+                    }
+                }
+                .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Button {
+                    withAnimation {
+                        step = .agentSetup
+                    }
+                } label: {
+                    Text("去设定你的 Agent")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(AppTheme.primaryColor)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(PrimaryButtonStyle())
+            }
+            .padding(.bottom, 8)
+        }
+    }
+
+    private var agentIntroExamples: some View {
+        let examples = [
+            "想找人一起探下新开的咖啡店但是不想花时间出片",
+            "学街舞报班找搭子，新人零基础求互相鼓励",
+            "上海出发武汉4天3晚找搭子，美食之旅",
+        ]
+        return VStack(alignment: .leading, spacing: 6) {
+            ForEach(examples, id: \.self) { example in
+                Text("\u{201C}\(example)\u{201D}")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.secondary.opacity(0.2), lineWidth: 0.5)
+                    )
+            }
+        }
+        .padding(.leading, 46)
+    }
+
+    private func agentIntroRow(icon: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(AppTheme.primaryColor)
+                .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.body)
+                    .fontWeight(.semibold)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - Agent Setup
+
     private var agentSetupStep: some View {
         VStack(spacing: 20) {
-            stepHeader(title: "设置你的私人 Agent", subtitle: "它会代表你去匹配搭子", icon: "brain.head.profile")
+            stepHeader(title: "🐙 设置你的 Agent", subtitle: "给它起个名字，选个形象", icon: nil)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("Agent 名字")
@@ -304,7 +505,7 @@ struct OnboardingView: View {
                 TextField("给你的 Agent 起个名字", text: $agentName)
                     .font(.body)
                     .padding(12)
-                    .background(Color(.systemGray6))
+                    .background(AppTheme.systemBubbleColor)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
             }
 
@@ -315,9 +516,10 @@ struct OnboardingView: View {
                 AvatarPickerView(
                     imageData: $agentAvatarImageData,
                     emoji: $agentEmoji,
-                    emojiOptions: Self.agentAvatarOptions,
+                    emojiOptions: [],
                     size: 80,
-                    accentColor: AppTheme.agentColor
+                    accentColor: AppTheme.primaryColor,
+                    gridHeight: 130
                 )
             }
 
@@ -336,7 +538,7 @@ struct OnboardingView: View {
                                 .foregroundStyle(agentPersonality == p ? .white : .primary)
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 8)
-                                .background(agentPersonality == p ? AppTheme.agentColor : Color(.systemGray6))
+                                .background(agentPersonality == p ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
                                 .clipShape(Capsule())
                         }
                     }
@@ -344,6 +546,8 @@ struct OnboardingView: View {
             }
         }
     }
+
+    // MARK: - Ready
 
     private var readyStep: some View {
         VStack(spacing: 20) {
@@ -392,7 +596,7 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 6) {
                 profileRow(label: "昵称", value: name)
                 if avatarImageData != nil {
-                    profileRow(label: "头像", value: "📷 自定义图片")
+                    profileRow(label: "头像", value: "自定义图片")
                 } else {
                     profileRow(label: "头像", value: avatarEmoji)
                 }
@@ -402,7 +606,7 @@ struct OnboardingView: View {
                 if !bio.isEmpty { profileRow(label: "简介", value: bio) }
                 Divider().padding(.vertical, 4)
                 if agentAvatarImageData != nil {
-                    profileRow(label: "Agent", value: "📷 \(agentName.isEmpty ? "点点" : agentName)")
+                    profileRow(label: "Agent", value: "\(agentName.isEmpty ? "点点" : agentName)")
                 } else {
                     profileRow(label: "Agent", value: "\(agentEmoji) \(agentName.isEmpty ? "点点" : agentName)")
                 }
@@ -442,12 +646,19 @@ struct OnboardingView: View {
 
     private var navigationButtons: some View {
         HStack {
-            if step.rawValue > OnboardingStep.name.rawValue {
+            if step.rawValue > OnboardingStep.name.rawValue && step != .agentSetup {
                 Button("上一步") {
                     withAnimation {
                         if let prev = OnboardingStep(rawValue: step.rawValue - 1) {
                             step = prev
                         }
+                    }
+                }
+                .foregroundStyle(.secondary)
+            } else if step == .agentSetup {
+                Button("上一步") {
+                    withAnimation {
+                        step = .agentIntro
                     }
                 }
                 .foregroundStyle(.secondary)
@@ -457,7 +668,9 @@ struct OnboardingView: View {
 
             Button {
                 withAnimation {
-                    if let next = OnboardingStep(rawValue: step.rawValue + 1) {
+                    if step == .bio {
+                        step = .agentIntro
+                    } else if let next = OnboardingStep(rawValue: step.rawValue + 1) {
                         step = next
                     }
                 }
@@ -479,11 +692,11 @@ struct OnboardingView: View {
         switch step {
         case .name: return name.trimmingCharacters(in: .whitespaces).count >= 1
         case .avatar: return true
-        case .gender: return !gender.isEmpty
-        case .birthYear: return true
+        case .genderAndBirth: return !gender.isEmpty
         case .occupation: return true
         case .interests: return !selectedInterests.isEmpty
         case .bio: return true
+        case .agentIntro: return true
         case .agentSetup: return true
         default: return true
         }
@@ -491,12 +704,18 @@ struct OnboardingView: View {
 
     // MARK: - Helpers
 
-    private func stepHeader(title: String, subtitle: String, icon: String) -> some View {
+    private func stepHeader(title: String, subtitle: String, icon: String?) -> some View {
         VStack(spacing: 6) {
-            HStack(spacing: AppTheme.spacingSM) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(AppTheme.primaryColor)
+            if let icon {
+                HStack(spacing: AppTheme.spacingSM) {
+                    Image(systemName: icon)
+                        .font(.title3)
+                        .foregroundStyle(AppTheme.primaryColor)
+                    Text(title)
+                        .font(.title2)
+                        .fontWeight(.bold)
+                }
+            } else {
                 Text(title)
                     .font(.title2)
                     .fontWeight(.bold)
@@ -520,7 +739,6 @@ struct OnboardingView: View {
         let finalBirthYear = selectedBirthYear
         let finalBirthDate = birthDateString
 
-        // 使用服务器分配的 user ID（LoginView 已完成登录）
         let userId = APIClient.shared.serverUserId ?? UUID().uuidString
 
         let user = User(
@@ -543,7 +761,6 @@ struct OnboardingView: View {
             agentPersonality: agentPersonality
         )
 
-        // Save locally
         let store = UserProfileStore()
         store.saveUser(user)
 
@@ -553,7 +770,6 @@ struct OnboardingView: View {
         dataStore.locationManager.requestPermission()
         dataStore.loadInitialData()
 
-        // Sync profile to backend
         Task {
             await syncProfileToBackend(
                 name: trimmedName,
@@ -592,7 +808,6 @@ struct OnboardingView: View {
     ) async {
         let api = APIClient.shared
         do {
-            // 用户已在 LoginView 登录，token 已保存，直接更新 profile
             var userData: [String: Any] = ["name": name]
             if !gender.isEmpty { userData["gender"] = gender }
             if birthYear > 0 { userData["birth_year"] = birthYear }
@@ -659,5 +874,38 @@ struct FlowLayout: Layout {
         }
 
         return (CGSize(width: maxWidth, height: y + rowHeight), positions)
+    }
+}
+
+// MARK: - Four Point Star Shape
+
+struct FourPointStar: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let r = min(rect.width, rect.height) / 2
+        let innerRatio: CGFloat = 0.35
+        let bottomStretch: CGFloat = 1.25
+
+        var path = Path()
+        for i in 0..<8 {
+            let angle = Angle(degrees: Double(i) * 45 - 90)
+            var radius: CGFloat
+            if i.isMultiple(of: 2) {
+                radius = i == 4 ? r * bottomStretch : r
+            } else {
+                radius = r * innerRatio
+            }
+            let point = CGPoint(
+                x: center.x + cos(angle.radians) * radius,
+                y: center.y + sin(angle.radians) * radius
+            )
+            if i == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
     }
 }

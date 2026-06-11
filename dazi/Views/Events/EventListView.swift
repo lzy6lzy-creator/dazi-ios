@@ -26,6 +26,17 @@ struct EventListView: View {
             }
             .background(AppTheme.backgroundColor)
             .navigationTitle("活动")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        dataStore.selectedTab = 0
+                    } label: {
+                        Image(systemName: "plus")
+                            .font(.body)
+                            .foregroundStyle(AppTheme.primaryColor)
+                    }
+                }
+            }
             .onChange(of: listScope) { _, newValue in
                 if newValue == .plaza && dataStore.plazaEvents.isEmpty {
                     Task {
@@ -81,6 +92,7 @@ struct EventListView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .refreshable {
                     await dataStore.fetchEventsFromServer()
                 }
@@ -102,6 +114,7 @@ struct EventListView: View {
                     }
                 }
                 .listStyle(.plain)
+                .scrollContentBackground(.hidden)
                 .refreshable {
                     await dataStore.fetchPlazaEventsFromServer()
                 }
@@ -181,7 +194,7 @@ struct EventListView: View {
         .foregroundStyle(.primary)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(AppTheme.cardBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.black.opacity(0.08), lineWidth: 1)
