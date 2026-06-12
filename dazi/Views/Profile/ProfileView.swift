@@ -760,11 +760,31 @@ struct EditProfileView: View {
         "🌟", "🌈", "🔥", "💎", "🎵", "🎮",
     ]
 
-    private static let genderOptions = ["男", "女", "暂时保密"]
-    private static let interestOptions = [
-        "电影", "徒步", "美食", "看展", "咖啡",
-        "桌游", "摄影", "演出", "运动", "阅读",
-        "旅行", "音乐", "烹饪", "骑行", "瑜伽",
+    private static let interestItems: [(String, String)] = [
+        ("电影", "film"),
+        ("徒步", "figure.hiking"),
+        ("美食", "fork.knife"),
+        ("看展", "paintpalette"),
+        ("咖啡", "cup.and.saucer"),
+        ("桌游", "dice"),
+        ("摄影", "camera"),
+        ("演出", "music.mic"),
+        ("运动", "sportscourt"),
+        ("阅读", "book"),
+        ("旅行", "airplane"),
+        ("音乐", "headphones"),
+        ("烹饪", "frying.pan"),
+        ("骑行", "bicycle"),
+        ("瑜伽", "figure.yoga"),
+        ("露营", "tent"),
+        ("潜水", "water.waves"),
+        ("滑雪", "figure.skiing.downhill"),
+        ("剧本杀", "theatermasks"),
+        ("电竞", "gamecontroller"),
+        ("播客", "radio"),
+        ("手作", "scissors"),
+        ("逛集市", "bag"),
+        ("City Walk", "figure.walk"),
     ]
     private static let eventVisibilityOptions: [(value: String, label: String, description: String)] = [
         ("hidden", "全部隐藏", "别人看不到你的过往活动"),
@@ -816,13 +836,21 @@ struct EditProfileView: View {
                 }
 
                 Section("基础资料") {
-                    Picker("性别", selection: $gender) {
-                        ForEach(Self.genderOptions, id: \.self) { option in
-                            Text(option).tag(option)
+                    VStack(spacing: 12) {
+                        Text("性别")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 12) {
+                            genderButton(label: "男", value: "男", icon: "sun.max")
+                            genderButton(label: "女", value: "女", icon: "moon.stars")
+                            genderButton(label: "保密", value: "暂时保密", icon: "sparkles")
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                }
 
+                Section {
                     DatePicker("出生日期", selection: $birthDate, in: birthDateRange, displayedComponents: .date)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
@@ -835,18 +863,22 @@ struct EditProfileView: View {
                 }
 
                 Section("兴趣") {
-                    FlowLayout(spacing: 8) {
-                        ForEach(Self.interestOptions, id: \.self) { interest in
-                            interestChip(interest)
+                    FlowLayout(spacing: 10) {
+                        ForEach(Self.interestItems, id: \.0) { item in
+                            interestChip(item.0, icon: item.1)
                         }
                     }
                     .listRowBackground(Color.clear)
+                }
 
+                Section {
                     TextField("补充其他爱好", text: $customInterests)
 
                     Toggle(isOn: $welcomeDisturb) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("欢迎打扰")
+                            Text("欢迎惊喜")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
                             Text("开启后，即使你没有发布活动，也可能被匹配到")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -901,7 +933,26 @@ struct EditProfileView: View {
         }
     }
 
-    private func interestChip(_ interest: String) -> some View {
+    private func genderButton(label: String, value: String, icon: String) -> some View {
+        Button {
+            gender = value
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.title2)
+                Text(label)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(gender == value ? .white : .primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(gender == value ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        }
+    }
+
+    private func interestChip(_ interest: String, icon: String) -> some View {
         let isSelected = selectedInterests.contains(interest)
         return Button {
             if isSelected {
@@ -910,14 +961,18 @@ struct EditProfileView: View {
                 selectedInterests.insert(interest)
             }
         } label: {
-            Text(interest)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(isSelected ? .white : .primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(isSelected ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                Text(interest)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(isSelected ? .white : .primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(isSelected ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }

@@ -45,6 +45,8 @@ struct EventDetailView: View {
                 if event.status == .active || event.status == .matched {
                     endEventButton
                 }
+
+                Spacer().frame(height: 80)
             }
             .padding()
         }
