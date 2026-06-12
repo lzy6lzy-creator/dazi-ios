@@ -25,19 +25,131 @@ struct AvatarView: View {
     }
 }
 
-/// 带相机图标的头像选择器，支持从相册上传图片或选择 Emoji
+// MARK: - Emoji Data
+
+struct EmojiCategory {
+    let name: String
+    let icon: String
+    let emojis: [String]
+}
+
+enum EmojiLibrary {
+    static let categories: [EmojiCategory] = [
+        EmojiCategory(name: "常用", icon: "clock", emojis: [
+            "😊", "😎", "🤗", "🥰", "😄", "🤓",
+            "😜", "🥳", "😇", "🤩", "😋", "🫡",
+            "🙃", "😌", "🤭", "😏", "🫢", "🤔",
+        ]),
+        EmojiCategory(name: "表情", icon: "face.smiling", emojis: [
+            "😀", "😃", "😆", "😁", "😅", "🤣",
+            "😂", "🙂", "😉", "😍", "🥲", "😘",
+            "😗", "😙", "😚", "😛", "🤑", "🤪",
+            "😝", "🤫", "🫠", "😐", "😑", "😶",
+            "🫥", "😒", "🙄", "😬", "😮‍💨", "🤥",
+            "😔", "😪", "🤤", "😴", "🥱", "😷",
+            "🤒", "🤕", "🤢", "🤮", "🥵", "🥶",
+            "🥴", "😵", "😵‍💫", "🤯", "🤠", "🥸",
+            "😈", "👿", "👹", "👺", "🤡", "💀",
+            "☠️", "👻", "👽", "👾", "🤖", "🎃",
+        ]),
+        EmojiCategory(name: "手势", icon: "hand.raised", emojis: [
+            "👋", "🤚", "🖐️", "✋", "🖖", "🫱",
+            "🫲", "🫳", "🫴", "👌", "🤌", "🤏",
+            "✌️", "🤞", "🫰", "🤟", "🤘", "🤙",
+            "👈", "👉", "👆", "🖕", "👇", "☝️",
+            "🫵", "👍", "👎", "✊", "👊", "🤛",
+            "🤜", "👏", "🙌", "🫶", "👐", "🤲",
+            "🤝", "🙏", "✍️", "💪", "🦾", "🦿",
+        ]),
+        EmojiCategory(name: "动物", icon: "hare", emojis: [
+            "🐶", "🐱", "🐭", "🐹", "🐰", "🦊",
+            "🐻", "🐼", "🐻‍❄️", "🐨", "🐯", "🦁",
+            "🐮", "🐷", "🐸", "🐵", "🙈", "🙉",
+            "🙊", "🐔", "🐧", "🐦", "🦆", "🦅",
+            "🦉", "🦇", "🐺", "🐗", "🐴", "🦄",
+            "🐝", "🪱", "🐛", "🦋", "🐌", "🐞",
+            "🐙", "🦑", "🦀", "🐡", "🐠", "🐟",
+            "🐬", "🐳", "🐋", "🦈", "🐊", "🐅",
+            "🐆", "🦓", "🦍", "🦧", "🐘", "🦛",
+            "🦏", "🐪", "🐫", "🦒", "🦘", "🦬",
+        ]),
+        EmojiCategory(name: "植物", icon: "leaf", emojis: [
+            "🌵", "🎄", "🌲", "🌳", "🌴", "🪵",
+            "🌱", "🌿", "☘️", "🍀", "🎍", "🪴",
+            "🎋", "🍃", "🍂", "🍁", "🪻", "🌺",
+            "🌸", "🌼", "🌻", "🌹", "🌷", "🪷",
+            "💐", "🌾", "🫧", "🍄", "🪨", "🌰",
+        ]),
+        EmojiCategory(name: "食物", icon: "fork.knife", emojis: [
+            "🍎", "🍐", "🍊", "🍋", "🍌", "🍉",
+            "🍇", "🍓", "🫐", "🍈", "🍒", "🍑",
+            "🥭", "🍍", "🥥", "🥝", "🍅", "🥑",
+            "🍔", "🍟", "🍕", "🌭", "🥪", "🌮",
+            "🌯", "🫔", "🥗", "🍜", "🍝", "🍣",
+            "🍱", "🍙", "🍚", "🍛", "🍲", "🫕",
+            "🥟", "🧁", "🍰", "🎂", "🍮", "🍩",
+            "🍪", "🍫", "🍬", "🍭", "🍡", "🧋",
+            "☕", "🍵", "🥤", "🧃", "🍺", "🍷",
+        ]),
+        EmojiCategory(name: "活动", icon: "sportscourt", emojis: [
+            "⚽", "🏀", "🏈", "⚾", "🥎", "🎾",
+            "🏐", "🏉", "🥏", "🎱", "🏓", "🏸",
+            "🥊", "🥋", "⛳", "⛸️", "🎣", "🤿",
+            "🎿", "🛷", "🥌", "🎯", "🪀", "🪁",
+            "🎮", "🕹️", "🎲", "🧩", "♟️", "🎰",
+            "🎨", "🧵", "🪡", "🧶", "🎭", "🎪",
+            "🎤", "🎧", "🎼", "🎹", "🥁", "🪘",
+            "🎷", "🎺", "🪗", "🎸", "🎻", "🪕",
+        ]),
+        EmojiCategory(name: "旅行", icon: "airplane", emojis: [
+            "🚗", "🚕", "🚌", "🏎️", "🚓", "🚑",
+            "🚒", "🚐", "🛻", "🚚", "🚛", "🚜",
+            "🏍️", "🛵", "🚲", "🛴", "🛹", "🛼",
+            "🚁", "✈️", "🛩️", "🚀", "🛸", "⛵",
+            "🚢", "🗼", "🗽", "⛩️", "🕌", "🛕",
+            "🏛️", "⛪", "🕍", "🏰", "🏯", "🎡",
+            "🎢", "🎠", "⛲", "⛱️", "🏖️", "🏝️",
+            "🏔️", "⛰️", "🌋", "🗻", "🏕️", "🏜️",
+        ]),
+        EmojiCategory(name: "物品", icon: "desktopcomputer", emojis: [
+            "⌚", "📱", "💻", "⌨️", "🖥️", "🖨️",
+            "🖱️", "💾", "💿", "📷", "📸", "🎥",
+            "📽️", "📺", "📻", "🔮", "🪄", "🎩",
+            "📿", "💎", "🔑", "🗝️", "🛡️", "🔧",
+            "🧲", "⚗️", "🧪", "🧫", "🧬", "🔬",
+            "🔭", "📡", "💡", "🔦", "🏮", "🪔",
+            "📖", "📚", "📝", "✏️", "🖊️", "🖋️",
+        ]),
+        EmojiCategory(name: "符号", icon: "star", emojis: [
+            "❤️", "🧡", "💛", "💚", "💙", "💜",
+            "🖤", "🤍", "🤎", "💔", "❤️‍🔥", "💖",
+            "💗", "💓", "💞", "💕", "💝", "💘",
+            "⭐", "🌟", "✨", "💫", "🔥", "💥",
+            "⚡", "🌈", "☀️", "🌤️", "⛅", "🌙",
+            "🌍", "🌎", "🌏", "🪐", "💧", "🌊",
+            "🎵", "🎶", "🔔", "🎀", "🎁", "🏆",
+            "🏅", "🥇", "🥈", "🥉", "🎖️", "🏵️",
+        ]),
+    ]
+}
+
+/// 带相机图标的头像选择器，支持从相册上传图片或从全量 emoji 中选择
 struct AvatarPickerView: View {
     @Binding var imageData: Data?
     @Binding var emoji: String
     let emojiOptions: [String]
     var size: CGFloat = 88
     var accentColor: Color = AppTheme.primaryColor
+    var gridHeight: CGFloat = 180
 
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var selectedCategoryIndex = 0
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 6)
+    private let categories = EmojiLibrary.categories
 
     var body: some View {
-        VStack(spacing: 16) {
-            // 头像预览 + 上传按钮（仅相机图标可点击）
+        VStack(spacing: 12) {
             HStack {
                 Spacer()
                 ZStack(alignment: .bottomTrailing) {
@@ -59,38 +171,73 @@ struct AvatarPickerView: View {
                 Spacer()
             }
 
-            // Emoji 选项网格
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 6), spacing: 10) {
-                ForEach(emojiOptions, id: \.self) { emojiOption in
-                    Button {
-                        emoji = emojiOption
-                        imageData = nil // 选择 Emoji 时清除自定义图片
-                        selectedPhoto = nil
-                    } label: {
-                        Text(emojiOption)
-                            .font(.system(size: 26))
-                            .frame(width: 44, height: 44)
-                            .background(
-                                imageData == nil && emoji == emojiOption
-                                    ? accentColor.opacity(0.2)
-                                    : Color(.systemGray6)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
-                            .overlay {
-                                if imageData == nil && emoji == emojiOption {
-                                    RoundedRectangle(cornerRadius: AppTheme.radiusSM)
-                                        .stroke(accentColor, lineWidth: 2)
-                                }
+            VStack(spacing: 0) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 4) {
+                        ForEach(categories.indices, id: \.self) { index in
+                            Button {
+                                selectedCategoryIndex = index
+                            } label: {
+                                Image(systemName: categories[index].icon)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(selectedCategoryIndex == index ? accentColor : .secondary)
+                                    .frame(width: 32, height: 28)
+                                    .background(
+                                        selectedCategoryIndex == index
+                                            ? accentColor.opacity(0.12)
+                                            : Color.clear
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: 6))
                             }
+                            .buttonStyle(.plain)
+                        }
                     }
-                    .buttonStyle(.plain)
+                    .padding(.horizontal, 4)
                 }
+                .padding(.vertical, 6)
+
+                Divider().padding(.horizontal, 4)
+
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 6) {
+                        ForEach(categories[selectedCategoryIndex].emojis, id: \.self) { emojiOption in
+                            Button {
+                                emoji = emojiOption
+                                imageData = nil
+                                selectedPhoto = nil
+                            } label: {
+                                Text(emojiOption)
+                                    .font(.system(size: 26))
+                                    .frame(width: 44, height: 44)
+                                    .background(
+                                        imageData == nil && emoji == emojiOption
+                                            ? accentColor.opacity(0.2)
+                                            : AppTheme.systemBubbleColor
+                                    )
+                                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+                                    .overlay {
+                                        if imageData == nil && emoji == emojiOption {
+                                            RoundedRectangle(cornerRadius: AppTheme.radiusSM)
+                                                .stroke(accentColor, lineWidth: 2)
+                                        }
+                                    }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                    .padding(.top, 6)
+                    .padding(.bottom, 4)
+                }
+                .frame(height: gridHeight)
             }
+            .padding(.horizontal, 12)
+            .background(AppTheme.systemBubbleColor.opacity(0.5))
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
         }
         .onChange(of: selectedPhoto) { _, newValue in
             Task {
                 if let data = try? await newValue?.loadTransferable(type: Data.self) {
-                    // 压缩图片到合理大小
                     if let uiImage = UIImage(data: data) {
                         let maxDimension: CGFloat = 400
                         let scale = min(maxDimension / uiImage.size.width, maxDimension / uiImage.size.height, 1.0)

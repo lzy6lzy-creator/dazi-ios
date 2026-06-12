@@ -45,6 +45,8 @@ struct EventDetailView: View {
                 if event.status == .active || event.status == .matched {
                     endEventButton
                 }
+
+                Spacer().frame(height: 80)
             }
             .padding()
         }
@@ -245,7 +247,7 @@ struct EventDetailView: View {
                 .foregroundStyle(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
-                .background(room == nil ? Color.gray.opacity(0.5) : AppTheme.secondaryColor)
+                .background(room == nil ? Color.gray.opacity(0.5) : AppTheme.primaryColor)
                 .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         }
         .buttonStyle(PrimaryButtonStyle())
