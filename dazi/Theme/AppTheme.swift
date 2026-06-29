@@ -1,21 +1,79 @@
 import SwiftUI
 
 enum AppTheme {
+    enum ThemePreset {
+        case classicOrange
+        case warmGreen
+    }
+
+    private struct ThemePalette {
+        let primaryColor: Color
+        let secondaryColor: Color
+        let agentColor: Color
+        let warmAccent: Color
+        let surfaceCream: Color
+        let primaryLight: Color
+        let backgroundColor: Color
+        let cardBackground: Color
+        let agentBubbleColor: Color
+        let userBubbleColor: Color
+        let partnerBubbleColor: Color
+        let systemBubbleColor: Color
+    }
+
+    // Change this preset to switch the app between preserved theme versions.
+    static let activePreset: ThemePreset = .warmGreen
+
+    private static var palette: ThemePalette {
+        switch activePreset {
+        case .classicOrange:
+            return ThemePalette(
+                primaryColor: Color(red: 1.0, green: 0.42, blue: 0.21), // #FF6B36
+                secondaryColor: Color(red: 0.29, green: 0.56, blue: 0.85),
+                agentColor: Color(red: 0.55, green: 0.36, blue: 0.96),
+                warmAccent: Color(red: 1.0, green: 0.42, blue: 0.21), // #FF6B36
+                surfaceCream: Color(UIColor.systemGroupedBackground),
+                primaryLight: Color(red: 1.0, green: 0.42, blue: 0.21).opacity(0.18),
+                backgroundColor: Color(UIColor.systemGroupedBackground),
+                cardBackground: Color(UIColor.secondarySystemGroupedBackground),
+                agentBubbleColor: Color(UIColor.tertiarySystemFill),
+                userBubbleColor: Color(red: 1.0, green: 0.42, blue: 0.21), // #FF6B36
+                partnerBubbleColor: Color(red: 0.91, green: 0.95, blue: 1.0),
+                systemBubbleColor: Color(UIColor.quaternarySystemFill)
+            )
+        case .warmGreen:
+            return ThemePalette(
+                primaryColor: Color(red: 0.243, green: 0.510, blue: 0.345), // #3E8258
+                secondaryColor: Color(red: 0.29, green: 0.56, blue: 0.85),
+                agentColor: Color(red: 0.271, green: 0.706, blue: 0.769), // #45B4C4
+                warmAccent: Color(red: 1.0, green: 0.42, blue: 0.21), // #FF6B36
+                surfaceCream: Color(red: 0.984, green: 0.973, blue: 0.945), // #FBF8F1
+                primaryLight: Color(red: 0.243, green: 0.510, blue: 0.345).opacity(0.18),
+                backgroundColor: Color(red: 0.984, green: 0.973, blue: 0.945), // #FBF8F1
+                cardBackground: Color.white,
+                agentBubbleColor: Color(red: 0.965, green: 0.945, blue: 0.902), // #F6F1E6
+                userBubbleColor: Color(red: 0.243, green: 0.510, blue: 0.345), // #3E8258
+                partnerBubbleColor: Color(red: 0.894, green: 0.941, blue: 0.988), // #E4F0FC
+                systemBubbleColor: Color(red: 0.949, green: 0.937, blue: 0.918) // #F2EFEA
+            )
+        }
+    }
+
     // MARK: - Colors (Brand)
-    static let primaryColor = Color(red: 0.243, green: 0.510, blue: 0.345) // #3E8258
-    static let secondaryColor = Color(red: 0.29, green: 0.56, blue: 0.85)
-    static let agentColor = Color(red: 0.271, green: 0.706, blue: 0.769) // #45B4C4
-    static let warmAccent = Color(red: 1.0, green: 0.42, blue: 0.21) // #FF6B36
-    static let surfaceCream = Color(red: 0.984, green: 0.973, blue: 0.945) // #FBF8F1
-    static let primaryLight = Color(red: 0.243, green: 0.510, blue: 0.345).opacity(0.18)
+    static var primaryColor: Color { palette.primaryColor }
+    static var secondaryColor: Color { palette.secondaryColor }
+    static var agentColor: Color { palette.agentColor }
+    static var warmAccent: Color { palette.warmAccent }
+    static var surfaceCream: Color { palette.surfaceCream }
+    static var primaryLight: Color { palette.primaryLight }
 
     // MARK: - Colors (Adaptive)
-    static let backgroundColor = Color(red: 0.984, green: 0.973, blue: 0.945) // #FBF8F1
-    static let cardBackground = Color.white
-    static let agentBubbleColor = Color(red: 0.965, green: 0.945, blue: 0.902) // #F6F1E6
-    static let userBubbleColor = Color(red: 0.243, green: 0.510, blue: 0.345) // #3E8258
-    static let partnerBubbleColor = Color(red: 0.894, green: 0.941, blue: 0.988) // #E4F0FC 暖蓝
-    static let systemBubbleColor = Color(red: 0.949, green: 0.937, blue: 0.918) // #F2EFEA 暖灰
+    static var backgroundColor: Color { palette.backgroundColor }
+    static var cardBackground: Color { palette.cardBackground }
+    static var agentBubbleColor: Color { palette.agentBubbleColor }
+    static var userBubbleColor: Color { palette.userBubbleColor }
+    static var partnerBubbleColor: Color { palette.partnerBubbleColor }
+    static var systemBubbleColor: Color { palette.systemBubbleColor }
 
     // MARK: - Spacing
     static let spacingXS: CGFloat = 4

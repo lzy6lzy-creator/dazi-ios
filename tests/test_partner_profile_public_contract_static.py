@@ -23,14 +23,14 @@ class PartnerProfilePublicContractStaticTests(unittest.TestCase):
         self.assertIn("pastEventsSection", PARTNER_PROFILE)
         self.assertIn("profileEventVisibility", PARTNER_PROFILE)
         self.assertIn("pastEvents", PARTNER_PROFILE)
-        self.assertIn("过往事件", PARTNER_PROFILE)
+        self.assertIn("过往活动", PARTNER_PROFILE)
 
     def test_my_profile_can_save_event_visibility_setting(self):
         self.assertIn("profileEventVisibility", USER_MODEL)
         self.assertIn("userProfileEventVisibility", PROFILE_STORE)
         self.assertIn("profileEventVisibility = dataStore.currentUser.profileEventVisibility", PROFILE_VIEW)
         self.assertIn('"profile_event_visibility": profileEventVisibility', PROFILE_VIEW)
-        self.assertIn("过往事件可见性", PROFILE_VIEW)
+        self.assertIn("过往活动可见性", PROFILE_VIEW)
 
 
 if __name__ == "__main__":
