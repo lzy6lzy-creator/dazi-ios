@@ -81,8 +81,13 @@ struct ChatRoomListView: View {
                     }
                 }
             }
+
+            Spacer().frame(height: 80)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
         .listStyle(.insetGrouped)
+        .scrollContentBackground(.hidden)
         .refreshable {
             async let rooms: () = dataStore.fetchChatRoomsFromServer()
             async let requests: () = dataStore.fetchPassiveMatchRequestsFromServer()

@@ -49,7 +49,7 @@ struct EventFeedbackView: View {
                     TextField("分享你的活动体验...", text: $experienceComment, axis: .vertical)
                         .lineLimit(3...6)
                         .padding(12)
-                        .background(Color(.systemGray6))
+                        .background(AppTheme.systemBubbleColor)
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
                 }
                 .padding(16)
@@ -65,7 +65,7 @@ struct EventFeedbackView: View {
                     TextField("评价你的搭子...", text: $partnerComment, axis: .vertical)
                         .lineLimit(3...6)
                         .padding(12)
-                        .background(Color(.systemGray6))
+                        .background(AppTheme.systemBubbleColor)
                         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
 
                     HStack(spacing: 4) {

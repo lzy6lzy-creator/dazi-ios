@@ -556,7 +556,7 @@ class DataStore {
             ? "比如周末想看电影、找人一起徒步、想吃顿好的~"
             : "比如\(currentUser.interests.prefix(3).joined(separator: "、"))？"
         return Message(
-            content: "你好\(currentUser.name)！我是\(currentUser.agentName)，你的个人助理。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
+            content: "你好\(currentUser.name)！我是\(currentUser.agentName)，你的找搭子Agent。\n\n告诉我你想做什么活动，我来帮你找到最合适的搭子！\(interestsHint)",
             role: .agent,
             senderName: currentUser.agentName,
             senderAvatar: currentUser.agentEmoji,

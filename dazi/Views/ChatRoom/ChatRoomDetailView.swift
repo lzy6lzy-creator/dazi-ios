@@ -249,7 +249,7 @@ struct ChatRoomDetailView: View {
                     .frame(width: 50)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("个人助理匹配对话")
+                        Text("Agent匹配对话")
                             .font(.subheadline)
                             .fontWeight(.medium)
                             .foregroundStyle(.primary)
@@ -306,7 +306,7 @@ struct ChatRoomDetailView: View {
             }
         }
         .padding(12)
-        .background(Color(.systemGray6).opacity(0.5))
+        .background(AppTheme.agentBubbleColor.opacity(0.5))
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
         .padding(.top, 4)
         .padding(.horizontal, 0)
@@ -530,7 +530,7 @@ struct ChatRoomDetailView: View {
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 14)
-        .background(Color(.systemBackground))
+        .background(AppTheme.cardBackground)
     }
 
     private func sendMessage() {

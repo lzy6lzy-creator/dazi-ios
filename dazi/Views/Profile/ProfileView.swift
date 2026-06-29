@@ -15,11 +15,13 @@ struct ProfileView: View {
                 VStack(spacing: 20) {
                     profileHeader
                     agentCard
+                    interestsSection
                     statsCard
                     gallerySection
                     memorySection
                     aboutSection
                     logoutSection
+                    Spacer().frame(height: 80)
                 }
                 .padding()
             }
@@ -27,7 +29,18 @@ struct ProfileView: View {
             .navigationTitle("我的")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showEditProfile = true } label: {
+                    Menu {
+                        Button {
+                            showEditProfile = true
+                        } label: {
+                            Label("编辑个人资料", systemImage: "person.crop.circle")
+                        }
+                        Button {
+                            showEditAgent = true
+                        } label: {
+                            Label("编辑Agent资料", systemImage: "brain.head.profile")
+                        }
+                    } label: {
                         Image(systemName: "pencil.line")
                             .font(.subheadline)
                     }
@@ -127,50 +140,43 @@ struct ProfileView: View {
     }
 
     private var agentCard: some View {
-        Button { showEditAgent = true } label: {
-            HStack(spacing: 14) {
-                AvatarView(
-                    imageData: dataStore.currentUser.agentAvatarImageData,
-                    emoji: dataStore.currentUser.agentEmoji,
-                    size: 56,
-                    backgroundColor: AppTheme.agentColor.opacity(0.12)
-                )
+        HStack(spacing: 14) {
+            AvatarView(
+                imageData: dataStore.currentUser.agentAvatarImageData,
+                emoji: dataStore.currentUser.agentEmoji,
+                size: 56,
+                backgroundColor: AppTheme.agentColor.opacity(0.12)
+            )
 
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(dataStore.currentUser.agentName)
-                            .font(.headline)
-                            .foregroundStyle(.primary)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text(dataStore.currentUser.agentName)
+                        .font(.headline)
 
-                        Text("AI")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(AppTheme.agentColor)
-                            .clipShape(Capsule())
-                    }
-
-                    Text("性格：\(dataStore.currentUser.agentPersonality)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Text("你的个人助理")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
+                    Text("AI")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(AppTheme.agentColor)
+                        .clipShape(Capsule())
                 }
 
-                Spacer()
-
-                Image(systemName: "chevron.right")
+                Text("性格：\(dataStore.currentUser.agentPersonality)")
                     .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text("你的找搭子 Agent")
+                    .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
-            .padding(16)
-            .background(AppTheme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
-            .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+
+            Spacer()
         }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
     }
 
     private var statsCard: some View {
@@ -187,13 +193,38 @@ struct ProfileView: View {
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
     }
 
+    private var interestsSection: some View {
+        Group {
+            if !dataStore.currentUser.interests.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("兴趣")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(.secondary)
+
+                    FlowLayout(spacing: 8) {
+                        ForEach(dataStore.currentUser.interests, id: \.self) { interest in
+                            Text(interest)
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundStyle(AppTheme.primaryColor)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(AppTheme.primaryColor.opacity(0.1))
+                                .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     private var gallerySection: some View {
         let displayedItems = dataStore.galleryItems.filter(\.isDisplayed)
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "photo.on.rectangle.angled")
                     .foregroundStyle(AppTheme.primaryColor)
-                Text("过往事件相册")
+                Text("过往活动相册")
                     .font(.headline)
                 Spacer()
                 Button { showEditGallery = true } label: {
@@ -729,14 +760,34 @@ struct EditProfileView: View {
         "🌟", "🌈", "🔥", "💎", "🎵", "🎮",
     ]
 
-    private static let genderOptions = ["男", "女", "暂时保密"]
-    private static let interestOptions = [
-        "电影", "徒步", "美食", "看展", "咖啡",
-        "桌游", "摄影", "演出", "运动", "阅读",
-        "旅行", "音乐", "烹饪", "骑行", "瑜伽",
+    private static let interestItems: [(String, String)] = [
+        ("电影", "film"),
+        ("徒步", "figure.hiking"),
+        ("美食", "fork.knife"),
+        ("看展", "paintpalette"),
+        ("咖啡", "cup.and.saucer"),
+        ("桌游", "dice"),
+        ("摄影", "camera"),
+        ("演出", "music.mic"),
+        ("运动", "sportscourt"),
+        ("阅读", "book"),
+        ("旅行", "airplane"),
+        ("音乐", "headphones"),
+        ("烹饪", "frying.pan"),
+        ("骑行", "bicycle"),
+        ("瑜伽", "figure.yoga"),
+        ("露营", "tent"),
+        ("潜水", "water.waves"),
+        ("滑雪", "figure.skiing.downhill"),
+        ("剧本杀", "theatermasks"),
+        ("电竞", "gamecontroller"),
+        ("播客", "radio"),
+        ("手作", "scissors"),
+        ("逛集市", "bag"),
+        ("City Walk", "figure.walk"),
     ]
     private static let eventVisibilityOptions: [(value: String, label: String, description: String)] = [
-        ("hidden", "全部隐藏", "别人看不到你的过往事件"),
+        ("hidden", "全部隐藏", "别人看不到你的过往活动"),
         ("partial", "部分隐藏", "只显示活动类型、月份和城市"),
         ("public", "全部能看", "显示完整标题、时间、地点和偏好"),
     ]
@@ -785,13 +836,21 @@ struct EditProfileView: View {
                 }
 
                 Section("基础资料") {
-                    Picker("性别", selection: $gender) {
-                        ForEach(Self.genderOptions, id: \.self) { option in
-                            Text(option).tag(option)
+                    VStack(spacing: 12) {
+                        Text("性别")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 12) {
+                            genderButton(label: "男", value: "男", icon: "sun.max")
+                            genderButton(label: "女", value: "女", icon: "moon.stars")
+                            genderButton(label: "保密", value: "暂时保密", icon: "sparkles")
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .listRowBackground(Color.clear)
+                }
 
+                Section {
                     DatePicker("出生日期", selection: $birthDate, in: birthDateRange, displayedComponents: .date)
                         .datePickerStyle(.wheel)
                         .labelsHidden()
@@ -804,18 +863,22 @@ struct EditProfileView: View {
                 }
 
                 Section("兴趣") {
-                    FlowLayout(spacing: 8) {
-                        ForEach(Self.interestOptions, id: \.self) { interest in
-                            interestChip(interest)
+                    FlowLayout(spacing: 10) {
+                        ForEach(Self.interestItems, id: \.0) { item in
+                            interestChip(item.0, icon: item.1)
                         }
                     }
                     .listRowBackground(Color.clear)
+                }
 
+                Section {
                     TextField("补充其他爱好", text: $customInterests)
 
                     Toggle(isOn: $welcomeDisturb) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("欢迎打扰")
+                            Text("欢迎惊喜")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
                             Text("开启后，即使你没有发布活动，也可能被匹配到")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -829,7 +892,7 @@ struct EditProfileView: View {
                 }
 
                 Section("公开主页") {
-                    Picker("过往事件可见性", selection: $profileEventVisibility) {
+                    Picker("过往活动可见性", selection: $profileEventVisibility) {
                         ForEach(Self.eventVisibilityOptions, id: \.value) { option in
                             Text(option.label).tag(option.value)
                         }
@@ -870,7 +933,26 @@ struct EditProfileView: View {
         }
     }
 
-    private func interestChip(_ interest: String) -> some View {
+    private func genderButton(label: String, value: String, icon: String) -> some View {
+        Button {
+            gender = value
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.title2)
+                Text(label)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(gender == value ? .white : .primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(gender == value ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        }
+    }
+
+    private func interestChip(_ interest: String, icon: String) -> some View {
         let isSelected = selectedInterests.contains(interest)
         return Button {
             if isSelected {
@@ -879,14 +961,18 @@ struct EditProfileView: View {
                 selectedInterests.insert(interest)
             }
         } label: {
-            Text(interest)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(isSelected ? .white : .primary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(isSelected ? AppTheme.primaryColor : Color(.systemGray6))
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                Text(interest)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundStyle(isSelected ? .white : .primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(isSelected ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
+            .clipShape(Capsule())
         }
         .buttonStyle(.plain)
     }
@@ -997,7 +1083,7 @@ struct EditAgentView: View {
                                     .foregroundStyle(agentPersonality == p ? .white : .primary)
                                     .padding(.horizontal, 14)
                                     .padding(.vertical, 8)
-                                    .background(agentPersonality == p ? AppTheme.agentColor : Color(.systemGray6))
+                                    .background(agentPersonality == p ? AppTheme.agentColor : AppTheme.systemBubbleColor)
                                     .clipShape(Capsule())
                             }
                         }
@@ -1064,5 +1150,55 @@ struct ConfidenceBar: View {
                 .fill(AppTheme.agentColor)
                 .frame(width: 40 * value, height: 4)
         }
+    }
+}
+
+private struct CompassMotif: View {
+    var body: some View {
+        Canvas { context, size in
+            let color = AppTheme.primaryColor.opacity(0.12)
+            let cx = size.width / 2
+            let cy = size.height / 2
+            let r = min(size.width, size.height) / 2
+
+            let outerCircle = Path(ellipseIn: CGRect(x: cx - r * 0.92, y: cy - r * 0.92, width: r * 1.84, height: r * 1.84))
+            context.stroke(outerCircle, with: .color(color), lineWidth: 1.4)
+
+            let dashCircle = Path(ellipseIn: CGRect(x: cx - r * 0.82, y: cy - r * 0.82, width: r * 1.64, height: r * 1.64))
+            let dashStyle = StrokeStyle(lineWidth: 1.2, dash: [1.2, 5.4])
+            context.stroke(dashCircle, with: .color(color), style: dashStyle)
+
+            let innerCircle = Path(ellipseIn: CGRect(x: cx - r * 0.46, y: cy - r * 0.46, width: r * 0.92, height: r * 0.92))
+            context.stroke(innerCircle, with: .color(color), lineWidth: 1.4)
+
+            var star = Path()
+            let pts: [(CGFloat, CGFloat)] = [
+                (0, -r * 0.82), (r * 0.1, -r * 0.1), (r * 0.82, 0), (r * 0.1, r * 0.1),
+                (0, r * 0.82), (-r * 0.1, r * 0.1), (-r * 0.82, 0), (-r * 0.1, -r * 0.1)
+            ]
+            star.move(to: CGPoint(x: cx + pts[0].0, y: cy + pts[0].1))
+            for i in 1..<pts.count {
+                star.addLine(to: CGPoint(x: cx + pts[i].0, y: cy + pts[i].1))
+            }
+            star.closeSubpath()
+            context.stroke(star, with: .color(color), lineWidth: 1.6)
+
+            for i in 0..<8 {
+                let angle = Double(i) * .pi / 4
+                let dx = CGFloat(cos(angle))
+                let dy = CGFloat(sin(angle))
+                var tick = Path()
+                tick.move(to: CGPoint(x: cx + dx * r * 0.48, y: cy + dy * r * 0.48))
+                tick.addLine(to: CGPoint(x: cx + dx * r * 0.56, y: cy + dy * r * 0.56))
+                context.stroke(tick, with: .color(color), lineWidth: 1)
+            }
+
+            let hubCircle = Path(ellipseIn: CGRect(x: cx - r * 0.13, y: cy - r * 0.13, width: r * 0.26, height: r * 0.26))
+            context.stroke(hubCircle, with: .color(color), lineWidth: 1.2)
+
+            let dot = Path(ellipseIn: CGRect(x: cx - r * 0.06, y: cy - r * 0.06, width: r * 0.12, height: r * 0.12))
+            context.fill(dot, with: .color(color))
+        }
+        .allowsHitTesting(false)
     }
 }

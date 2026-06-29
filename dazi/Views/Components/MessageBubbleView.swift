@@ -197,7 +197,7 @@ struct MessageBubbleView: View {
                     }
                 }
             }
-            .background(Color(.systemBackground))
+            .background(AppTheme.cardBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: AppTheme.radiusSM)
                     .stroke(Color.black.opacity(0.08), lineWidth: 1)
@@ -304,7 +304,7 @@ struct MessageBubbleView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .frame(minHeight: 44)
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(AppTheme.cardBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: AppTheme.radiusSM)
                             .stroke(Color.black.opacity(0.08), lineWidth: 1)
@@ -324,7 +324,7 @@ struct MessageBubbleView: View {
         let location = isLocationQuestion(question)
         let selectedColor = location ? Color(red: 0.08, green: 0.48, blue: 0.52) : AppTheme.primaryColor
         let selectedBackground = selectedColor.opacity(0.12)
-        let normalBackground = Color(.secondarySystemGroupedBackground)
+        let normalBackground = AppTheme.cardBackground
         let borderColor = selected ? selectedColor : Color.black.opacity(0.10)
         return Button {
             toggleOption(question: question, optionId: option.id)
@@ -408,7 +408,7 @@ struct MessageBubbleView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .frame(minHeight: 48)
-        .background(Color(.secondarySystemGroupedBackground))
+        .background(AppTheme.cardBackground)
         .overlay(
             RoundedRectangle(cornerRadius: AppTheme.radiusSM)
                 .stroke(AppTheme.primaryColor.opacity(0.20), lineWidth: 1)
@@ -461,7 +461,7 @@ struct MessageBubbleView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemGroupedBackground))
+                    .background(AppTheme.cardBackground)
                     .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
             } else if !selectedAgeOptionIds(for: question).isEmpty {
                 let range = defaultAgeRange(for: question)
@@ -479,7 +479,7 @@ struct MessageBubbleView: View {
                 .padding(.horizontal, 12)
                 .padding(.vertical, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(.secondarySystemGroupedBackground))
+                .background(AppTheme.cardBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: AppTheme.radiusSM)
                         .stroke(AppTheme.primaryColor.opacity(0.18), lineWidth: 1)
@@ -902,7 +902,7 @@ struct DateSeparator: View {
             .foregroundStyle(.tertiary)
             .padding(.horizontal, AppTheme.spacingMD)
             .padding(.vertical, AppTheme.spacingXS)
-            .background(Color(.quaternarySystemFill))
+            .background(AppTheme.systemBubbleColor)
             .clipShape(Capsule())
             .padding(.vertical, AppTheme.spacingSM)
     }

@@ -16,19 +16,23 @@ struct AgentChatView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ZStack(alignment: .bottom) {
                 messageList
-                if isNewUser {
-                    promptChips
+                    .onTapGesture {
+                        isInputFocused = false
+                    }
+
+                VStack(spacing: 0) {
+                    if isNewUser {
+                        promptChips
+                    }
+                    ChatInputBar(text: $inputText, isInputFocused: $isInputFocused, placeholder: "告诉点点你想做什么...") {
+                        sendMessage()
+                    }
                 }
-                ChatInputBar(text: $inputText, isInputFocused: $isInputFocused, placeholder: "告诉点点你想做什么...") {
-                    sendMessage()
-                }
+                .padding(.bottom, isInputFocused ? 0 : 76)
             }
             .background(AppTheme.backgroundColor)
-            .onTapGesture {
-                isInputFocused = false
-            }
             .navigationTitle("点点")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -42,7 +46,7 @@ struct AgentChatView: View {
                         )
                         Text(dataStore.currentUser.agentName)
                             .font(.headline)
-                        Text("你的个人助理")
+                        Text("你的找搭子Agent")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -75,9 +79,11 @@ struct AgentChatView: View {
                             .id(message.id)
                     }
                 }
-                .padding(.vertical, 12)
+                .padding(.top, 12)
+                .padding(.bottom, 140)
             }
             .scrollDismissesKeyboard(.interactively)
+            .scrollBounceBehavior(.basedOnSize)
             .onChange(of: dataStore.agentMessages.count) {
                 withAnimation(.easeOut(duration: 0.3)) {
                     if let lastId = dataStore.agentMessages.last?.id {
