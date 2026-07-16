@@ -72,7 +72,20 @@ struct daziApp: App {
                     appState = .login
                 }
             }
+            .onOpenURL { url in
+                captureInvitationCode(from: url)
+            }
         }
+    }
+
+    private func captureInvitationCode(from url: URL) {
+        let components = url.pathComponents.filter { $0 != "/" }
+        guard components.count >= 2, components[0].lowercased() == "i" else { return }
+        let code = components[1]
+            .uppercased()
+            .filter { $0.isLetter || $0.isNumber }
+        guard code.count == 8 else { return }
+        UserDefaults.standard.set(code, forKey: "pendingInvitationCode")
     }
 
     /// Force iOS to load the keyboard subsystem at launch so the first tap is instant.

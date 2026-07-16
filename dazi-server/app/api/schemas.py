@@ -25,16 +25,35 @@ def normalize_mainland_phone(value: object) -> str:
 
 class AuthSendCodeRequest(BaseModel):
     phone: str
+    invite_code: Optional[str] = Field(default=None, max_length=32)
+    install_id: Optional[str] = Field(default=None, max_length=128)
 
     @field_validator("phone", mode="before")
     @classmethod
     def validate_phone(cls, value):
         return normalize_mainland_phone(value)
 
+    @field_validator("invite_code", mode="before")
+    @classmethod
+    def normalize_invite_code(cls, value):
+        if value is None:
+            return None
+        normalized = str(value).strip().upper().replace("-", "").replace(" ", "")
+        return normalized or None
+
+    @field_validator("install_id", mode="before")
+    @classmethod
+    def normalize_install_id(cls, value):
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
 
 class AuthLoginRequest(BaseModel):
     phone: str
     code: str
+    admission_token: Optional[str] = Field(default=None, max_length=256)
 
     @field_validator("phone", mode="before")
     @classmethod
@@ -48,6 +67,68 @@ class AuthLoginRequest(BaseModel):
         if not SMS_CODE_RE.fullmatch(code):
             raise ValueError("验证码必须是 6 位数字")
         return code
+
+    @field_validator("admission_token", mode="before")
+    @classmethod
+    def normalize_admission_token(cls, value):
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+
+class AuthSendCodeResponse(BaseModel):
+    message: str
+    admission_token: str
+    expires_in: int
+    registration_mode: str
+
+
+class RegistrationPolicyResponse(BaseModel):
+    registration_mode: str
+    invitation_required: bool
+    launch_city_code: str
+    qualified_user_count: int
+    qualified_target: int
+    ios_distribution_mode: str
+    download_url: Optional[str] = None
+
+
+class InvitationMeResponse(BaseModel):
+    code: Optional[str] = None
+    status: Optional[str] = None
+    granted: int
+    consumed: int
+    reserved: int
+    available: int
+    share_url: Optional[str] = None
+    milestones: dict[str, str] = Field(default_factory=dict)
+
+
+class InvitationStatusResponse(BaseModel):
+    valid: bool
+    available: int
+
+
+class LocationVerificationRequest(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy_meters: float = Field(gt=0)
+    captured_at: datetime
+
+    @field_validator("captured_at")
+    @classmethod
+    def require_timezone(cls, value: datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("captured_at 必须包含时区")
+        return value
+
+
+class LocationVerificationResponse(BaseModel):
+    is_launch_city: bool
+    city_code: Optional[str] = None
+    expires_at: datetime
+    settled_milestones: list[str] = Field(default_factory=list)
 
 
 class AuthTokenResponse(BaseModel):

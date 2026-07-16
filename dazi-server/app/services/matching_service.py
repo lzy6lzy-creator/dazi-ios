@@ -37,6 +37,7 @@ from app.services.matching_policy import (
 )
 from app.services.location_policy import is_location_compatible
 from app.services.push_notification_service import push_notification_service
+from app.services.invitation_reward_service import record_invitation_milestone_safely
 
 logger = logging.getLogger(__name__)
 
@@ -625,6 +626,22 @@ class MatchingService:
             "user_id": str(event.user_id),
         }
 
+    async def _record_match_invitation_milestones(
+        self,
+        event_a: Event,
+        event_b: Event,
+        room_id: uuid.UUID,
+        db: AsyncSession,
+    ) -> None:
+        for event in (event_a, event_b):
+            await record_invitation_milestone_safely(
+                db,
+                user_id=event.user_id,
+                milestone_type="first_match",
+                source_event_id=event.id,
+                source_chat_room_id=room_id,
+            )
+
     async def _create_chat_room(self, event_a: Event, event_b: Event,
                                 match_summary: str, agent_dialogue: Optional[str],
                                 db: AsyncSession) -> uuid.UUID:
@@ -641,6 +658,7 @@ class MatchingService:
         await db.flush()
 
         await self._add_chat_room_members(room.id, event_a, event_b, db)
+        await self._record_match_invitation_milestones(event_a, event_b, room.id, db)
 
         # WebSocket 通知双方用户匹配成功
         for uid, eid in [(event_a.user_id, event_a.id), (event_b.user_id, event_b.id)]:
@@ -739,6 +757,7 @@ class MatchingService:
         )
         db.add(system_msg)
         await db.flush()
+        await self._record_match_invitation_milestones(event_a, event_b, room.id, db)
         await db.commit()
         await self._broadcast_room_message(room.id, system_msg, db)
 

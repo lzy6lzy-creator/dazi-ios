@@ -38,6 +38,7 @@ from app.services.match_blocklist_service import clear_event_match_state
 from app.services.prompt_builder import PromptBuilder
 from app.services.sse import sse_event
 from app.services.memory_service import extract_and_update_memories_after_publish
+from app.services.invitation_reward_service import record_invitation_milestone_safely
 from app.services.clarification_service import (
     ConversationQuestionNormalizer,
     merge_clarification_answers,
@@ -1151,6 +1152,13 @@ async def _create_event_from_draft(
             event.location, event.preferences, event.constraints
         )
         event.embedding = await embedding_service.encode(text)
+
+        await record_invitation_milestone_safely(
+            db,
+            user_id=user_id,
+            milestone_type="first_event_publish",
+            source_event_id=event.id,
+        )
 
         logger.info(f"Created event {event.id} from draft for user {user_id}: {event.title}")
         return event.id

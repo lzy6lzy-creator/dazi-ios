@@ -45,6 +45,82 @@ struct AuthTokenResponse: Codable {
     }
 }
 
+struct APIRegistrationPolicyResponse: Codable {
+    let registrationMode: String
+    let invitationRequired: Bool
+    let launchCityCode: String
+    let qualifiedUserCount: Int
+    let qualifiedTarget: Int
+    let iosDistributionMode: String
+    let downloadURL: String?
+
+    enum CodingKeys: String, CodingKey {
+        case registrationMode = "registration_mode"
+        case invitationRequired = "invitation_required"
+        case launchCityCode = "launch_city_code"
+        case qualifiedUserCount = "qualified_user_count"
+        case qualifiedTarget = "qualified_target"
+        case iosDistributionMode = "ios_distribution_mode"
+        case downloadURL = "download_url"
+    }
+}
+
+struct APISendCodeResponse: Codable {
+    let message: String
+    let admissionToken: String
+    let expiresIn: Int
+    let registrationMode: String
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case admissionToken = "admission_token"
+        case expiresIn = "expires_in"
+        case registrationMode = "registration_mode"
+    }
+}
+
+struct APIInvitationMeResponse: Codable {
+    let code: String?
+    let status: String?
+    let granted: Int
+    let consumed: Int
+    let reserved: Int
+    let available: Int
+    let shareURL: String?
+    let milestones: [String: String]
+
+    enum CodingKeys: String, CodingKey {
+        case code, status, granted, consumed, reserved, available, milestones
+        case shareURL = "share_url"
+    }
+}
+
+struct APILocationVerificationResponse: Codable {
+    let isLaunchCity: Bool
+    let cityCode: String?
+    let expiresAt: String
+    let settledMilestones: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case isLaunchCity = "is_launch_city"
+        case cityCode = "city_code"
+        case expiresAt = "expires_at"
+        case settledMilestones = "settled_milestones"
+    }
+}
+
+private enum InstallationIdentity {
+    static let current: String = {
+        let key = "daziInstallationIdentifier"
+        if let existing = UserDefaults.standard.string(forKey: key) {
+            return existing
+        }
+        let value = UUID().uuidString
+        UserDefaults.standard.set(value, forKey: key)
+        return value
+    }()
+}
+
 struct APIUserResponse: Codable {
     let id: String
     let name: String
@@ -640,20 +716,39 @@ final class APIClient {
 
     // MARK: - Auth
 
-    func sendVerificationCode(phone: String) async throws -> [String: Any] {
-        try await requestDict(
-            method: "POST",
-            path: "/api/v1/auth/send-code",
-            body: ["phone": phone],
+    func getRegistrationPolicy() async throws -> APIRegistrationPolicyResponse {
+        try await request(
+            method: "GET",
+            path: "/api/v1/auth/registration-policy",
             authenticated: false
         )
     }
 
-    func login(phone: String, code: String) async throws -> AuthTokenResponse {
+    func sendVerificationCode(phone: String, inviteCode: String? = nil) async throws -> APISendCodeResponse {
+        var body: [String: Any] = [
+            "phone": phone,
+            "install_id": InstallationIdentity.current,
+        ]
+        if let inviteCode, !inviteCode.isEmpty {
+            body["invite_code"] = inviteCode
+        }
+        return try await request(
+            method: "POST",
+            path: "/api/v1/auth/send-code",
+            body: body,
+            authenticated: false
+        )
+    }
+
+    func login(phone: String, code: String, admissionToken: String) async throws -> AuthTokenResponse {
         let result: AuthTokenResponse = try await request(
             method: "POST",
             path: "/api/v1/auth/login",
-            body: ["phone": phone, "code": code],
+            body: [
+                "phone": phone,
+                "code": code,
+                "admission_token": admissionToken,
+            ],
             authenticated: false
         )
         saveTokens(result)
@@ -668,6 +763,30 @@ final class APIClient {
 
     func updateMe(data: [String: Any]) async throws -> APIUserResponse {
         try await request(method: "PUT", path: "/api/v1/users/me", body: data)
+    }
+
+    // MARK: - Invitations
+
+    func getMyInvitation() async throws -> APIInvitationMeResponse {
+        try await request(method: "GET", path: "/api/v1/invitations/me")
+    }
+
+    func verifyLaunchCityLocation(
+        latitude: Double,
+        longitude: Double,
+        accuracyMeters: Double,
+        capturedAt: Date
+    ) async throws -> APILocationVerificationResponse {
+        try await request(
+            method: "POST",
+            path: "/api/v1/location/verify",
+            body: [
+                "latitude": latitude,
+                "longitude": longitude,
+                "accuracy_meters": accuracyMeters,
+                "captured_at": ISO8601DateFormatter().string(from: capturedAt),
+            ]
+        )
     }
 
     // MARK: - Notifications

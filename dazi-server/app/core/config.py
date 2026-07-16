@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     ALIYUN_DYPNS_TEMPLATE_CODE: str = "100001"
     ALIYUN_DYPNS_ENABLED: bool = False
 
+    # App registration invitation distribution links.
+    INVITATION_IOS_DISTRIBUTION_MODE: str = ""
+    INVITATION_TESTFLIGHT_PUBLIC_URL: str = ""
+    INVITATION_APP_STORE_URL: str = ""
+
     # App Store Connect API for TestFlight internal invitations
     ASC_KEY_ID: str = ""
     ASC_ISSUER_ID: str = ""

@@ -11,7 +11,8 @@ class LoginVerificationStaticTests(unittest.TestCase):
     def test_send_code_waits_for_real_sms_code(self):
         source = (ROOT / "dazi/Views/Onboarding/LoginView.swift").read_text(encoding="utf-8")
 
-        self.assertIn("let _ = try await api.sendVerificationCode(phone: phone)", source)
+        self.assertIn("let response = try await api.sendVerificationCode(", source)
+        self.assertIn("admissionToken = response.admissionToken", source)
         self.assertIn("codeSent = true", source)
         self.assertIn("code.count == 6", source)
         self.assertNotIn("internalTestCode", source)

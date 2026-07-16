@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fbf8f1">
+  <title>i搭不搭好友邀请</title>
+  <style>
+    :root{--paper:#fbf8f1;--card:#fffdf9;--ink:#1d2429;--muted:#6d7479;--green:#3e8258;--soft:#e2f1e7;--line:#e9e0d5}
+    *{box-sizing:border-box} body{margin:0;background:var(--paper);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif}
+    main{width:min(520px,100%);min-height:100vh;margin:auto;padding:calc(36px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom));display:flex;flex-direction:column;justify-content:center}
+    .brand{font-size:18px;font-weight:750;margin-bottom:18px}.brand i{font-style:normal;color:var(--green)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:28px 22px;box-shadow:0 24px 70px rgba(55,45,35,.09);text-align:center}
+    .eyebrow{color:var(--green);font-size:13px;font-weight:700}.title{font-size:28px;line-height:1.25;margin:10px 0}.desc{color:var(--muted);font-size:15px;margin:0 auto 22px;max-width:360px}
+    .code{font:750 30px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:4px;padding:16px;background:var(--soft);border-radius:16px;margin:14px 0 8px}.status{font-size:13px;color:var(--muted);min-height:22px}
+    .actions{display:grid;gap:11px;margin-top:22px}.button{border:0;border-radius:15px;min-height:52px;padding:0 16px;font:650 16px inherit;display:flex;align-items:center;justify-content:center;text-decoration:none;cursor:pointer}.primary{background:var(--green);color:white}.secondary{background:white;color:var(--ink);border:1px solid var(--line)}.button[aria-disabled=true]{opacity:.45;pointer-events:none}
+    .pair{display:grid;grid-template-columns:1fr 1fr;gap:10px}.note{font-size:12px;color:var(--muted);margin:18px 5px 0;line-height:1.55}
+    .loading{opacity:.55} #invalid{display:none;color:#a54839;background:#fff0ec;padding:12px;border-radius:12px;margin-top:14px;font-size:14px}
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand"><i>i</i>搭不搭</div>
+  <section class="card loading" id="card">
+    <div class="eyebrow">好友邀请</div>
+    <h1 class="title">一起找到合适的活动搭子</h1>
+    <p class="desc">安装 i搭不搭 后，注册时会自动带入邀请码；如果没有自动填入，也可以复制后手动输入。</p>
+    <div class="code" id="code">--------</div>
+    <div class="status" id="status">正在检查邀请码…</div>
+    <div id="invalid">这个邀请码当前不可用，请向好友获取新的邀请码。</div>
+    <div class="actions">
+      <a class="button primary" id="install" aria-disabled="true">通过 TestFlight 安装</a>
+      <a class="button secondary" id="open">已安装，打开 i搭不搭</a>
+      <div class="pair">
+        <button class="button secondary" id="share">分享给好友</button>
+        <button class="button secondary" id="copy">复制邀请码</button>
+      </div>
+    </div>
+    <p class="note">TestFlight 只负责安装，邀请码用于 App 内新用户注册。正式上架 App Store 后，这个邀请链接仍然有效。</p>
+  </section>
+</main>
+<script>
+  const parts = location.pathname.split('/').filter(Boolean);
+  const code = (parts[0] === 'i' && parts[1] ? parts[1] : '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,8);
+  const shareURL = `https://idabuda.com/i/${code}`;
+  const card = document.querySelector('#card');
+  const codeNode = document.querySelector('#code');
+  const statusNode = document.querySelector('#status');
+  const install = document.querySelector('#install');
+  const open = document.querySelector('#open');
+  codeNode.textContent = code || '--------';
+  open.href = `${shareURL}?open=1`;
+
+  async function load() {
+    try {
+      const [statusResponse, policyResponse] = await Promise.all([
+        fetch(`/api/v1/invitations/${encodeURIComponent(code)}/status`),
+        fetch('/api/v1/auth/registration-policy')
+      ]);
+      const invitation = await statusResponse.json();
+      const policy = await policyResponse.json();
+      if (invitation.valid) {
+        statusNode.textContent = `当前还可邀请 ${invitation.available} 位好友`;
+      } else {
+        statusNode.textContent = '';
+        document.querySelector('#invalid').style.display = 'block';
+        document.querySelector('#share').setAttribute('aria-disabled','true');
+      }
+      if (policy.download_url) {
+        install.href = policy.download_url;
+        install.removeAttribute('aria-disabled');
+      } else {
+        install.textContent = policy.ios_distribution_mode === 'app_store' ? 'App Store 链接配置中' : 'TestFlight 链接配置中';
+      }
+      if (policy.ios_distribution_mode === 'app_store' && policy.download_url) install.textContent = '前往 App Store 安装';
+    } catch (_) {
+      statusNode.textContent = '暂时无法检查邀请码，请稍后刷新';
+    } finally {
+      card.classList.remove('loading');
+    }
+  }
+
+  document.querySelector('#copy').addEventListener('click', async () => {
+    await navigator.clipboard.writeText(code);
+    document.querySelector('#copy').textContent = '已复制';
+  });
+  document.querySelector('#share').addEventListener('click', async () => {
+    const data = {title:'i搭不搭好友邀请',text:`我在 i搭不搭 等你。邀请码：${code}`,url:shareURL};
+    if (navigator.share) await navigator.share(data); else await navigator.clipboard.writeText(shareURL);
+  });
+  load();
+</script>
+</body>
+</html>

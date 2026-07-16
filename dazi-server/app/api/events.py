@@ -16,6 +16,7 @@ from app.models.event import Event
 from app.api.schemas import EventCreate, EventUpdate, EventResponse, EventPlazaResponse
 from app.services.match_blocklist_service import clear_event_match_state
 from app.services.matching_tasks import schedule_event_matching
+from app.services.invitation_reward_service import record_invitation_milestone_safely
 
 router = APIRouter(prefix="/api/v1/events", tags=["events"])
 
@@ -60,6 +61,13 @@ async def create_event(
         event.location, event.preferences, event.constraints
     )
     event.embedding = await embedding_service.encode(text)
+
+    await record_invitation_milestone_safely(
+        db,
+        user_id=user_id,
+        milestone_type="first_event_publish",
+        source_event_id=event.id,
+    )
 
     schedule_event_matching(background_tasks, event.id)
     return event

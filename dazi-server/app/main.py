@@ -26,6 +26,14 @@ from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage, ChatRoomVote,
 from app.models.prompt import PromptTemplate  # noqa: F401
 from app.models.beta_signup import BetaSignup  # noqa: F401
 from app.models.site_feedback import SiteFeedback  # noqa: F401
+from app.models.invitation import (  # noqa: F401
+    InvitationLedger,
+    InvitationMilestone,
+    InvitationProgram,
+    LocationVerification,
+    SignupAdmission,
+    UserInvitationAccount,
+)
 
 # 导入路由
 from app.api.auth import router as auth_router
@@ -38,6 +46,8 @@ from app.api.feedback import router as feedback_router
 from app.api.admin import router as admin_router
 from app.api.ws import router as ws_router
 from app.api.notifications import router as notifications_router
+from app.api.invitations import router as invitations_router
+from app.api.location_eligibility import router as location_eligibility_router
 
 # 配置日志 + 内存缓冲区
 log_buffer.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
@@ -98,11 +108,53 @@ async def lifespan(app: FastAPI):
 
 
 async def _ensure_runtime_schema(conn) -> None:
-    """Backfill additive columns for existing databases.
-
-    The project currently creates tables at startup instead of running Alembic
-    revisions, so additive schema changes need a lightweight runtime guard.
-    """
+    """Backfill additive columns and bootstrap singleton runtime state."""
+    await conn.execute(
+        text(
+            """
+            INSERT INTO invitation_programs (
+                id,
+                registration_mode,
+                launch_city_code,
+                qualified_target,
+                location_valid_days,
+                qualified_user_count,
+                ios_distribution_mode,
+                created_at,
+                updated_at
+            )
+            VALUES (1, 'open', '310000', 500, 30, 0, 'testflight', NOW(), NOW())
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+    )
+    await conn.execute(
+        text(
+            """
+            UPDATE invitation_programs
+            SET ios_distribution_mode = CASE
+                    WHEN :distribution_mode IN ('testflight', 'app_store')
+                    THEN :distribution_mode
+                    ELSE ios_distribution_mode
+                END,
+                testflight_public_url = CASE
+                    WHEN :testflight_url <> '' THEN :testflight_url
+                    ELSE testflight_public_url
+                END,
+                app_store_url = CASE
+                    WHEN :app_store_url <> '' THEN :app_store_url
+                    ELSE app_store_url
+                END,
+                updated_at = NOW()
+            WHERE id = 1
+            """
+        ),
+        {
+            "distribution_mode": settings.INVITATION_IOS_DISTRIBUTION_MODE,
+            "testflight_url": settings.INVITATION_TESTFLIGHT_PUBLIC_URL,
+            "app_store_url": settings.INVITATION_APP_STORE_URL,
+        },
+    )
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_event_visibility VARCHAR(20) DEFAULT 'partial'"))
     await conn.execute(text("UPDATE users SET profile_event_visibility = 'partial' WHERE profile_event_visibility IS NULL"))
@@ -131,6 +183,57 @@ async def _ensure_runtime_schema(conn) -> None:
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS superseded_by_id UUID"))
     await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_push_device_tokens_token_unique ON push_device_tokens(token)"))
     await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_push_device_tokens_user_active ON push_device_tokens(user_id, is_active)"))
+    await conn.execute(
+        text(
+            """
+            INSERT INTO invitation_milestones (
+                id, user_id, milestone_type, status, source_event_id, created_at
+            )
+            SELECT
+                gen_random_uuid(), first_event.user_id, 'first_event_publish',
+                'pending_location', first_event.id, NOW()
+            FROM (
+                SELECT DISTINCT ON (user_id) id, user_id
+                FROM events
+                WHERE status <> 'cancelled'
+                ORDER BY user_id, created_at ASC
+            ) AS first_event
+            ON CONFLICT (user_id, milestone_type) DO NOTHING
+            """
+        )
+    )
+    await conn.execute(
+        text(
+            """
+            WITH matched_users AS (
+                SELECT event_a.user_id, event_a.id AS event_id,
+                       rooms.id AS room_id, rooms.created_at
+                FROM chat_rooms AS rooms
+                JOIN events AS event_a ON event_a.id = rooms.event_id_a
+                WHERE rooms.phase = 'matched'
+                UNION ALL
+                SELECT event_b.user_id, event_b.id AS event_id,
+                       rooms.id AS room_id, rooms.created_at
+                FROM chat_rooms AS rooms
+                JOIN events AS event_b ON event_b.id = rooms.event_id_b
+                WHERE rooms.phase = 'matched'
+            ), first_matches AS (
+                SELECT DISTINCT ON (user_id) user_id, event_id, room_id
+                FROM matched_users
+                ORDER BY user_id, created_at ASC
+            )
+            INSERT INTO invitation_milestones (
+                id, user_id, milestone_type, status,
+                source_event_id, source_chat_room_id, created_at
+            )
+            SELECT
+                gen_random_uuid(), user_id, 'first_match', 'pending_location',
+                event_id, room_id, NOW()
+            FROM first_matches
+            ON CONFLICT (user_id, milestone_type) DO NOTHING
+            """
+        )
+    )
 
 
 app = FastAPI(
@@ -167,6 +270,8 @@ app.include_router(feedback_router)
 app.include_router(admin_router)
 app.include_router(ws_router)
 app.include_router(notifications_router)
+app.include_router(invitations_router)
+app.include_router(location_eligibility_router)
 
 # 静态文件
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 
 struct ProfileView: View {
     @Environment(DataStore.self) private var dataStore
@@ -8,6 +9,7 @@ struct ProfileView: View {
     @State private var editingMemory: AgentMemory?
     @State private var editMemoryText = ""
     @State private var showEditGallery = false
+    @State private var showInvitationCenter = false
 
     var body: some View {
         NavigationStack {
@@ -17,6 +19,7 @@ struct ProfileView: View {
                     agentCard
                     interestsSection
                     statsCard
+                    invitationEntryCard
                     gallerySection
                     memorySection
                     aboutSection
@@ -56,6 +59,10 @@ struct ProfileView: View {
             }
             .sheet(isPresented: $showEditAgent) {
                 EditAgentView()
+                    .environment(dataStore)
+            }
+            .sheet(isPresented: $showInvitationCenter) {
+                InvitationCenterView()
                     .environment(dataStore)
             }
             .sheet(item: $editingMemory) { memory in
@@ -191,6 +198,38 @@ struct ProfileView: View {
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+    }
+
+    private var invitationEntryCard: some View {
+        Button {
+            showInvitationCenter = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "person.2.badge.plus")
+                    .font(.title2)
+                    .foregroundStyle(AppTheme.primaryColor)
+                    .frame(width: 44, height: 44)
+                    .background(AppTheme.primaryColor.opacity(0.1))
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("邀请好友")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("发布和匹配成功可获得邀请次数")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(16)
+            .background(AppTheme.cardBackground)
+            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+            .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+        }
+        .buttonStyle(.plain)
     }
 
     private var interestsSection: some View {
@@ -507,6 +546,200 @@ struct ProfileView: View {
         case .style: return "风格"
         case .feedback: return "反馈"
         }
+    }
+}
+
+private struct InvitationCenterView: View {
+    @Environment(DataStore.self) private var dataStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var invitation: APIInvitationMeResponse?
+    @State private var isLoading = true
+    @State private var errorMessage: String?
+    @State private var copiedMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 20) {
+                    if isLoading {
+                        ProgressView("正在读取邀请资格…")
+                            .padding(.top, 80)
+                    } else if let invitation, let code = invitation.code {
+                        invitationBalance(invitation, code: code)
+                    } else {
+                        earningGuide
+                    }
+
+                    if let errorMessage {
+                        Text(errorMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                }
+                .padding(20)
+            }
+            .background(AppTheme.backgroundColor)
+            .navigationTitle("邀请好友")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+            .task { await loadInvitation() }
+            .refreshable { await loadInvitation() }
+            .alert("已复制", isPresented: Binding(
+                get: { copiedMessage != nil },
+                set: { if !$0 { copiedMessage = nil } }
+            )) {
+                Button("好") { copiedMessage = nil }
+            } message: {
+                Text(copiedMessage ?? "")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func invitationBalance(_ value: APIInvitationMeResponse, code: String) -> some View {
+        let shareURL = URL(string: value.shareURL ?? "https://idabuda.com/i/\(code)")!
+        VStack(spacing: 10) {
+            Text("还可以邀请")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("\(value.available)")
+                .font(.system(size: 58, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.primaryColor)
+            Text("位好友")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            Text(code)
+                .font(.title2.monospaced().weight(.semibold))
+                .tracking(3)
+                .padding(.top, 8)
+            Text("长期邀请码")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusXL))
+
+        ShareLink(
+            item: shareURL,
+            subject: Text("来自 i搭不搭 的邀请"),
+            message: Text("我在 i搭不搭 等你，一起找合适的活动搭子。邀请码：\(code)")
+        ) {
+            Label("邀请微信好友", systemImage: "square.and.arrow.up")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(value.available > 0 ? AppTheme.primaryColor : Color.secondary)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        }
+        .disabled(value.available <= 0)
+
+        HStack(spacing: 12) {
+            copyButton(title: "复制链接", value: shareURL.absoluteString)
+            copyButton(title: "复制邀请码", value: code)
+        }
+
+        VStack(alignment: .leading, spacing: 12) {
+            Text("获得记录")
+                .font(.headline)
+            milestoneRow(
+                title: "首次发布活动",
+                reward: "+3",
+                status: value.milestones["first_event_publish"]
+            )
+            milestoneRow(
+                title: "首次成功匹配",
+                reward: "+2",
+                status: value.milestones["first_match"]
+            )
+        }
+        .padding(16)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+    }
+
+    private var earningGuide: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "mappin.and.ellipse")
+                .font(.system(size: 42))
+                .foregroundStyle(AppTheme.primaryColor)
+            Text("在上海完成真实定位后获得邀请资格")
+                .font(.headline)
+                .multilineTextAlignment(.center)
+            Text("首次发布活动可获得 3 次邀请，首次成功匹配再获得 2 次。定位只用于资格判断，不保存精确坐标。")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Button {
+                dataStore.locationManager.requestPermission()
+                dataStore.locationManager.refreshLocation()
+                Task {
+                    try? await Task.sleep(for: .seconds(2))
+                    await loadInvitation()
+                }
+            } label: {
+                Label("刷新上海定位资格", systemImage: "location.fill")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(AppTheme.primaryColor)
+        }
+        .padding(24)
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusXL))
+    }
+
+    private func copyButton(title: String, value: String) -> some View {
+        Button {
+            UIPasteboard.general.string = value
+            copiedMessage = title
+        } label: {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+        }
+        .buttonStyle(.bordered)
+        .tint(AppTheme.primaryColor)
+    }
+
+    private func milestoneRow(title: String, reward: String, status: String?) -> some View {
+        HStack {
+            Image(systemName: status == "settled" ? "checkmark.circle.fill" : "circle")
+                .foregroundStyle(status == "settled" ? AppTheme.primaryColor : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.subheadline.weight(.medium))
+                if status == "pending_location" {
+                    Text("等待上海定位确认")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
+            }
+            Spacer()
+            Text(reward)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AppTheme.primaryColor)
+        }
+    }
+
+    @MainActor
+    private func loadInvitation() async {
+        isLoading = invitation == nil
+        errorMessage = nil
+        do {
+            invitation = try await APIClient.shared.getMyInvitation()
+        } catch {
+            errorMessage = "暂时无法读取邀请信息，请稍后重试"
+        }
+        isLoading = false
     }
 }
 

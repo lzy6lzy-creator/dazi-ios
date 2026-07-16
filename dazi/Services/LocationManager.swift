@@ -7,6 +7,9 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
 
     var latitude: Double = 0
     var longitude: Double = 0
+    var accuracyMeters: Double = 0
+    var capturedAt: Date?
+    var isLaunchCityEligible: Bool?
     var cityName: String = ""
     var districtName: String = ""
     var streetName: String = ""
@@ -47,12 +50,22 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         guard let location = locations.last else { return }
         let lat = location.coordinate.latitude
         let lng = location.coordinate.longitude
+        let accuracy = location.horizontalAccuracy
+        let timestamp = location.timestamp
 
         Task { @MainActor in
             self.latitude = lat
             self.longitude = lng
+            self.accuracyMeters = accuracy
+            self.capturedAt = timestamp
             self.hasLocation = true
             self.reverseGeocode(location: location)
+            self.uploadInvitationEligibility(
+                latitude: lat,
+                longitude: lng,
+                accuracyMeters: accuracy,
+                capturedAt: timestamp
+            )
         }
     }
 
@@ -93,6 +106,32 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
                 if !self.districtName.isEmpty { parts.append(self.districtName) }
                 if !self.streetName.isEmpty { parts.append(self.streetName) }
                 self.locationString = parts.isEmpty ? "未知位置" : parts.joined(separator: " ")
+            }
+        }
+    }
+
+    private func uploadInvitationEligibility(
+        latitude: Double,
+        longitude: Double,
+        accuracyMeters: Double,
+        capturedAt: Date
+    ) {
+        guard APIClient.shared.isLoggedIn, accuracyMeters > 0, accuracyMeters <= 1000 else {
+            return
+        }
+        Task {
+            do {
+                let result = try await APIClient.shared.verifyLaunchCityLocation(
+                    latitude: latitude,
+                    longitude: longitude,
+                    accuracyMeters: accuracyMeters,
+                    capturedAt: capturedAt
+                )
+                await MainActor.run {
+                    self.isLaunchCityEligible = result.isLaunchCity
+                }
+            } catch {
+                print("[Invitation] Location eligibility upload failed: \(error.localizedDescription)")
             }
         }
     }

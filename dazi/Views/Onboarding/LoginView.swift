@@ -7,14 +7,18 @@ struct LoginView: View {
 
     @State private var phone = ""
     @State private var code = ""
+    @State private var inviteCode = ""
+    @State private var invitationRequired = false
+    @State private var admissionToken: String?
     @State private var codeSent = false
     @State private var countdown = 0
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var didAppear = false
+    @AppStorage("pendingInvitationCode") private var pendingInvitationCode = ""
     @FocusState private var focusedField: Field?
 
-    private enum Field { case phone, code }
+    private enum Field { case phone, inviteCode, code }
 
     private let api = APIClient.shared
 
@@ -50,6 +54,7 @@ struct LoginView: View {
             focusedField = nil
         }
         .onAppear {
+            applyPendingInvitationCode()
             guard !didAppear else { return }
             if reduceMotion {
                 didAppear = true
@@ -58,6 +63,22 @@ struct LoginView: View {
                     didAppear = true
                 }
             }
+        }
+        .task {
+            await loadRegistrationPolicy()
+        }
+        .onChange(of: phone) { _, _ in
+            invalidateSentCode()
+        }
+        .onChange(of: inviteCode) { _, newValue in
+            let normalized = normalizeInviteCode(newValue)
+            if normalized != newValue {
+                inviteCode = normalized
+            }
+            invalidateSentCode()
+        }
+        .onChange(of: pendingInvitationCode) { _, _ in
+            applyPendingInvitationCode()
         }
     }
 
@@ -93,6 +114,10 @@ struct LoginView: View {
     private var loginCard: some View {
         VStack(spacing: 16) {
             phoneField
+            if invitationRequired {
+                inviteCodeField
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
             codeField
 
             if let errorMessage {
@@ -201,12 +226,32 @@ struct LoginView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: canSendCode)
     }
 
+    private var inviteCodeField: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "ticket")
+                .foregroundStyle(LoginPalette.accent)
+            TextField("8 位邀请码", text: $inviteCode)
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .focused($focusedField, equals: .inviteCode)
+                .font(.system(size: 17, design: .monospaced))
+                .foregroundStyle(LoginPalette.primaryText)
+        }
+        .padding(.horizontal, 18)
+        .frame(height: 56)
+        .background(fieldBackground(isFocused: focusedField == .inviteCode))
+        .overlay(fieldStroke(isFocused: focusedField == .inviteCode))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
     private var canSendCode: Bool {
-        phone.count == 11 && countdown == 0
+        phone.count == 11
+            && countdown == 0
+            && (!invitationRequired || inviteCode.count == 8)
     }
 
     private var canLogin: Bool {
-        phone.count == 11 && code.count == 6
+        phone.count == 11 && code.count == 6 && admissionToken != nil
     }
 
     private func topBrandPadding(for height: CGFloat) -> CGFloat {
@@ -229,8 +274,12 @@ struct LoginView: View {
 
         Task {
             do {
-                let _ = try await api.sendVerificationCode(phone: phone)
+                let response = try await api.sendVerificationCode(
+                    phone: phone,
+                    inviteCode: invitationRequired ? inviteCode : nil
+                )
                 await MainActor.run {
+                    admissionToken = response.admissionToken
                     codeSent = true
                     startCountdown()
                 }
@@ -246,6 +295,13 @@ struct LoginView: View {
         if case APIError.serverError(let statusCode, let body) = error {
             if statusCode == 429 {
                 return "请求过于频繁，请稍后再试"
+            }
+            if statusCode == 403 || body.contains("需要邀请码") {
+                invitationRequired = true
+                return "当前注册需要邀请码"
+            }
+            if statusCode == 400 && body.contains("邀请码不可用") {
+                return "邀请码不可用，请检查后重试"
             }
             if statusCode == 503 || body.contains("短信服务暂时不可用") {
                 return "短信服务暂时不可用，请稍后重试"
@@ -265,14 +321,18 @@ struct LoginView: View {
     }
 
     private func doLogin() {
-        guard canLogin else { return }
+        guard canLogin, let admissionToken else { return }
         isLoading = true
         errorMessage = nil
         focusedField = nil
 
         Task {
             do {
-                let result = try await api.login(phone: phone, code: code)
+                let result = try await api.login(
+                    phone: phone,
+                    code: code,
+                    admissionToken: admissionToken
+                )
                 await MainActor.run {
                     isLoading = false
                     onLoginComplete(result.isNewUser ?? true)
@@ -284,6 +344,37 @@ struct LoginView: View {
                 }
             }
         }
+    }
+
+    @MainActor
+    private func loadRegistrationPolicy() async {
+        do {
+            let policy = try await api.getRegistrationPolicy()
+            invitationRequired = policy.invitationRequired
+        } catch {
+            // send-code remains the source of truth if policy loading is unavailable.
+        }
+    }
+
+    private func normalizeInviteCode(_ value: String) -> String {
+        String(
+            value.uppercased()
+                .filter { $0.isLetter || $0.isNumber }
+                .prefix(8)
+        )
+    }
+
+    private func applyPendingInvitationCode() {
+        inviteCode = normalizeInviteCode(pendingInvitationCode)
+        invitationRequired = !inviteCode.isEmpty
+    }
+
+    private func invalidateSentCode() {
+        guard admissionToken != nil else { return }
+        admissionToken = nil
+        code = ""
+        codeSent = false
+        countdown = 0
     }
 }
 

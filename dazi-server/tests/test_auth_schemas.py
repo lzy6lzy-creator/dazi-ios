@@ -30,6 +30,22 @@ class AuthSchemaTests(unittest.TestCase):
                 with self.assertRaises(ValidationError):
                     AuthLoginRequest(phone="13800000000", code=code)
 
+    def test_invitation_admission_fields_are_optional_and_trimmed(self):
+        send_request = AuthSendCodeRequest(
+            phone="13800000000",
+            invite_code=" abcd2345 ",
+            install_id=" install-1 ",
+        )
+        login_request = AuthLoginRequest(
+            phone="13800000000",
+            code="123456",
+            admission_token=" admission-token ",
+        )
+
+        self.assertEqual(send_request.invite_code, "ABCD2345")
+        self.assertEqual(send_request.install_id, "install-1")
+        self.assertEqual(login_request.admission_token, "admission-token")
+
 
 if __name__ == "__main__":
     unittest.main()
