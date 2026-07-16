@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import tempfile
 import unittest
 from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import patch
 
 from app.api.admin import invite_beta_signup_record
 from app.models.beta_signup import BetaSignup
@@ -46,16 +43,13 @@ class BetaSignupInviteSyncTests(unittest.IsolatedAsyncioTestCase):
             updated_at=now,
         )
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            phones_path = str(Path(tmpdir) / "internal_test_phones.txt")
-            with patch("app.api.admin.settings.INTERNAL_TEST_PHONES_FILE", phones_path):
-                payload = await invite_beta_signup_record(signup, client)  # type: ignore[arg-type]
+        payload = await invite_beta_signup_record(signup, client)  # type: ignore[arg-type]
 
         self.assertEqual(client.calls, ["invite:tester@example.com:测试用户", "sync:tester@example.com"])
         self.assertEqual(signup.status, "invited")
         self.assertEqual(payload["app_store_connect"], client.synced_status)
         self.assertEqual(payload["app_store_connect_invite_result"], client.invite_result)
-        self.assertEqual(payload["phone_status"], "added")
+        self.assertNotIn("phone_status", payload)
 
 
 if __name__ == "__main__":

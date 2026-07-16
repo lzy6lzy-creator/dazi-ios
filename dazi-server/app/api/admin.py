@@ -10,7 +10,6 @@ import asyncio
 import csv
 import io
 import logging
-from pathlib import Path
 from typing import Optional
 from uuid import UUID
 from datetime import datetime, timezone
@@ -60,24 +59,6 @@ class BetaSignupStatusUpdate(BaseModel):
 
 class FeedbackStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=30)
-
-
-def append_internal_test_phone(phone: Optional[str], *, name: str, email: str) -> str:
-    if not phone:
-        return "missing"
-    phones_path = Path(settings.INTERNAL_TEST_PHONES_FILE)
-    try:
-        phones_path.parent.mkdir(parents=True, exist_ok=True)
-        existing = phones_path.read_text(encoding="utf-8") if phones_path.exists() else ""
-        if phone in existing:
-            return "already_present"
-        with phones_path.open("a", encoding="utf-8") as file:
-            if existing and not existing.endswith("\n"):
-                file.write("\n")
-            file.write(f"{phone}  # {name} {email} TestFlight internal invite\n")
-        return "added"
-    except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"写入内测手机号白名单失败: {exc}") from exc
 
 
 def beta_signup_status_after_invite(asc_result: dict) -> str:
@@ -710,7 +691,6 @@ async def update_beta_signup_status(
 
 
 async def invite_beta_signup_record(signup: BetaSignup, client: AppStoreConnectClient) -> dict:
-    phone_status = append_internal_test_phone(signup.contact, name=signup.name, email=signup.email)
     asc_result = await client.invite_internal_tester(
         email=signup.email,
         name=signup.name,
@@ -721,7 +701,6 @@ async def invite_beta_signup_record(signup: BetaSignup, client: AppStoreConnectC
     signup.status = "accepted" if invite_status == "accepted" else synced_status
     signup.updated_at = datetime.now(timezone.utc)
     payload = beta_signup_payload(signup)
-    payload["phone_status"] = phone_status
     payload["app_store_connect"] = asc_status
     payload["app_store_connect_invite_result"] = asc_result
     return payload
@@ -789,7 +768,6 @@ async def invite_all_beta_signups_internal_task(db: AsyncSession) -> dict:
                 "ok": True,
                 "signup": payload,
                 "app_store_connect": payload.get("app_store_connect"),
-                "phone_status": payload.get("phone_status"),
             })
         except AppStoreConnectError as exc:
             failed += 1

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+import re
 from uuid import UUID
 from typing import Any, Optional
 
@@ -7,13 +8,46 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ── Auth ──
 
+MAINLAND_PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
+SMS_CODE_RE = re.compile(r"^\d{6}$")
+
+
+def normalize_mainland_phone(value: object) -> str:
+    phone = str(value or "").strip().replace(" ", "").replace("-", "")
+    if phone.startswith("+86"):
+        phone = phone[3:]
+    elif phone.startswith("86") and len(phone) == 13:
+        phone = phone[2:]
+    if not MAINLAND_PHONE_RE.fullmatch(phone):
+        raise ValueError("请填写 11 位中国大陆手机号")
+    return phone
+
+
 class AuthSendCodeRequest(BaseModel):
     phone: str
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value):
+        return normalize_mainland_phone(value)
 
 
 class AuthLoginRequest(BaseModel):
     phone: str
     code: str
+
+    @field_validator("phone", mode="before")
+    @classmethod
+    def validate_phone(cls, value):
+        return normalize_mainland_phone(value)
+
+    @field_validator("code", mode="before")
+    @classmethod
+    def validate_code(cls, value):
+        code = str(value or "").strip()
+        if not SMS_CODE_RE.fullmatch(code):
+            raise ValueError("验证码必须是 6 位数字")
+        return code
 
 
 class AuthTokenResponse(BaseModel):

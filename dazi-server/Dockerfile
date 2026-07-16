@@ -16,7 +16,6 @@ RUN pip install --no-cache-dir --timeout 120 \
 
 # Copy app code
 COPY app/ /code/app/
-COPY internal_test_phones.txt /code/internal_test_phones.txt
 
 EXPOSE 8000
 

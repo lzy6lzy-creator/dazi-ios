@@ -79,7 +79,8 @@ class BetaSignupStaticTests(unittest.TestCase):
         self.assertIn('@router.patch("/beta-signups/{signup_id}/status")', admin_api)
         self.assertIn('@router.post("/beta-signups/{signup_id}/invite-internal")', admin_api)
         self.assertIn("ASC_KEY_ID", admin_api)
-        self.assertIn("INTERNAL_TEST_PHONES_FILE", admin_api)
+        self.assertNotIn("INTERNAL_TEST_PHONES_FILE", admin_api)
+        self.assertNotIn("append_internal_test_phone", admin_api)
         self.assertIn("setBetaSignupStatus", admin_html)
         self.assertIn("inviteBetaSignup", admin_html)
         self.assertIn("rejectBetaSignup", admin_html)
@@ -130,6 +131,31 @@ class BetaSignupStaticTests(unittest.TestCase):
         self.assertIn("/opt/dazi-secrets:/code/runtime-secrets:ro", compose)
         self.assertIn("ASC_PRIVATE_KEY_PATH=/code/runtime-secrets/AuthKey_XXXXXX.p8", env_example)
         self.assertNotIn("ASC_PRIVATE_KEY_PATH=/code/runtime-config/AuthKey_XXXXXX.p8", env_example)
+
+    def test_app_auth_configuration_uses_pnvs_without_phone_whitelist(self):
+        config = read_text("app/core/config.py")
+        compose = read_text("docker-compose.prod.yml")
+        env_example = read_text(".env.example")
+        dockerfile = read_text("Dockerfile")
+
+        required_keys = (
+            "ALIYUN_DYPNS_ACCESS_KEY_ID",
+            "ALIYUN_DYPNS_ACCESS_KEY_SECRET",
+            "ALIYUN_DYPNS_REGION_ID",
+            "ALIYUN_DYPNS_SCHEME_NAME",
+            "ALIYUN_DYPNS_SIGN_NAME",
+            "ALIYUN_DYPNS_TEMPLATE_CODE",
+            "ALIYUN_DYPNS_ENABLED",
+        )
+        for key in required_keys:
+            with self.subTest(key=key):
+                self.assertIn(key, config)
+                self.assertIn(key, compose)
+                self.assertIn(key, env_example)
+
+        for content in (config, compose, env_example):
+            self.assertNotIn("INTERNAL_TEST_", content)
+        self.assertNotIn("internal_test_phones.txt", dockerfile)
 
 
 if __name__ == "__main__":

@@ -20,11 +20,14 @@ class Settings(BaseSettings):
     # Admin — 必须通过环境变量或 .env 提供，无默认值
     ADMIN_TOKEN: str
 
-    # Internal TestFlight / staging login
-    INTERNAL_TEST_MODE: bool = False
-    INTERNAL_TEST_CODE: str = ""
-    INTERNAL_TEST_PHONES: str = ""
-    INTERNAL_TEST_PHONES_FILE: str = "internal_test_phones.txt"
+    # Alibaba Cloud Phone Number Verification Service (PNVS)
+    ALIYUN_DYPNS_ACCESS_KEY_ID: str = ""
+    ALIYUN_DYPNS_ACCESS_KEY_SECRET: str = ""
+    ALIYUN_DYPNS_REGION_ID: str = "cn-hangzhou"
+    ALIYUN_DYPNS_SCHEME_NAME: str = "默认方案"
+    ALIYUN_DYPNS_SIGN_NAME: str = ""
+    ALIYUN_DYPNS_TEMPLATE_CODE: str = "100001"
+    ALIYUN_DYPNS_ENABLED: bool = False
 
     # App Store Connect API for TestFlight internal invitations
     ASC_KEY_ID: str = ""
