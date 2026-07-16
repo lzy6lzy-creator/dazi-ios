@@ -17,7 +17,6 @@ struct LoginView: View {
     private enum Field { case phone, code }
 
     private let api = APIClient.shared
-    private let internalTestCode = "121212"
 
     var body: some View {
         ZStack {
@@ -207,7 +206,7 @@ struct LoginView: View {
     }
 
     private var canLogin: Bool {
-        phone.count == 11 && code.count >= 4
+        phone.count == 11 && code.count == 6
     }
 
     private func topBrandPadding(for height: CGFloat) -> CGFloat {
@@ -232,7 +231,6 @@ struct LoginView: View {
             do {
                 let _ = try await api.sendVerificationCode(phone: phone)
                 await MainActor.run {
-                    code = internalTestCode
                     codeSent = true
                     startCountdown()
                 }
@@ -245,11 +243,13 @@ struct LoginView: View {
     }
 
     private func messageForSendCodeError(_ error: Error) -> String {
-        if case APIError.serverError(let statusCode, let body) = error, statusCode == 403 {
-            if body.contains("未加入内部测试白名单") {
-                return "该手机号未加入内部测试白名单，请先联系管理员开通内测资格"
+        if case APIError.serverError(let statusCode, let body) = error {
+            if statusCode == 429 {
+                return "请求过于频繁，请稍后再试"
             }
-            return "该手机号暂未加入内部测试白名单"
+            if statusCode == 503 || body.contains("短信服务暂时不可用") {
+                return "短信服务暂时不可用，请稍后重试"
+            }
         }
         return "发送失败，请检查网络"
     }
