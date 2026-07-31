@@ -43,18 +43,18 @@ enum AppTheme {
             )
         case .warmGreen:
             return ThemePalette(
-                primaryColor: Color(red: 0.243, green: 0.510, blue: 0.345), // #3E8258
-                secondaryColor: Color(red: 0.29, green: 0.56, blue: 0.85),
-                agentColor: Color(red: 0.271, green: 0.706, blue: 0.769), // #45B4C4
-                warmAccent: Color(red: 1.0, green: 0.42, blue: 0.21), // #FF6B36
-                surfaceCream: Color(red: 0.984, green: 0.973, blue: 0.945), // #FBF8F1
-                primaryLight: Color(red: 0.243, green: 0.510, blue: 0.345).opacity(0.18),
-                backgroundColor: Color(red: 0.984, green: 0.973, blue: 0.945), // #FBF8F1
+                primaryColor: Color(red: 0.137, green: 0.420, blue: 0.353), // #236B5A
+                secondaryColor: Color(red: 0.851, green: 0.427, blue: 0.310), // #D96D4F
+                agentColor: Color(red: 0.184, green: 0.620, blue: 0.584), // #2F9E95
+                warmAccent: Color(red: 0.851, green: 0.427, blue: 0.310), // #D96D4F
+                surfaceCream: Color(red: 0.969, green: 0.953, blue: 0.922), // #F7F3EB
+                primaryLight: Color(red: 0.137, green: 0.420, blue: 0.353).opacity(0.18),
+                backgroundColor: Color(red: 0.969, green: 0.953, blue: 0.922), // #F7F3EB
                 cardBackground: Color.white,
-                agentBubbleColor: Color(red: 0.965, green: 0.945, blue: 0.902), // #F6F1E6
-                userBubbleColor: Color(red: 0.243, green: 0.510, blue: 0.345), // #3E8258
-                partnerBubbleColor: Color(red: 0.894, green: 0.941, blue: 0.988), // #E4F0FC
-                systemBubbleColor: Color(red: 0.949, green: 0.937, blue: 0.918) // #F2EFEA
+                agentBubbleColor: Color(red: 0.949, green: 0.925, blue: 0.886), // #F2ECE2
+                userBubbleColor: Color(red: 0.137, green: 0.420, blue: 0.353), // #236B5A
+                partnerBubbleColor: Color(red: 0.902, green: 0.957, blue: 0.945), // #E6F4F1
+                systemBubbleColor: Color(red: 0.933, green: 0.906, blue: 0.863) // #EEE7DC
             )
         }
     }
@@ -100,14 +100,14 @@ enum AppTheme {
     /// 活动类型颜色（关键词模糊匹配，支持开放类型）
     static func activityTypeColor(_ type: String) -> Color {
         let t = type.lowercased()
-        if t.contains("电影") || t.contains("影") || t.contains("剧") { return .blue }
-        if t.contains("吃") || t.contains("美食") || t.contains("火锅") || t.contains("烧烤") || t.contains("餐") { return .orange }
-        if t.contains("运动") || t.contains("徒步") || t.contains("爬") || t.contains("骑") || t.contains("球") || t.contains("跑") || t.contains("游泳") { return .green }
-        if t.contains("展") || t.contains("博物") || t.contains("画") || t.contains("艺术") { return .purple }
-        if t.contains("咖啡") || t.contains("茶") || t.contains("喝") { return .brown }
-        if t.contains("音乐") || t.contains("演出") || t.contains("演唱") || t.contains("live") { return .pink }
-        if t.contains("旅") || t.contains("露营") || t.contains("星") { return .cyan }
-        if t.contains("桌游") || t.contains("游戏") || t.contains("玩") { return .indigo }
+        if t.contains("电影") || t.contains("影") || t.contains("剧") { return agentColor }
+        if t.contains("吃") || t.contains("美食") || t.contains("火锅") || t.contains("烧烤") || t.contains("餐") { return warmAccent }
+        if t.contains("运动") || t.contains("徒步") || t.contains("爬") || t.contains("骑") || t.contains("球") || t.contains("跑") || t.contains("游泳") { return primaryColor }
+        if t.contains("展") || t.contains("博物") || t.contains("画") || t.contains("艺术") { return secondaryColor }
+        if t.contains("咖啡") || t.contains("茶") || t.contains("喝") { return Color(red: 0.62, green: 0.43, blue: 0.28) }
+        if t.contains("音乐") || t.contains("演出") || t.contains("演唱") || t.contains("live") { return Color(red: 0.72, green: 0.31, blue: 0.43) }
+        if t.contains("旅") || t.contains("露营") || t.contains("星") { return agentColor }
+        if t.contains("桌游") || t.contains("游戏") || t.contains("玩") { return Color(red: 0.43, green: 0.45, blue: 0.70) }
         return Color.secondary
     }
 
@@ -134,10 +134,10 @@ enum AppTheme {
 
     static func statusColor(for status: EventStatus) -> Color {
         switch status {
-        case .pending: return .orange
-        case .matching: return .blue
-        case .matched: return .green
-        case .active: return .purple
+        case .pending: return warmAccent
+        case .matching: return agentColor
+        case .matched: return primaryColor
+        case .active: return secondaryColor
         case .completed: return .gray
         case .cancelled: return .red
         }

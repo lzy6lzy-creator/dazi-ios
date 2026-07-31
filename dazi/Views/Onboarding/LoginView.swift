@@ -1,5 +1,11 @@
 import SwiftUI
 
+private enum LoginInvitationState: Equatable {
+    case hidden
+    case notRequired(target: Int)
+    case required(target: Int?)
+}
+
 struct LoginView: View {
     @Environment(DataStore.self) private var dataStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -8,7 +14,7 @@ struct LoginView: View {
     @State private var phone = ""
     @State private var code = ""
     @State private var inviteCode = ""
-    @State private var invitationRequired = false
+    @State private var invitationState: LoginInvitationState = .hidden
     @State private var admissionToken: String?
     @State private var codeSent = false
     @State private var countdown = 0
@@ -64,11 +70,8 @@ struct LoginView: View {
                 }
             }
         }
-        .task {
-            await loadRegistrationPolicy()
-        }
         .onChange(of: phone) { _, _ in
-            invalidateSentCode()
+            resetForPhoneChange()
         }
         .onChange(of: inviteCode) { _, newValue in
             let normalized = normalizeInviteCode(newValue)
@@ -114,7 +117,7 @@ struct LoginView: View {
     private var loginCard: some View {
         VStack(spacing: 16) {
             phoneField
-            if invitationRequired {
+            if invitationFieldVisible {
                 inviteCodeField
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
@@ -229,29 +232,61 @@ struct LoginView: View {
     private var inviteCodeField: some View {
         HStack(spacing: 12) {
             Image(systemName: "ticket")
-                .foregroundStyle(LoginPalette.accent)
-            TextField("8 位邀请码", text: $inviteCode)
-                .textInputAutocapitalization(.characters)
-                .autocorrectionDisabled()
-                .focused($focusedField, equals: .inviteCode)
-                .font(.system(size: 17, design: .monospaced))
-                .foregroundStyle(LoginPalette.primaryText)
+                .foregroundStyle(
+                    invitationNeedsInput ? LoginPalette.accent : LoginPalette.tertiaryText
+                )
+
+            switch invitationState {
+            case .notRequired(let target):
+                Text("前 \(target) 位用户免邀请码")
+                    .font(.system(size: 16))
+                    .foregroundStyle(LoginPalette.tertiaryText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            case .required:
+                TextField("8 位邀请码", text: $inviteCode)
+                    .textInputAutocapitalization(.characters)
+                    .autocorrectionDisabled()
+                    .focused($focusedField, equals: .inviteCode)
+                    .font(.system(size: 17, design: .monospaced))
+                    .foregroundStyle(LoginPalette.primaryText)
+            case .hidden:
+                EmptyView()
+            }
         }
         .padding(.horizontal, 18)
         .frame(height: 56)
-        .background(fieldBackground(isFocused: focusedField == .inviteCode))
-        .overlay(fieldStroke(isFocused: focusedField == .inviteCode))
+        .background(
+            invitationNeedsInput
+                ? fieldBackgroundColor(isFocused: focusedField == .inviteCode)
+                : LoginPalette.disabledFieldBackground
+        )
+        .overlay(
+            fieldStroke(
+                isFocused: invitationNeedsInput && focusedField == .inviteCode
+            )
+        )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private var invitationFieldVisible: Bool {
+        invitationState != .hidden
+    }
+
+    private var invitationNeedsInput: Bool {
+        if case .required = invitationState {
+            return true
+        }
+        return false
     }
 
     private var canSendCode: Bool {
         phone.count == 11
             && countdown == 0
-            && (!invitationRequired || inviteCode.count == 8)
+            && (!invitationNeedsInput || inviteCode.count == 8)
     }
 
     private var canLogin: Bool {
-        phone.count == 11 && code.count == 6 && admissionToken != nil
+        phone.count == 11 && code.count == 6
     }
 
     private func topBrandPadding(for height: CGFloat) -> CGFloat {
@@ -259,6 +294,10 @@ struct LoginView: View {
     }
 
     private func fieldBackground(isFocused: Bool) -> some ShapeStyle {
+        isFocused ? LoginPalette.focusedFieldBackground : LoginPalette.fieldBackground
+    }
+
+    private func fieldBackgroundColor(isFocused: Bool) -> Color {
         isFocused ? LoginPalette.focusedFieldBackground : LoginPalette.fieldBackground
     }
 
@@ -276,28 +315,67 @@ struct LoginView: View {
             do {
                 let response = try await api.sendVerificationCode(
                     phone: phone,
-                    inviteCode: invitationRequired ? inviteCode : nil
+                    inviteCode: invitationNeedsInput ? inviteCode : nil
                 )
                 await MainActor.run {
+                    applySendCodeResponse(response)
                     admissionToken = response.admissionToken
                     codeSent = true
                     startCountdown()
                 }
             } catch {
                 await MainActor.run {
-                    errorMessage = messageForSendCodeError(error)
+                    if let detail = invitationRequiredDetail(from: error) {
+                        invitationState = .required(target: detail.qualifiedTarget)
+                        focusedField = .inviteCode
+                        errorMessage = detail.message
+                    } else {
+                        errorMessage = messageForSendCodeError(error)
+                    }
                 }
             }
         }
     }
 
+    private func applySendCodeResponse(_ response: APISendCodeResponse) {
+        switch response.invitationState {
+        case "not_required":
+            if let target = response.qualifiedTarget {
+                invitationState = .notRequired(target: target)
+            } else {
+                invitationState = .hidden
+            }
+        case "required":
+            invitationState = .required(target: response.qualifiedTarget)
+        default:
+            invitationState = .hidden
+        }
+    }
+
+    private func invitationRequiredDetail(from error: Error) -> APIInvitationRequiredDetail? {
+        guard case APIError.serverError(let statusCode, let body) = error,
+              statusCode == 403,
+              let data = body.data(using: .utf8),
+              let envelope = try? JSONDecoder().decode(
+                  APIErrorDetailEnvelope<APIInvitationRequiredDetail>.self,
+                  from: data
+              ),
+              envelope.detail.code == "invitation_required" else {
+            return nil
+        }
+        return envelope.detail
+    }
+
     private func messageForSendCodeError(_ error: Error) -> String {
         if case APIError.serverError(let statusCode, let body) = error {
+            if statusCode == 403 && body.contains("未加入内部测试白名单") {
+                return "该手机号未加入内部测试白名单，请先联系管理员开通内测资格"
+            }
             if statusCode == 429 {
                 return "请求过于频繁，请稍后再试"
             }
             if statusCode == 403 || body.contains("需要邀请码") {
-                invitationRequired = true
+                invitationState = .required(target: nil)
                 return "当前注册需要邀请码"
             }
             if statusCode == 400 && body.contains("邀请码不可用") {
@@ -321,7 +399,7 @@ struct LoginView: View {
     }
 
     private func doLogin() {
-        guard canLogin, let admissionToken else { return }
+        guard canLogin else { return }
         isLoading = true
         errorMessage = nil
         focusedField = nil
@@ -346,16 +424,6 @@ struct LoginView: View {
         }
     }
 
-    @MainActor
-    private func loadRegistrationPolicy() async {
-        do {
-            let policy = try await api.getRegistrationPolicy()
-            invitationRequired = policy.invitationRequired
-        } catch {
-            // send-code remains the source of truth if policy loading is unavailable.
-        }
-    }
-
     private func normalizeInviteCode(_ value: String) -> String {
         String(
             value.uppercased()
@@ -366,30 +434,40 @@ struct LoginView: View {
 
     private func applyPendingInvitationCode() {
         inviteCode = normalizeInviteCode(pendingInvitationCode)
-        invitationRequired = !inviteCode.isEmpty
+        invitationState = inviteCode.isEmpty ? .hidden : .required(target: nil)
     }
 
     private func invalidateSentCode() {
-        guard admissionToken != nil else { return }
         admissionToken = nil
         code = ""
         codeSent = false
         countdown = 0
     }
+
+    private func resetForPhoneChange() {
+        invalidateSentCode()
+        if pendingInvitationCode.isEmpty {
+            inviteCode = ""
+            invitationState = .hidden
+        } else {
+            applyPendingInvitationCode()
+        }
+    }
 }
 
 private enum LoginPalette {
-    static let background = Color(red: 0.984, green: 0.973, blue: 0.945) // #FBF8F1
+    static let background = Color(red: 0.969, green: 0.953, blue: 0.922) // #F7F3EB
     static let primaryText = Color(red: 0.11, green: 0.14, blue: 0.18)
     static let secondaryText = Color(red: 0.43, green: 0.46, blue: 0.50)
     static let tertiaryText = Color(red: 0.62, green: 0.64, blue: 0.67)
-    static let accent = Color(red: 0.243, green: 0.510, blue: 0.345) // #0A7D6B
-    static let accentSoft = Color(red: 0.839, green: 0.937, blue: 0.902) // #D6EFE6
-    static let fieldBackground = Color(red: 0.957, green: 0.945, blue: 0.918) // #F4F1EA
-    static let focusedFieldBackground = Color(red: 0.976, green: 0.969, blue: 0.953)
+    static let accent = Color(red: 0.137, green: 0.420, blue: 0.353) // #236B5A
+    static let accentSoft = Color(red: 0.902, green: 0.957, blue: 0.945) // #E6F4F1
+    static let fieldBackground = Color(red: 0.949, green: 0.925, blue: 0.886) // #F2ECE2
+    static let focusedFieldBackground = Color(red: 0.976, green: 0.961, blue: 0.933) // #F9F5EE
+    static let disabledFieldBackground = Color(red: 0.925, green: 0.921, blue: 0.910)
     static let divider = Color.black.opacity(0.10)
     static let cardStroke = Color.black.opacity(0.06)
-    static let focusStroke = Color(red: 0.243, green: 0.510, blue: 0.345).opacity(0.35)
+    static let focusStroke = Color(red: 0.137, green: 0.420, blue: 0.353).opacity(0.35)
     static let disabledButton = Color(red: 0.80, green: 0.79, blue: 0.77)
 }
 

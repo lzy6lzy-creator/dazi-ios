@@ -1,7 +1,7 @@
 from datetime import date, datetime
 import re
 from uuid import UUID
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -82,6 +82,10 @@ class AuthSendCodeResponse(BaseModel):
     admission_token: str
     expires_in: int
     registration_mode: str
+    user_state: Literal["existing", "whitelist", "new"]
+    invitation_state: Literal["hidden", "not_required", "required"]
+    qualified_user_count: int
+    qualified_target: int
 
 
 class RegistrationPolicyResponse(BaseModel):

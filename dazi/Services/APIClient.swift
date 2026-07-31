@@ -3,8 +3,8 @@ import Foundation
 // MARK: - API Configuration
 
 enum APIConfig {
-    // 内部 TestFlight 临时入口；ICP备案完成后切回 https://idabuda.com。
-    static let baseURL = "http://47.103.127.95"
+    // 正式服务域名
+    static let baseURL = "https://idabuda.com"
 }
 
 // MARK: - API Errors
@@ -67,16 +67,43 @@ struct APIRegistrationPolicyResponse: Codable {
 
 struct APISendCodeResponse: Codable {
     let message: String
-    let admissionToken: String
-    let expiresIn: Int
-    let registrationMode: String
+    let admissionToken: String?
+    let expiresIn: Int?
+    let registrationMode: String?
+    let userState: String?
+    let invitationState: String?
+    let qualifiedUserCount: Int?
+    let qualifiedTarget: Int?
 
     enum CodingKeys: String, CodingKey {
         case message
         case admissionToken = "admission_token"
         case expiresIn = "expires_in"
         case registrationMode = "registration_mode"
+        case userState = "user_state"
+        case invitationState = "invitation_state"
+        case qualifiedUserCount = "qualified_user_count"
+        case qualifiedTarget = "qualified_target"
     }
+}
+
+struct APIInvitationRequiredDetail: Decodable {
+    let code: String
+    let message: String
+    let invitationState: String
+    let qualifiedUserCount: Int
+    let qualifiedTarget: Int
+
+    enum CodingKeys: String, CodingKey {
+        case code, message
+        case invitationState = "invitation_state"
+        case qualifiedUserCount = "qualified_user_count"
+        case qualifiedTarget = "qualified_target"
+    }
+}
+
+struct APIErrorDetailEnvelope<Detail: Decodable>: Decodable {
+    let detail: Detail
 }
 
 struct APIInvitationMeResponse: Codable {
@@ -740,15 +767,18 @@ final class APIClient {
         )
     }
 
-    func login(phone: String, code: String, admissionToken: String) async throws -> AuthTokenResponse {
+    func login(phone: String, code: String, admissionToken: String?) async throws -> AuthTokenResponse {
+        var body: [String: Any] = [
+            "phone": phone,
+            "code": code,
+        ]
+        if let admissionToken, !admissionToken.isEmpty {
+            body["admission_token"] = admissionToken
+        }
         let result: AuthTokenResponse = try await request(
             method: "POST",
             path: "/api/v1/auth/login",
-            body: [
-                "phone": phone,
-                "code": code,
-                "admission_token": admissionToken,
-            ],
+            body: body,
             authenticated: false
         )
         saveTokens(result)

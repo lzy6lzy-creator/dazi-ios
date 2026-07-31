@@ -16,17 +16,18 @@ class InvitationIosStaticTests(unittest.TestCase):
         self.assertIn('body["invite_code"]', text)
         self.assertIn('"install_id": InstallationIdentity.current', text)
         self.assertIn("admissionToken: String", text)
-        self.assertIn('"admission_token": admissionToken', text)
+        self.assertIn('body["admission_token"] = admissionToken', text)
 
     def test_login_view_reveals_invite_field_and_preserves_admission(self):
         text = (ROOT / "dazi" / "Views" / "Onboarding" / "LoginView.swift").read_text(encoding="utf-8")
 
-        self.assertIn("invitationRequired", text)
+        self.assertIn("LoginInvitationState", text)
+        self.assertIn("invitationState", text)
         self.assertIn("inviteCodeField", text)
         self.assertIn("admissionToken", text)
-        self.assertIn("getRegistrationPolicy", text)
+        self.assertIn("applySendCodeResponse", text)
         self.assertIn("response.admissionToken", text)
-        self.assertIn("inviteCode: invitationRequired ? inviteCode : nil", text)
+        self.assertIn("inviteCode: invitationNeedsInput ? inviteCode : nil", text)
 
     def test_app_captures_invitation_universal_link(self):
         text = (ROOT / "dazi" / "daziApp.swift").read_text(encoding="utf-8")

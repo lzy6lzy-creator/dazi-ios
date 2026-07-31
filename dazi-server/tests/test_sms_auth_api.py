@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import uuid
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -8,8 +9,9 @@ from fastapi import HTTPException
 
 from app.api.auth import login, send_code
 from app.api.schemas import AuthLoginRequest, AuthSendCodeRequest
+from app.core.config import settings
 from app.services.sms_verification_service import SmsProviderError
-from app.services.invitation_service import IssuedAdmission
+from app.services.invitation_service import InvitationRequiredError, IssuedAdmission
 
 
 class FakeSmsService:
@@ -34,6 +36,33 @@ class FailIfUsedDb:
         raise AssertionError("database must not be queried before SMS verification passes")
 
 
+class FakeResult:
+    def __init__(self, value):
+        self.value = value
+
+    def scalar_one_or_none(self):
+        return self.value
+
+
+class FakeAuthDb:
+    def __init__(self, *results):
+        self.results = list(results)
+        self.added = []
+
+    async def execute(self, _query):
+        if not self.results:
+            raise AssertionError("unexpected database query")
+        return FakeResult(self.results.pop(0))
+
+    def add(self, value):
+        self.added.append(value)
+
+    async def flush(self):
+        for value in self.added:
+            if getattr(value, "id", None) is None:
+                value.id = uuid.uuid4()
+
+
 class FakeRateLimiter:
     def __init__(self):
         self.calls = []
@@ -43,7 +72,7 @@ class FakeRateLimiter:
 
 
 class SmsAuthApiTests(unittest.IsolatedAsyncioTestCase):
-    async def test_send_code_calls_sms_service_for_any_valid_phone(self):
+    async def test_send_code_new_open_user_sends_sms_with_actual_free_target(self):
         service = FakeSmsService()
         limiter = FakeRateLimiter()
 
@@ -53,6 +82,9 @@ class SmsAuthApiTests(unittest.IsolatedAsyncioTestCase):
                 raw_token="admission-token",
                 expires_in=600,
                 registration_mode="open",
+                admission_type="open",
+                qualified_user_count=127,
+                qualified_target=500,
             )),
         ):
             response = await send_code(
@@ -68,9 +100,77 @@ class SmsAuthApiTests(unittest.IsolatedAsyncioTestCase):
             "admission_token": "admission-token",
             "expires_in": 600,
             "registration_mode": "open",
+            "user_state": "new",
+            "invitation_state": "not_required",
+            "qualified_user_count": 127,
+            "qualified_target": 500,
         })
         self.assertEqual(service.sent, ["13800000000"])
         self.assertEqual(limiter.calls, [("13800000000", "127.0.0.1")])
+
+    async def test_send_code_whitelist_user_still_sends_real_sms(self):
+        service = FakeSmsService()
+        limiter = FakeRateLimiter()
+
+        async def issue_for_whitelist(_db, **kwargs):
+            if not kwargs["whitelist_bypass"]:
+                raise AssertionError("whitelist bypass was not forwarded")
+            return IssuedAdmission(
+                raw_token="whitelist-admission",
+                expires_in=600,
+                registration_mode="invite_only",
+                admission_type="whitelist",
+                qualified_user_count=500,
+                qualified_target=500,
+            )
+
+        with patch.object(settings, "INTERNAL_TEST_PHONES", "13800000000"), patch.object(
+            settings, "INTERNAL_TEST_PHONES_FILE", ""
+        ), patch("app.api.auth.issue_signup_admission", issue_for_whitelist):
+            response = await send_code(
+                AuthSendCodeRequest(phone="13800000000"),
+                request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1")),
+                db=object(),
+                sms_service=service,
+                rate_limiter=limiter,
+            )
+
+        self.assertEqual(response["user_state"], "whitelist")
+        self.assertEqual(response["invitation_state"], "hidden")
+        self.assertEqual(service.sent, ["13800000000"])
+
+    async def test_send_code_missing_invite_returns_target_without_sending_sms(self):
+        service = FakeSmsService()
+        limiter = FakeRateLimiter()
+
+        with patch.object(settings, "INTERNAL_TEST_PHONES", ""), patch.object(
+            settings, "INTERNAL_TEST_PHONES_FILE", ""
+        ), patch(
+            "app.api.auth.issue_signup_admission",
+            AsyncMock(side_effect=InvitationRequiredError(
+                qualified_user_count=500,
+                qualified_target=500,
+            )),
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                await send_code(
+                    AuthSendCodeRequest(phone="13900000000"),
+                    request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1")),
+                    db=object(),
+                    sms_service=service,
+                    rate_limiter=limiter,
+                )
+
+        self.assertEqual(raised.exception.status_code, 403)
+        self.assertEqual(raised.exception.detail, {
+            "code": "invitation_required",
+            "message": "当前注册需要邀请码",
+            "invitation_state": "required",
+            "qualified_user_count": 500,
+            "qualified_target": 500,
+        })
+        self.assertEqual(service.sent, [])
+        self.assertEqual(limiter.calls, [])
 
     async def test_send_code_uses_first_forwarded_client_ip_behind_nginx(self):
         service = FakeSmsService()
@@ -153,6 +253,57 @@ class SmsAuthApiTests(unittest.IsolatedAsyncioTestCase):
             unittest.mock.ANY,
             raw_token="admission-token",
         )
+
+    async def test_whitelist_fixed_code_skips_sms_provider_and_allows_new_user(self):
+        service = FakeSmsService(verified=False)
+        db = FakeAuthDb(None)
+
+        with patch.object(settings, "INTERNAL_TEST_CODE", "121212"), patch.object(
+            settings, "INTERNAL_TEST_PHONES", "13800000000"
+        ), patch.object(settings, "INTERNAL_TEST_PHONES_FILE", ""):
+            response = await login(
+                AuthLoginRequest(phone="13800000000", code="121212"),
+                db=db,
+                sms_service=service,
+            )
+
+        self.assertTrue(response["is_new_user"])
+        self.assertEqual(service.checked, [])
+        self.assertEqual(len(db.added), 2)
+
+    async def test_whitelist_dynamic_code_still_uses_sms_provider(self):
+        service = FakeSmsService(verified=True)
+        existing_user = SimpleNamespace(id=uuid.uuid4())
+
+        with patch.object(settings, "INTERNAL_TEST_CODE", "121212"), patch.object(
+            settings, "INTERNAL_TEST_PHONES", "13800000000"
+        ), patch.object(settings, "INTERNAL_TEST_PHONES_FILE", ""):
+            response = await login(
+                AuthLoginRequest(phone="13800000000", code="654321"),
+                db=FakeAuthDb(existing_user),
+                sms_service=service,
+            )
+
+        self.assertFalse(response["is_new_user"])
+        self.assertEqual(service.checked, [("13800000000", "654321")])
+
+    async def test_non_whitelist_fixed_code_must_pass_sms_provider(self):
+        service = FakeSmsService(verified=False)
+
+        with patch.object(settings, "INTERNAL_TEST_CODE", "121212"), patch.object(
+            settings, "INTERNAL_TEST_PHONES", "13800000000"
+        ), patch.object(settings, "INTERNAL_TEST_PHONES_FILE", ""), patch(
+            "app.api.auth.record_failed_verification", AsyncMock()
+        ):
+            with self.assertRaises(HTTPException) as raised:
+                await login(
+                    AuthLoginRequest(phone="13900000000", code="121212"),
+                    db=FailIfUsedDb(),
+                    sms_service=service,
+                )
+
+        self.assertEqual(raised.exception.status_code, 400)
+        self.assertEqual(service.checked, [("13900000000", "121212")])
 
 
 if __name__ == "__main__":

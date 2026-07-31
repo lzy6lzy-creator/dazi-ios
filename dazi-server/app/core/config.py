@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     ALIYUN_DYPNS_TEMPLATE_CODE: str = "100001"
     ALIYUN_DYPNS_ENABLED: bool = False
 
+    # Backend-only internal login override. Whitelist users may also use PNVS.
+    INTERNAL_TEST_CODE: str = "121212"
+    INTERNAL_TEST_PHONES: str = ""
+    INTERNAL_TEST_PHONES_FILE: str = "/code/runtime-config/internal_test_phones.txt"
+
     # App registration invitation distribution links.
     INVITATION_IOS_DISTRIBUTION_MODE: str = ""
     INVITATION_TESTFLIGHT_PUBLIC_URL: str = ""

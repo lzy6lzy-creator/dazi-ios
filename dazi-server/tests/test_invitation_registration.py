@@ -112,6 +112,26 @@ class InvitationRegistrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(db.added[0].admission_type, "existing")
         self.assertEqual(issued.registration_mode, "paused")
 
+    async def test_whitelist_new_user_bypasses_invite_only_with_policy_metadata(self):
+        program = SimpleNamespace(
+            registration_mode="invite_only",
+            qualified_user_count=127,
+            qualified_target=500,
+        )
+        db = FakeDb(None, program)
+
+        issued = await issue_signup_admission(
+            db,
+            phone="13800000000",
+            whitelist_bypass=True,
+            now=self.now,
+        )
+
+        self.assertEqual(db.added[0].admission_type, "whitelist")
+        self.assertEqual(issued.admission_type, "whitelist")
+        self.assertEqual(issued.qualified_user_count, 127)
+        self.assertEqual(issued.qualified_target, 500)
+
     async def test_new_user_is_rejected_while_paused(self):
         db = FakeDb(None, SimpleNamespace(registration_mode="paused"))
 
@@ -149,10 +169,17 @@ class InvitationRegistrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(issued.registration_mode, "invite_only")
 
     async def test_invite_only_requires_code(self):
-        db = FakeDb(None, SimpleNamespace(registration_mode="invite_only"))
+        db = FakeDb(None, SimpleNamespace(
+            registration_mode="invite_only",
+            qualified_user_count=500,
+            qualified_target=500,
+        ))
 
-        with self.assertRaises(InvitationRequiredError):
+        with self.assertRaises(InvitationRequiredError) as raised:
             await issue_signup_admission(db, phone="13800000000", now=self.now)
+
+        self.assertEqual(raised.exception.qualified_user_count, 500)
+        self.assertEqual(raised.exception.qualified_target, 500)
 
     async def test_consuming_invitation_moves_reserved_to_consumed(self):
         inviter_id = uuid.uuid4()

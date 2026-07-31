@@ -34,7 +34,10 @@ class RegistrationPausedError(InvitationServiceError):
 
 
 class InvitationRequiredError(InvitationServiceError):
-    pass
+    def __init__(self, *, qualified_user_count: int, qualified_target: int):
+        super().__init__("Invitation code is required")
+        self.qualified_user_count = qualified_user_count
+        self.qualified_target = qualified_target
 
 
 class InvitationUnavailableError(InvitationServiceError):
@@ -71,6 +74,9 @@ class IssuedAdmission:
     raw_token: str
     expires_in: int
     registration_mode: str
+    admission_type: str = "open"
+    qualified_user_count: int = 0
+    qualified_target: int = 0
 
 
 def utc_now() -> datetime:
@@ -157,16 +163,21 @@ async def issue_signup_admission(
     invite_code: Optional[str] = None,
     install_id: Optional[str] = None,
     client_ip: Optional[str] = None,
+    whitelist_bypass: bool = False,
     now: Optional[datetime] = None,
 ) -> IssuedAdmission:
     current_time = now or utc_now()
     user_result = await db.execute(select(User.id).where(User.phone == phone))
     existing_user_id = user_result.scalar_one_or_none()
     program = await get_invitation_program(db, lock=True)
+    qualified_user_count = int(getattr(program, "qualified_user_count", 0))
+    qualified_target = int(getattr(program, "qualified_target", 0))
 
     invitation_account_user_id = None
     if existing_user_id is not None:
         admission_type = "existing"
+    elif whitelist_bypass:
+        admission_type = "whitelist"
     elif program.registration_mode == "paused":
         raise RegistrationPausedError("New registrations are paused")
     elif program.registration_mode == "open":
@@ -174,7 +185,10 @@ async def issue_signup_admission(
     elif program.registration_mode == "invite_only":
         normalized_code = normalize_invite_code(invite_code)
         if normalized_code is None:
-            raise InvitationRequiredError("Invitation code is required")
+            raise InvitationRequiredError(
+                qualified_user_count=qualified_user_count,
+                qualified_target=qualified_target,
+            )
         account_result = await db.execute(
             select(UserInvitationAccount)
             .where(func.upper(UserInvitationAccount.code) == normalized_code)
@@ -216,6 +230,9 @@ async def issue_signup_admission(
         raw_token=raw_token,
         expires_in=ADMISSION_TTL_SECONDS,
         registration_mode=program.registration_mode,
+        admission_type=admission_type,
+        qualified_user_count=qualified_user_count,
+        qualified_target=qualified_target,
     )
 
 

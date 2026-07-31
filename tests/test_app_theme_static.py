@@ -21,9 +21,9 @@ class AppThemeStaticTests(unittest.TestCase):
 
     def test_preserves_warm_green_palette(self):
         self.assertIn("case .warmGreen:", TEXT)
-        self.assertIn("primaryColor: Color(red: 0.243, green: 0.510, blue: 0.345)", TEXT)
-        self.assertIn("agentColor: Color(red: 0.271, green: 0.706, blue: 0.769)", TEXT)
-        self.assertIn("surfaceCream: Color(red: 0.984, green: 0.973, blue: 0.945)", TEXT)
+        self.assertIn("primaryColor: Color(red: 0.137, green: 0.420, blue: 0.353)", TEXT)
+        self.assertIn("agentColor: Color(red: 0.184, green: 0.620, blue: 0.584)", TEXT)
+        self.assertIn("surfaceCream: Color(red: 0.969, green: 0.953, blue: 0.922)", TEXT)
 
     def test_public_theme_api_stays_stable(self):
         self.assertIn("static var primaryColor: Color { palette.primaryColor }", TEXT)

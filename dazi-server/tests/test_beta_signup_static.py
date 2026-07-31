@@ -132,7 +132,7 @@ class BetaSignupStaticTests(unittest.TestCase):
         self.assertIn("ASC_PRIVATE_KEY_PATH=/code/runtime-secrets/AuthKey_XXXXXX.p8", env_example)
         self.assertNotIn("ASC_PRIVATE_KEY_PATH=/code/runtime-config/AuthKey_XXXXXX.p8", env_example)
 
-    def test_app_auth_configuration_uses_pnvs_without_phone_whitelist(self):
+    def test_app_auth_configuration_uses_pnvs_with_backend_only_phone_whitelist(self):
         config = read_text("app/core/config.py")
         compose = read_text("docker-compose.prod.yml")
         env_example = read_text(".env.example")
@@ -153,9 +153,18 @@ class BetaSignupStaticTests(unittest.TestCase):
                 self.assertIn(key, compose)
                 self.assertIn(key, env_example)
 
-        for content in (config, compose, env_example):
-            self.assertNotIn("INTERNAL_TEST_", content)
-        self.assertNotIn("internal_test_phones.txt", dockerfile)
+        for key in (
+            "INTERNAL_TEST_CODE",
+            "INTERNAL_TEST_PHONES",
+            "INTERNAL_TEST_PHONES_FILE",
+        ):
+            with self.subTest(key=key):
+                self.assertIn(key, config)
+                self.assertIn(key, compose)
+                self.assertIn(key, env_example)
+
+        self.assertNotIn("INTERNAL_TEST_MODE", config)
+        self.assertNotIn("INTERNAL_TEST_CODE", dockerfile)
 
 
 if __name__ == "__main__":

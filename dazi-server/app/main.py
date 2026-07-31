@@ -249,8 +249,6 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:8080",
-        "http://47.103.127.95:8000",
-        "http://47.103.127.95",
         "https://idabuda.com",
         "https://www.idabuda.com",
     ],
