@@ -326,6 +326,34 @@ tr.click-row { cursor: pointer; }
 .badge-invited { color: #ffe0a3; border-color: rgba(224, 168, 61, .45); }
 .badge-accepted { color: #cbffd9; border-color: rgba(75, 196, 123, .45); }
 .badge-rejected { color: #ffc2c0; border-color: rgba(239, 100, 97, .45); }
+.badge-overdue { color: #ffc2c0; border-color: rgba(239, 100, 97, .75); background: rgba(239, 100, 97, .10); }
+.badge-due_30 { color: #ffd78a; border-color: rgba(224, 168, 61, .75); background: rgba(224, 168, 61, .09); }
+.badge-due_90 { color: #fff0b8; border-color: rgba(224, 168, 61, .4); }
+.badge-later { color: #cbffd9; border-color: rgba(75, 196, 123, .45); }
+.badge-missing_date { color: #cce6ff; border-color: rgba(90, 167, 255, .45); }
+.badge-archived { color: #aeb7c4; border-color: rgba(144, 153, 168, .35); }
+
+.stat.critical .value { color: var(--red); }
+.stat.warning .value { color: var(--amber); }
+.stat.good .value { color: var(--green); }
+.reminder-row-overdue td { background: rgba(239, 100, 97, .045); }
+.reminder-notes {
+  color: var(--muted);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.compact-textarea {
+  min-height: 82px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  color: var(--text);
+}
 
 .tags {
   display: flex;
@@ -593,6 +621,7 @@ label.field {
 
   <aside class="sidebar">
     <button class="nav-item active" data-panel="overview">概览 <span id="count-overview" class="nav-count"></span></button>
+    <button class="nav-item" data-panel="reminders">到期提醒 <span id="count-reminders" class="nav-count"></span></button>
     <button class="nav-item" data-panel="events">事件 <span id="count-events" class="nav-count"></span></button>
     <button class="nav-item" data-panel="users">用户 <span id="count-users" class="nav-count"></span></button>
     <button class="nav-item" data-panel="beta-signups">内测报名 <span id="count-beta-signups" class="nav-count"></span></button>
@@ -632,6 +661,100 @@ label.field {
           <div class="section-head"><h2>最近日志</h2><button onclick="loadLogs('overviewLogs', 30)">刷新</button></div>
           <div class="section-body"><div id="overviewLogs" class="log-box"></div></div>
         </div>
+      </div>
+    </section>
+
+    <section id="panel-reminders" class="panel">
+      <div class="panel-head">
+        <div class="panel-title"><h1>到期提醒</h1><span class="subtle" id="remindersSummary">北京时间 · 不保存账号密钥</span></div>
+        <div class="toolbar">
+          <button class="primary" onclick="openReminderEditor()">新增提醒</button>
+          <button onclick="refreshExternalServiceReminders()">在线核查域名/证书</button>
+          <button class="blue" onclick="loadServiceReminders()">刷新</button>
+        </div>
+      </div>
+
+      <div id="reminderStats" class="grid stats"></div>
+
+      <div id="reminderEditor" class="section" style="display:none;">
+        <div class="section-head">
+          <h2 id="reminderEditorTitle">新增提醒</h2>
+          <button onclick="closeReminderEditor()">取消</button>
+        </div>
+        <div class="section-body">
+          <input id="reminderId" type="hidden">
+          <div class="form-grid">
+            <label class="field">事项名称<input id="reminderName" maxlength="120" placeholder="例如：云服务器续费"></label>
+            <label class="field">服务商<input id="reminderProvider" maxlength="80" placeholder="例如：阿里云"></label>
+            <label class="field">分类
+              <select id="reminderCategory">
+                <option value="domain">域名</option>
+                <option value="certificate">证书</option>
+                <option value="compliance">备案与合规</option>
+                <option value="infrastructure">服务器</option>
+                <option value="sms">短信</option>
+                <option value="apple">Apple</option>
+                <option value="credential">密钥检查</option>
+                <option value="llm">LLM</option>
+                <option value="other">其他</option>
+              </select>
+            </label>
+            <label class="field">提醒类型
+              <select id="reminderType">
+                <option value="expiry">到期 / 续费</option>
+                <option value="review">定期核查</option>
+                <option value="balance">余额检查</option>
+              </select>
+            </label>
+            <label class="field">日期<input id="reminderDueDate" type="date"></label>
+            <label class="field">日期精度
+              <select id="reminderDatePrecision">
+                <option value="exact">确切日期</option>
+                <option value="month">仅确认月份</option>
+                <option value="unknown">日期待补</option>
+              </select>
+            </label>
+            <label class="field">重复周期（月）<input id="reminderRecurrence" type="number" min="1" max="120" placeholder="不重复则留空"></label>
+            <label class="field">提前提醒天数<input id="reminderDays" value="90,60,30,14,7,1" placeholder="逗号分隔"></label>
+            <label class="field">负责人<input id="reminderOwner" maxlength="80" placeholder="可选"></label>
+            <label class="field">处理链接<input id="reminderActionUrl" type="url" maxlength="500" placeholder="https://..."></label>
+            <label class="field">续费方式
+              <span class="checkbox-field"><input id="reminderAutoRenew" type="checkbox">服务商已开启自动续费</span>
+            </label>
+          </div>
+          <label class="field" style="margin-top:10px;">备注<textarea id="reminderNotes" class="compact-textarea" maxlength="4000" placeholder="只记录续费与核查信息，不要填写密码、Key 或私钥"></textarea></label>
+          <div class="toolbar" style="margin-top:12px;">
+            <button class="primary" onclick="saveServiceReminder()">保存提醒</button>
+            <button onclick="closeReminderEditor()">取消</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <h2>项目服务台账</h2>
+          <div class="toolbar">
+            <select id="reminderStatusFilter" onchange="renderServiceReminders()">
+              <option value="active">当前提醒</option>
+              <option value="all">全部</option>
+              <option value="archived">已归档</option>
+            </select>
+            <select id="reminderCategoryFilter" onchange="renderServiceReminders()">
+              <option value="">全部分类</option>
+              <option value="domain">域名</option>
+              <option value="certificate">证书</option>
+              <option value="compliance">备案与合规</option>
+              <option value="infrastructure">服务器</option>
+              <option value="sms">短信</option>
+              <option value="apple">Apple</option>
+              <option value="credential">密钥检查</option>
+              <option value="llm">LLM</option>
+              <option value="other">其他</option>
+            </select>
+            <input id="reminderSearch" class="grow" placeholder="搜索事项、服务商、备注" oninput="renderServiceReminders()">
+          </div>
+        </div>
+        <div class="table-wrap" id="remindersContent"><div class="loading">加载中</div></div>
       </div>
     </section>
 
@@ -919,6 +1042,8 @@ const state = {
   users: [],
   betaSignups: [],
   feedback: [],
+  serviceReminders: [],
+  serviceReminderSummary: null,
   prompts: [],
   selectedPrompt: null,
   matchDetailCandidates: {},
@@ -1113,6 +1238,7 @@ function refreshActivePanel() {
 
 function loadPanel(name, force = false) {
   if (name === 'overview') return loadOverview(force);
+  if (name === 'reminders') return loadServiceReminders(force);
   if (name === 'events') return loadEvents(force);
   if (name === 'users') return loadUsers(force);
   if (name === 'beta-signups') return loadBetaSignups(force);
@@ -1149,7 +1275,212 @@ async function loadOverview() {
     ].map(([label, value]) => `<div class="stat"><div class="value">${fmtNum(value)}</div><div class="label">${label}</div></div>`).join('');
     await loadEvents(false, true);
     await loadLogs('overviewLogs', 30);
+    await loadServiceReminders(false, true);
   });
+}
+
+const reminderCategoryLabels = {
+  domain: '域名', certificate: '证书', compliance: '备案与合规',
+  infrastructure: '服务器', sms: '短信', apple: 'Apple',
+  credential: '密钥检查', llm: 'LLM', other: '其他',
+};
+
+const reminderTypeLabels = {
+  expiry: '到期 / 续费', review: '定期核查', balance: '余额检查',
+};
+
+function reminderDueText(item) {
+  if (!item.due_date) return '日期待补';
+  const [year, month, day] = item.due_date.split('-');
+  if (item.date_precision === 'month') return `${year} 年 ${Number(month)} 月（具体日待核实）`;
+  return `${year}-${month}-${day}`;
+}
+
+function reminderStateText(item) {
+  if (item.status === 'archived') return '已归档';
+  if (item.due_state === 'missing_date') return '待补日期';
+  if (item.due_state === 'overdue') return `已超期 ${Math.abs(item.days_remaining)} 天`;
+  if (item.days_remaining === 0) return '今天处理';
+  return `还有 ${item.days_remaining} 天`;
+}
+
+function reminderCycleText(item) {
+  if (!item.recurrence_months) return '不自动顺延';
+  if (item.recurrence_months === 1) return '每月';
+  if (item.recurrence_months === 12) return '每年';
+  return `每 ${item.recurrence_months} 个月`;
+}
+
+async function loadServiceReminders(_force = false, summaryOnly = false) {
+  const target = summaryOnly ? null : $('#remindersContent');
+  const data = await guarded(target, async () => requestAdmin('/api/admin/service-reminders'));
+  if (!data) return;
+  state.serviceReminders = data.items || [];
+  state.serviceReminderSummary = data.summary || {};
+  const urgentCount = Number(data.summary?.overdue || 0) + Number(data.summary?.due_30 || 0);
+  setNavCount('reminders', urgentCount);
+  if (summaryOnly) return;
+
+  $('#remindersSummary').textContent = `北京时间 · ${data.today} · 不保存账号密钥`;
+  $('#reminderStats').innerHTML = [
+    ['当前事项', data.summary?.active, ''],
+    ['已超期', data.summary?.overdue, 'critical'],
+    ['30 天内', data.summary?.due_30, 'warning'],
+    ['31–90 天', data.summary?.due_90, 'warning'],
+    ['待补日期', data.summary?.missing_date, ''],
+  ].map(([label, value, kind]) => `<div class="stat ${kind}"><div class="value">${fmtNum(value)}</div><div class="label">${label}</div></div>`).join('');
+  renderServiceReminders();
+}
+
+async function refreshExternalServiceReminders() {
+  const data = await guarded(null, async () => requestAdmin('/api/admin/service-reminders/refresh-external', { method: 'POST' }));
+  if (!data) return;
+  const refreshedCount = (data.refreshed || []).length;
+  const errorCount = (data.errors || []).length;
+  showToast(errorCount
+    ? `在线核查完成：更新 ${refreshedCount} 项，${errorCount} 项失败，已保留原日期`
+    : `在线核查完成：已更新 ${refreshedCount} 项`);
+  await loadServiceReminders(true);
+}
+
+function renderServiceReminders() {
+  const container = $('#remindersContent');
+  if (!container) return;
+  const status = $('#reminderStatusFilter')?.value || 'active';
+  const category = $('#reminderCategoryFilter')?.value || '';
+  const query = ($('#reminderSearch')?.value || '').trim().toLowerCase();
+  const items = state.serviceReminders.filter(item => {
+    if (status !== 'all' && item.status !== status) return false;
+    if (category && item.category !== category) return false;
+    if (query) {
+      const haystack = [item.name, item.provider, item.notes, item.owner].filter(Boolean).join(' ').toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+    return true;
+  });
+  if (!items.length) {
+    container.innerHTML = '<div class="empty">没有符合条件的提醒</div>';
+    return;
+  }
+
+  const rows = items.map(item => {
+    const id = escapeAttr(item.id);
+    const action = item.action_url
+      ? `<a href="${escapeAttr(item.action_url)}" target="_blank" rel="noopener"><button>打开控制台</button></a>`
+      : '';
+    const cycleAction = item.status === 'active' && item.recurrence_months
+      ? `<button class="primary" onclick="completeServiceReminder('${id}')">${item.reminder_type === 'expiry' ? '已续费' : '本轮已检查'}</button>`
+      : '';
+    const archiveAction = item.status === 'active'
+      ? `<button class="danger" onclick="archiveServiceReminder('${id}')">归档</button>`
+      : `<button onclick="restoreServiceReminder('${id}')">恢复</button>`;
+    const autoRenew = item.auto_renew ? '<span class="badge badge-active">自动续费</span>' : '';
+    const verified = item.last_verified_at ? fmtTime(item.last_verified_at) : '未核实';
+    return `<tr class="reminder-row-${escapeAttr(item.due_state)}">
+      <td style="width:25%;">
+        <div class="cell-strong">${escapeHtml(item.name)}</div>
+        <div class="subtle">${escapeHtml(item.provider || '-')} · ${escapeHtml(reminderTypeLabels[item.reminder_type] || item.reminder_type)}</div>
+        ${item.notes ? `<div class="reminder-notes">${escapeHtml(item.notes)}</div>` : ''}
+      </td>
+      <td style="width:11%;">${escapeHtml(reminderCategoryLabels[item.category] || item.category)}</td>
+      <td style="width:18%;"><div class="cell-strong">${escapeHtml(reminderDueText(item))}</div><div class="subtle">${escapeHtml(reminderCycleText(item))}</div></td>
+      <td style="width:12%;"><span class="badge badge-${escapeAttr(item.due_state)}">${escapeHtml(reminderStateText(item))}</span><div style="margin-top:5px;">${autoRenew}</div></td>
+      <td style="width:11%;"><div>${escapeHtml(item.owner || '未指定')}</div><div class="subtle">核实：${escapeHtml(verified)}</div></td>
+      <td style="width:23%;"><div class="status-actions">${action}<button class="blue" onclick="openReminderEditor('${id}')">编辑</button>${cycleAction}${archiveAction}</div></td>
+    </tr>`;
+  }).join('');
+  container.innerHTML = `<table>
+    <thead><tr><th style="width:25%;">事项</th><th style="width:11%;">分类</th><th style="width:18%;">日期与周期</th><th style="width:12%;">状态</th><th style="width:11%;">负责人</th><th style="width:23%;">操作</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function openReminderEditor(id = '') {
+  const item = id ? state.serviceReminders.find(row => row.id === id) : null;
+  $('#reminderEditor').style.display = 'block';
+  $('#reminderEditorTitle').textContent = item ? '编辑提醒' : '新增提醒';
+  $('#reminderId').value = item?.id || '';
+  $('#reminderName').value = item?.name || '';
+  $('#reminderProvider').value = item?.provider || '';
+  $('#reminderCategory').value = item?.category || 'other';
+  $('#reminderType').value = item?.reminder_type || 'expiry';
+  $('#reminderDueDate').value = item?.due_date || '';
+  $('#reminderDatePrecision').value = item?.date_precision || 'exact';
+  $('#reminderRecurrence').value = item?.recurrence_months || '';
+  $('#reminderDays').value = (item?.reminder_days || [90, 60, 30, 14, 7, 1]).join(',');
+  $('#reminderOwner').value = item?.owner || '';
+  $('#reminderActionUrl').value = item?.action_url || '';
+  $('#reminderAutoRenew').checked = Boolean(item?.auto_renew);
+  $('#reminderNotes').value = item?.notes || '';
+  $('#reminderEditor').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeReminderEditor() {
+  $('#reminderEditor').style.display = 'none';
+  $('#reminderId').value = '';
+}
+
+async function saveServiceReminder() {
+  const id = $('#reminderId').value;
+  const reminderDays = $('#reminderDays').value.split(',')
+    .map(value => Number(value.trim()))
+    .filter(value => Number.isInteger(value) && value >= 0);
+  const recurrenceValue = $('#reminderRecurrence').value.trim();
+  const dueDate = $('#reminderDueDate').value || null;
+  const body = {
+    name: $('#reminderName').value.trim(),
+    provider: $('#reminderProvider').value.trim() || null,
+    category: $('#reminderCategory').value,
+    reminder_type: $('#reminderType').value,
+    due_date: dueDate,
+    date_precision: dueDate ? $('#reminderDatePrecision').value : 'unknown',
+    recurrence_months: recurrenceValue ? Number(recurrenceValue) : null,
+    reminder_days: reminderDays,
+    owner: $('#reminderOwner').value.trim() || null,
+    action_url: $('#reminderActionUrl').value.trim() || null,
+    auto_renew: $('#reminderAutoRenew').checked,
+    notes: $('#reminderNotes').value.trim() || null,
+  };
+  if (!body.name) {
+    showToast('请填写事项名称', true);
+    return;
+  }
+  const path = id ? `/api/admin/service-reminders/${encodeURIComponent(id)}` : '/api/admin/service-reminders';
+  const method = id ? 'PATCH' : 'POST';
+  const data = await guarded(null, async () => requestAdmin(path, { method, body: JSON.stringify(body) }));
+  if (!data) return;
+  closeReminderEditor();
+  showToast(id ? '提醒已更新' : '提醒已创建');
+  await loadServiceReminders(true);
+}
+
+async function completeServiceReminder(id) {
+  const item = state.serviceReminders.find(row => row.id === id);
+  if (!item) return;
+  const action = item.reminder_type === 'expiry' ? '续费' : '检查';
+  if (!confirmAction(`确认“${item.name}”本轮已完成${action}，并顺延到下一个周期吗？`)) return;
+  const data = await guarded(null, async () => requestAdmin(`/api/admin/service-reminders/${encodeURIComponent(id)}/complete-cycle`, { method: 'POST' }));
+  if (!data) return;
+  showToast(data.due_date ? `已处理，下一次：${reminderDueText(data)}` : '已记录本轮检查');
+  await loadServiceReminders(true);
+}
+
+async function archiveServiceReminder(id) {
+  const item = state.serviceReminders.find(row => row.id === id);
+  if (!item || !confirmAction(`确认归档“${item.name}”吗？`)) return;
+  const data = await guarded(null, async () => requestAdmin(`/api/admin/service-reminders/${encodeURIComponent(id)}`, { method: 'DELETE' }));
+  if (!data) return;
+  showToast('提醒已归档');
+  await loadServiceReminders(true);
+}
+
+async function restoreServiceReminder(id) {
+  const data = await guarded(null, async () => requestAdmin(`/api/admin/service-reminders/${encodeURIComponent(id)}`, {
+    method: 'PATCH', body: JSON.stringify({ status: 'active' }),
+  }));
+  if (!data) return;
+  showToast('提醒已恢复');
+  await loadServiceReminders(true);
 }
 
 async function loadEvents(_force = false, renderRecentOnly = false) {

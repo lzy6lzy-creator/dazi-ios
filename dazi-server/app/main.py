@@ -18,6 +18,7 @@ from app.core.log_buffer import log_buffer
 from app.services.agent_server import agent_server
 from app.services.embedding_service import embedding_service
 from app.services.scheduler import beta_invite_scheduler, match_scheduler
+from app.services.service_reminder_monitor import service_reminder_monitor
 
 # 导入所有 model 以确保建表时能发现它们
 from app.models.user import User, Agent, AgentMemory, EventMemory, MemoryEvidence, AgentChatMessage, PushDeviceToken  # noqa: F401
@@ -26,6 +27,7 @@ from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage, ChatRoomVote,
 from app.models.prompt import PromptTemplate  # noqa: F401
 from app.models.beta_signup import BetaSignup  # noqa: F401
 from app.models.site_feedback import SiteFeedback  # noqa: F401
+from app.models.service_reminder import ServiceReminder  # noqa: F401
 from app.models.invitation import (  # noqa: F401
     InvitationLedger,
     InvitationMilestone,
@@ -95,11 +97,13 @@ async def lifespan(app: FastAPI):
     # 启动定时匹配任务（每小时扫描 pending 事件）
     match_scheduler.start()
     beta_invite_scheduler.start()
+    service_reminder_monitor.start()
 
     yield
     # 关闭时清理资源
     await match_scheduler.stop()
     await beta_invite_scheduler.stop()
+    await service_reminder_monitor.stop()
     await agent_server.close()
     await embedding_service.close()
     await close_redis()
@@ -154,6 +158,89 @@ async def _ensure_runtime_schema(conn) -> None:
             "testflight_url": settings.INVITATION_TESTFLIGHT_PUBLIC_URL,
             "app_store_url": settings.INVITATION_APP_STORE_URL,
         },
+    )
+    await conn.execute(
+        text(
+            """
+            INSERT INTO service_reminders (
+                id, slug, name, category, provider, reminder_type, due_date,
+                date_precision, recurrence_months, reminder_days, auto_renew,
+                action_url, notes, source, status, last_verified_at, created_at, updated_at
+            )
+            VALUES
+                (
+                    gen_random_uuid(), 'idabuda-domain', 'idabuda.com 域名', 'domain',
+                    '阿里云 HiChina', 'expiry', DATE '2027-06-04', 'exact', 12,
+                    '90,60,30,14,7,1', FALSE, 'https://dc.console.aliyun.com/',
+                    '注册局到期时间；自动续费状态仍需在阿里云控制台核实。',
+                    'rdap', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'idabuda-tls', 'idabuda.com HTTPS 证书', 'certificate',
+                    '阿里云 / DigiCert', 'expiry', DATE '2026-09-02', 'exact', 3,
+                    '90,60,30,14,7,1', FALSE, 'https://yundunnext.console.aliyun.com/?p=cas',
+                    '证书实际到期时间为 2026-09-01 23:59:59 UTC，即北京时间 2026-09-02 07:59:59；当前为手工安装，未发现自动续签。',
+                    'live_tls', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'idabuda-icp', 'ICP备案年度核查', 'compliance',
+                    '阿里云备案', 'review', DATE '2027-06-29', 'exact', 12,
+                    '90,60,30,14,7,1', FALSE, 'https://beian.aliyun.com/',
+                    'ICP备案已于 2026-06-29 验证正常；此处是年度核查提醒，不代表备案本身存在固定到期日。',
+                    'project_record', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'aliyun-server', '阿里云服务器续费', 'infrastructure',
+                    '阿里云', 'expiry', DATE '2027-06-30', 'month', 12,
+                    '90,60,30,14,7,1', FALSE, 'https://ecs.console.aliyun.com/',
+                    '用户确认按一年暂记为 2027 年 6 月；具体日期和自动续费状态待控制台核实。',
+                    'manual_user', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'aliyun-pnvs', '阿里云 PNVS 短信套餐', 'sms',
+                    '阿里云号码认证服务', 'expiry', DATE '2027-06-30', 'month', 12,
+                    '90,60,30,14,7,1', FALSE, 'https://dypns.console.aliyun.com/',
+                    '按一年暂记为 2027 年 6 月；需要同时关注套餐余量、短信签名和模板状态。',
+                    'manual_user', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'apple-developer-membership', 'Apple Developer Program 会员', 'apple',
+                    'Apple', 'expiry', DATE '2027-06-30', 'month', 12,
+                    '90,60,30,14,7,1', FALSE, 'https://developer.apple.com/account/',
+                    '用户确认按一年暂记为 2027 年 6 月；具体续费日和自动续费状态待 Apple 账户核实。',
+                    'manual_user', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'apple-development-certificate', 'Apple Development 签名证书', 'certificate',
+                    'Apple', 'expiry', DATE '2027-03-11', 'exact', 12,
+                    '90,60,30,14,7,1', FALSE, 'https://developer.apple.com/account/resources/certificates/list',
+                    '本机钥匙串于 2026-08-01 核实；发布证书需要在 Apple 账户中另行核实。',
+                    'local_keychain', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'apple-testflight-build', 'TestFlight 当前构建', 'apple',
+                    'App Store Connect', 'expiry', NULL, 'unknown', NULL,
+                    '30,14,7,1', FALSE, 'https://appstoreconnect.apple.com/apps',
+                    'TestFlight 构建通常按上传时间计算有效期；补充当前构建上传时间后填写具体失效日。',
+                    'manual', 'active', NULL, NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'apple-keys-review', 'App Store Connect / APNs 密钥检查', 'credential',
+                    'Apple', 'review', DATE '2027-06-30', 'month', 12,
+                    '90,60,30,14,7,1', FALSE, 'https://appstoreconnect.apple.com/access/integrations/api',
+                    '密钥没有按会员日期自动到期；这里按 2027 年 6 月设置年度权限、有效性和轮换检查。',
+                    'manual_user', 'active', NOW(), NOW(), NOW()
+                ),
+                (
+                    gen_random_uuid(), 'moonshot-balance', 'Moonshot / Kimi 余额检查', 'llm',
+                    'Moonshot AI', 'balance', DATE '2026-09-01', 'exact', 1,
+                    '7,3,1', FALSE, 'https://platform.moonshot.cn/console/info',
+                    '充值余额没有固定到期日；每月检查一次余额和近期消耗。',
+                    'manual_user', 'active', NOW(), NOW(), NOW()
+                )
+            ON CONFLICT (slug) DO NOTHING
+            """
+        )
     )
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_event_visibility VARCHAR(20) DEFAULT 'partial'"))

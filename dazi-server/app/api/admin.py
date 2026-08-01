@@ -7,12 +7,14 @@ Admin API - 管理后台接口
 from __future__ import annotations
 
 import asyncio
+import calendar
 import csv
 import io
 import logging
 from typing import Optional
-from uuid import UUID
-from datetime import datetime, timezone
+from uuid import UUID, uuid4
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -27,12 +29,14 @@ from app.models.event import Event, MatchLog, MatchBlocklist
 from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage
 from app.models.beta_signup import BetaSignup
 from app.models.site_feedback import SiteFeedback
+from app.models.service_reminder import ServiceReminder
 from app.services.app_store_connect import (
     AppStoreConnectClient,
     AppStoreConnectConfigError,
     AppStoreConnectError,
 )
 
+from app.services.service_reminder_monitor import refresh_external_service_reminders
 from app.core.log_buffer import log_buffer
 
 logger = logging.getLogger(__name__)
@@ -49,6 +53,9 @@ router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(ve
 
 BETA_SIGNUP_STATUSES = {"new", "updated", "approved", "invited", "accepted", "rejected", "archived"}
 FEEDBACK_STATUSES = {"new", "reviewed", "resolved", "archived"}
+SERVICE_REMINDER_STATUSES = {"active", "archived"}
+SERVICE_REMINDER_TYPES = {"expiry", "review", "balance"}
+SERVICE_REMINDER_DATE_PRECISIONS = {"exact", "month", "unknown"}
 BULK_INVITE_SKIP_STATUSES = {"accepted", "rejected", "invited"}
 ASC_SYNC_MANUAL_STATUSES = {"rejected", "archived"}
 
@@ -59,6 +66,37 @@ class BetaSignupStatusUpdate(BaseModel):
 
 class FeedbackStatusUpdate(BaseModel):
     status: str = Field(..., min_length=1, max_length=30)
+
+
+class ServiceReminderCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    category: str = Field(..., min_length=1, max_length=40)
+    provider: Optional[str] = Field(default=None, max_length=80)
+    reminder_type: str = Field(default="expiry", min_length=1, max_length=30)
+    due_date: Optional[date] = None
+    date_precision: str = Field(default="exact", min_length=1, max_length=20)
+    recurrence_months: Optional[int] = Field(default=None, ge=1, le=120)
+    reminder_days: list[int] = Field(default_factory=lambda: [90, 60, 30, 14, 7, 1])
+    auto_renew: bool = False
+    owner: Optional[str] = Field(default=None, max_length=80)
+    action_url: Optional[str] = Field(default=None, max_length=500)
+    notes: Optional[str] = Field(default=None, max_length=4000)
+
+
+class ServiceReminderUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    category: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    provider: Optional[str] = Field(default=None, max_length=80)
+    reminder_type: Optional[str] = Field(default=None, min_length=1, max_length=30)
+    due_date: Optional[date] = None
+    date_precision: Optional[str] = Field(default=None, min_length=1, max_length=20)
+    recurrence_months: Optional[int] = Field(default=None, ge=1, le=120)
+    reminder_days: Optional[list[int]] = None
+    auto_renew: Optional[bool] = None
+    owner: Optional[str] = Field(default=None, max_length=80)
+    action_url: Optional[str] = Field(default=None, max_length=500)
+    notes: Optional[str] = Field(default=None, max_length=4000)
+    status: Optional[str] = Field(default=None, min_length=1, max_length=20)
 
 
 def beta_signup_status_after_invite(asc_result: dict) -> str:
@@ -1053,6 +1091,235 @@ async def export_feedback_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="dazi-feedback.csv"'},
     )
+
+
+# ── 服务到期与周期检查提醒 ──
+
+def _service_reminder_days(value: str) -> list[int]:
+    days: list[int] = []
+    for item in (value or "").split(","):
+        try:
+            day = int(item.strip())
+        except ValueError:
+            continue
+        if 0 <= day <= 3650:
+            days.append(day)
+    return sorted(set(days), reverse=True)
+
+
+def _validate_service_reminder_values(data: dict) -> dict:
+    cleaned = dict(data)
+    reminder_type = cleaned.get("reminder_type")
+    if reminder_type is not None:
+        reminder_type = reminder_type.strip().lower()
+        if reminder_type not in SERVICE_REMINDER_TYPES:
+            raise HTTPException(status_code=400, detail=f"不支持的提醒类型: {reminder_type}")
+        cleaned["reminder_type"] = reminder_type
+
+    date_precision = cleaned.get("date_precision")
+    if date_precision is not None:
+        date_precision = date_precision.strip().lower()
+        if date_precision not in SERVICE_REMINDER_DATE_PRECISIONS:
+            raise HTTPException(status_code=400, detail=f"不支持的日期精度: {date_precision}")
+        cleaned["date_precision"] = date_precision
+
+    status = cleaned.get("status")
+    if status is not None:
+        status = status.strip().lower()
+        if status not in SERVICE_REMINDER_STATUSES:
+            raise HTTPException(status_code=400, detail=f"不支持的提醒状态: {status}")
+        cleaned["status"] = status
+
+    if "reminder_days" in cleaned and cleaned["reminder_days"] is not None:
+        reminder_days = sorted(
+            {int(day) for day in cleaned["reminder_days"] if 0 <= int(day) <= 3650},
+            reverse=True,
+        )
+        if not reminder_days:
+            raise HTTPException(status_code=400, detail="至少保留一个有效的提前提醒天数")
+        cleaned["reminder_days"] = ",".join(str(day) for day in reminder_days)
+
+    action_url = cleaned.get("action_url")
+    if action_url:
+        action_url = action_url.strip()
+        if not action_url.startswith(("https://", "http://")):
+            raise HTTPException(status_code=400, detail="处理链接必须以 http:// 或 https:// 开头")
+        cleaned["action_url"] = action_url
+
+    for field_name in ("name", "category", "provider", "owner", "notes"):
+        if field_name in cleaned and isinstance(cleaned[field_name], str):
+            cleaned[field_name] = cleaned[field_name].strip() or None
+
+    for required_field in ("name", "category"):
+        if required_field in cleaned and not cleaned[required_field]:
+            raise HTTPException(status_code=400, detail=f"{required_field} 不能为空")
+
+    if cleaned.get("due_date") is None and "due_date" in cleaned:
+        cleaned["date_precision"] = "unknown"
+    return cleaned
+
+
+def _service_reminder_state(item: ServiceReminder, today: date) -> tuple[str, Optional[int]]:
+    if item.status != "active":
+        return "archived", None
+    if not item.due_date:
+        return "missing_date", None
+    days_remaining = (item.due_date - today).days
+    if days_remaining < 0:
+        return "overdue", days_remaining
+    if days_remaining <= 30:
+        return "due_30", days_remaining
+    if days_remaining <= 90:
+        return "due_90", days_remaining
+    return "later", days_remaining
+
+
+def service_reminder_payload(item: ServiceReminder, today: Optional[date] = None) -> dict:
+    current_date = today or datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    due_state, days_remaining = _service_reminder_state(item, current_date)
+    return {
+        "id": str(item.id),
+        "slug": item.slug,
+        "name": item.name,
+        "category": item.category,
+        "provider": item.provider,
+        "reminder_type": item.reminder_type,
+        "due_date": item.due_date.isoformat() if item.due_date else None,
+        "date_precision": item.date_precision,
+        "recurrence_months": item.recurrence_months,
+        "reminder_days": _service_reminder_days(item.reminder_days),
+        "auto_renew": item.auto_renew,
+        "owner": item.owner,
+        "action_url": item.action_url,
+        "notes": item.notes,
+        "source": item.source,
+        "status": item.status,
+        "due_state": due_state,
+        "days_remaining": days_remaining,
+        "last_verified_at": item.last_verified_at.isoformat() if item.last_verified_at else None,
+        "created_at": item.created_at.isoformat(),
+        "updated_at": item.updated_at.isoformat(),
+    }
+
+
+@router.get("/service-reminders")
+async def list_service_reminders(db: AsyncSession = Depends(get_db)):
+    """列出全部到期、续费、余额和合规检查提醒。"""
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    result = await db.execute(
+        select(ServiceReminder).order_by(
+            ServiceReminder.status.asc(),
+            ServiceReminder.due_date.asc().nulls_last(),
+            ServiceReminder.created_at.asc(),
+        )
+    )
+    items = [service_reminder_payload(item, today) for item in result.scalars().all()]
+    active_items = [item for item in items if item["status"] == "active"]
+    return {
+        "today": today.isoformat(),
+        "summary": {
+            "active": len(active_items),
+            "overdue": sum(item["due_state"] == "overdue" for item in active_items),
+            "due_30": sum(item["due_state"] == "due_30" for item in active_items),
+            "due_90": sum(item["due_state"] == "due_90" for item in active_items),
+            "missing_date": sum(item["due_state"] == "missing_date" for item in active_items),
+        },
+        "items": items,
+    }
+
+
+@router.post("/service-reminders")
+async def create_service_reminder(
+    body: ServiceReminderCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """新增一条不包含账号密钥的运维提醒。"""
+    data = _validate_service_reminder_values(body.model_dump())
+    item = ServiceReminder(
+        slug=f"custom-{uuid4().hex}",
+        source="manual",
+        status="active",
+        **data,
+    )
+    db.add(item)
+    await db.flush()
+    return service_reminder_payload(item)
+
+
+@router.post("/service-reminders/refresh-external")
+async def refresh_external_reminders(db: AsyncSession = Depends(get_db)):
+    """立即在线核查 idabuda.com 域名和 HTTPS 证书日期。"""
+    return await refresh_external_service_reminders(db)
+
+
+@router.patch("/service-reminders/{reminder_id}")
+async def update_service_reminder(
+    reminder_id: UUID,
+    body: ServiceReminderUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """编辑提醒日期、周期、负责人和处理信息。"""
+    result = await db.execute(select(ServiceReminder).where(ServiceReminder.id == reminder_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="提醒不存在")
+
+    data = _validate_service_reminder_values(body.model_dump(exclude_unset=True))
+    for field_name, value in data.items():
+        setattr(item, field_name, value)
+    item.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    return service_reminder_payload(item)
+
+
+def _advance_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+@router.post("/service-reminders/{reminder_id}/complete-cycle")
+async def complete_service_reminder_cycle(
+    reminder_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """标记本轮已处理，并在配置了周期时生成下一次日期。"""
+    result = await db.execute(select(ServiceReminder).where(ServiceReminder.id == reminder_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="提醒不存在")
+
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    previous_due_date = item.due_date
+    if item.due_date and item.recurrence_months:
+        next_due_date = _advance_months(item.due_date, item.recurrence_months)
+        while next_due_date < today:
+            next_due_date = _advance_months(next_due_date, item.recurrence_months)
+        item.due_date = next_due_date
+    item.last_verified_at = datetime.now(timezone.utc)
+    item.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    payload = service_reminder_payload(item, today)
+    payload["previous_due_date"] = previous_due_date.isoformat() if previous_due_date else None
+    return payload
+
+
+@router.delete("/service-reminders/{reminder_id}")
+async def archive_service_reminder(
+    reminder_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """归档提醒；保留历史记录，不做物理删除。"""
+    result = await db.execute(select(ServiceReminder).where(ServiceReminder.id == reminder_id))
+    item = result.scalar_one_or_none()
+    if not item:
+        raise HTTPException(status_code=404, detail="提醒不存在")
+    item.status = "archived"
+    item.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    return service_reminder_payload(item)
 
 
 # ── 删除用户 ──
