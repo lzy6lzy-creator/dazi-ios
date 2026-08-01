@@ -18,6 +18,9 @@ class AccountDeletionStaticTests(unittest.TestCase):
         request_index = store.index("try await api.deleteMyAccount()")
         reset_index = store.index("resetLocalSession(unregisterRemoteToken: false)")
         self.assertLess(request_index, reset_index)
+        reset_body = store[store.index("private func resetLocalSession"):]
+        self.assertIn("toastTask?.cancel()", reset_body)
+        self.assertIn("currentToast = nil", reset_body)
 
     def test_profile_exposes_irreversible_account_deletion_confirmation(self):
         profile = (ROOT / "dazi/Views/Profile/ProfileView.swift").read_text(encoding="utf-8")

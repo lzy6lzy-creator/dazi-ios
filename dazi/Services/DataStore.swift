@@ -56,6 +56,9 @@ class DataStore {
     private func resetLocalSession(unregisterRemoteToken: Bool) {
         pollingTask?.cancel()
         pollingTask = nil
+        toastTask?.cancel()
+        toastTask = nil
+        currentToast = nil
         ws.disconnect()
         profileStore.clearUser()
         if unregisterRemoteToken {

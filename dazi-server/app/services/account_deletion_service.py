@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.redis import ChatHistoryCache
 from app.models.chat import ChatRoom
 from app.models.event import Event, MatchLog
 from app.models.invitation import InvitationLedger, SignupAdmission
@@ -70,4 +71,5 @@ async def delete_user_account(
     )
     await db.delete(user)
     await db.flush()
+    await ChatHistoryCache.clear_user_state(str(user_id))
     return result

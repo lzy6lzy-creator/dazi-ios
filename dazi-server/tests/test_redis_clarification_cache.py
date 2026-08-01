@@ -21,6 +21,12 @@ class FakeRedis:
         for key in keys:
             self.values.pop(key, None)
 
+    async def scan_iter(self, match: str):
+        prefix = match.removesuffix("*")
+        for key in list(self.values):
+            if key.startswith(prefix):
+                yield key
+
 
 class ClarificationCacheTests(unittest.IsolatedAsyncioTestCase):
     async def test_latest_clarification_session_tracks_and_clears_active_session(self):
@@ -67,6 +73,25 @@ class ClarificationCacheTests(unittest.IsolatedAsyncioTestCase):
 
             self.assertEqual(await ChatHistoryCache.get_history("user-1"), [])
             self.assertEqual(await ChatHistoryCache.get_agent_chat_session_start("user-1"), session_start)
+
+    async def test_clear_user_state_removes_all_account_scoped_cache(self):
+        fake = FakeRedis()
+
+        with patch("app.core.redis.get_redis", new=AsyncMock(return_value=fake)):
+            await ChatHistoryCache.append_message("user-1", "user", "今晚吃火锅")
+            await ChatHistoryCache.set_event_draft("user-1", {"activity": "火锅"})
+            await ChatHistoryCache.set_editing_event("user-1", "event-1")
+            await ChatHistoryCache.set_clarification_session(
+                "user-1", "session-1", {"reply": "请选择地点"}
+            )
+            await ChatHistoryCache.set_clarification_session(
+                "user-1", "session-2", {"reply": "请选择时间"}
+            )
+            await fake.set("agent_chat:user-2", "keep")
+
+            await ChatHistoryCache.clear_user_state("user-1")
+
+            self.assertEqual(fake.values, {"agent_chat:user-2": "keep"})
 
 
 if __name__ == "__main__":

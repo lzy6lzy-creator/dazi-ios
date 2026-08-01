@@ -30,12 +30,12 @@ from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage
 from app.models.beta_signup import BetaSignup
 from app.models.site_feedback import SiteFeedback
 from app.models.service_reminder import ServiceReminder
+from app.services.account_deletion_service import delete_user_account
 from app.services.app_store_connect import (
     AppStoreConnectClient,
     AppStoreConnectConfigError,
     AppStoreConnectError,
 )
-
 from app.services.service_reminder_monitor import refresh_external_service_reminders
 from app.core.log_buffer import log_buffer
 
@@ -1609,57 +1609,16 @@ async def match_stats(db: AsyncSession = Depends(get_db)):
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
     """删除用户及其所有关联数据"""
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if not user:
+    deletion = await delete_user_account(db, user_id=user_id)
+    if deletion is None:
         return {"error": "用户不存在"}
-
-    user_name = user.name
-
-    # 获取该用户的所有事件 ID
-    events_r = await db.execute(select(Event.id).where(Event.user_id == user_id))
-    event_ids = [row[0] for row in events_r.fetchall()]
-
-    # 删除匹配日志（涉及该用户事件的）
-    if event_ids:
-        await db.execute(
-            delete(MatchLog).where(
-                (MatchLog.event_a_id.in_(event_ids)) | (MatchLog.event_b_id.in_(event_ids))
-            )
-        )
-
-    # 删除聊天室成员和消息（涉及该用户的）
-    await db.execute(delete(ChatRoomMember).where(ChatRoomMember.user_id == user_id))
-    await db.execute(delete(ChatMessage).where(ChatMessage.sender_id == user_id))
-
-    # 删除涉及该用户事件的聊天室
-    if event_ids:
-        await db.execute(
-            delete(ChatRoom).where(
-                (ChatRoom.event_id_a.in_(event_ids)) | (ChatRoom.event_id_b.in_(event_ids))
-            )
-        )
-
-    # 清除其他事件中引用了该用户事件的 matched_event_id
-    if event_ids:
-        other_events_r = await db.execute(
-            select(Event).where(Event.matched_event_id.in_(event_ids))
-        )
-        for evt in other_events_r.scalars().all():
-            evt.matched_event_id = None
-            evt.match_score = None
-            evt.status = "pending"
-
-    # 删除事件、Agent 聊天记录、记忆、Agent、用户
-    await db.execute(delete(Event).where(Event.user_id == user_id))
-    await db.execute(delete(AgentChatMessage).where(AgentChatMessage.user_id == user_id))
-    await db.execute(delete(AgentMemory).where(AgentMemory.user_id == user_id))
-    await db.execute(delete(Agent).where(Agent.user_id == user_id))
-    await db.delete(user)
-    await db.flush()
-
-    logger.info(f"Deleted user {user_name} ({user_id}) and all related data")
-    return {"message": f"已删除用户 {user_name} 及所有关联数据"}
+    logger.info(
+        "Deleted user %s (%s), including %s events",
+        deletion.user_name,
+        deletion.user_id,
+        deletion.deleted_event_count,
+    )
+    return {"message": f"已删除用户 {deletion.user_name} 及所有关联数据"}
 
 
 # ── Prompt 管理（DB 持久化 + 内存缓存） ──

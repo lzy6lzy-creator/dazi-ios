@@ -11,6 +11,7 @@ from fastapi.security import HTTPAuthorizationCredentials
 from app.api.auth import refresh_token
 from app.api.schemas import AuthRefreshRequest
 from app.api.users import delete_me
+from app.core.redis import ChatHistoryCache
 from app.core.security import get_current_user_id
 from app.services.account_deletion_service import delete_user_account
 
@@ -57,12 +58,18 @@ class AccountDeletionServiceTests(unittest.IsolatedAsyncioTestCase):
         user = SimpleNamespace(id=user_id, phone="13800000000", name="测试用户")
         db = FakeDb(user, [uuid.uuid4(), uuid.uuid4()])
 
-        result = await delete_user_account(db, user_id=user_id)
+        with patch.object(
+            ChatHistoryCache,
+            "clear_user_state",
+            new=AsyncMock(),
+        ) as clear_user_state:
+            result = await delete_user_account(db, user_id=user_id)
 
         self.assertEqual(result.user_id, user_id)
         self.assertEqual(result.deleted_event_count, 2)
         self.assertEqual(db.deleted, [user])
         self.assertEqual(db.flush_count, 1)
+        clear_user_state.assert_awaited_once_with(str(user_id))
         statements = "\n".join(db.statements)
         self.assertIn("DELETE FROM match_logs", statements)
         self.assertIn("DELETE FROM chat_rooms", statements)
@@ -76,11 +83,17 @@ class AccountDeletionServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_missing_user_returns_none_without_deleting(self):
         db = FakeDb(None, [])
 
-        result = await delete_user_account(db, user_id=uuid.uuid4())
+        with patch.object(
+            ChatHistoryCache,
+            "clear_user_state",
+            new=AsyncMock(),
+        ) as clear_user_state:
+            result = await delete_user_account(db, user_id=uuid.uuid4())
 
         self.assertIsNone(result)
         self.assertEqual(db.deleted, [])
         self.assertEqual(db.flush_count, 0)
+        clear_user_state.assert_not_awaited()
 
 
 class AccountDeletionApiTests(unittest.IsolatedAsyncioTestCase):

@@ -234,3 +234,18 @@ class ChatHistoryCache:
         if latest_session_id == session_id:
             keys.append(latest_key)
         await r.delete(*keys)
+
+    @classmethod
+    async def clear_user_state(cls, user_id: str) -> None:
+        """清除账号注销后不应继续保留的全部用户缓存。"""
+        r = await get_redis()
+        keys = [
+            cls._key(user_id),
+            f"{cls.SESSION_START_PREFIX}:{user_id}",
+            f"{cls.DRAFT_PREFIX}:{user_id}",
+            f"{cls.EDITING_PREFIX}:{user_id}",
+            f"{cls.CLARIFICATION_LATEST_PREFIX}:{user_id}",
+        ]
+        async for key in r.scan_iter(match=f"{cls.CLARIFICATION_PREFIX}:{user_id}:*"):
+            keys.append(key)
+        await r.delete(*set(keys))
