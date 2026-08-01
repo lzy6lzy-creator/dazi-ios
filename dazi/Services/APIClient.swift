@@ -177,6 +177,16 @@ struct APIUserResponse: Codable {
     }
 }
 
+struct APIAccountDeletionResponse: Codable {
+    let message: String
+    let deletedEventCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case deletedEventCount = "deleted_event_count"
+    }
+}
+
 struct APIPublicProfileEventResponse: Codable {
     let id: String
     let title: String
@@ -793,6 +803,12 @@ final class APIClient {
 
     func updateMe(data: [String: Any]) async throws -> APIUserResponse {
         try await request(method: "PUT", path: "/api/v1/users/me", body: data)
+    }
+
+    func deleteMyAccount() async throws {
+        let _: APIAccountDeletionResponse = try await request(
+            method: "DELETE", path: "/api/v1/users/me"
+        )
     }
 
     // MARK: - Invitations

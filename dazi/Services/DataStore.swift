@@ -45,12 +45,24 @@ class DataStore {
     }
 
     func logout() {
+        resetLocalSession(unregisterRemoteToken: true)
+    }
+
+    func deleteAccount() async throws {
+        try await api.deleteMyAccount()
+        resetLocalSession(unregisterRemoteToken: false)
+    }
+
+    private func resetLocalSession(unregisterRemoteToken: Bool) {
         pollingTask?.cancel()
         pollingTask = nil
         ws.disconnect()
         profileStore.clearUser()
-        notifications.unregisterStoredRemoteDeviceTokenBeforeLogout()
+        if unregisterRemoteToken {
+            notifications.unregisterStoredRemoteDeviceTokenBeforeLogout()
+        }
         api.clearTokens()
+        UserDefaults.standard.removeObject(forKey: "pendingInvitationCode")
         isRegistered = false
         currentUser = .placeholder
         User.currentUser = .placeholder
@@ -66,7 +78,7 @@ class DataStore {
         notifiedRoomCreationIds = []
         galleryItems = []
         galleryStore.clear()
-        notifications.updateBadge(0)
+        notifications.clearAccountNotifications()
     }
 
     // MARK: - Returning User Login

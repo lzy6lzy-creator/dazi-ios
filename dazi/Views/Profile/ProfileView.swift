@@ -10,6 +10,10 @@ struct ProfileView: View {
     @State private var editMemoryText = ""
     @State private var showEditGallery = false
     @State private var showInvitationCenter = false
+    @State private var showLogoutConfirm = false
+    @State private var showDeleteAccountConfirm = false
+    @State private var isDeletingAccount = false
+    @State private var accountActionError: String?
 
     var body: some View {
         NavigationStack {
@@ -23,7 +27,7 @@ struct ProfileView: View {
                     gallerySection
                     memorySection
                     aboutSection
-                    logoutSection
+                    accountActionsSection
                     Spacer().frame(height: 80)
                 }
                 .padding()
@@ -474,31 +478,87 @@ struct ProfileView: View {
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
     }
 
-    @State private var showLogoutConfirm = false
-
-    private var logoutSection: some View {
-        Button(role: .destructive) {
-            showLogoutConfirm = true
-        } label: {
-            HStack {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                Text("退出登录")
+    private var accountActionsSection: some View {
+        VStack(spacing: 0) {
+            Button(role: .destructive) {
+                showLogoutConfirm = true
+            } label: {
+                HStack {
+                    Image(systemName: "rectangle.portrait.and.arrow.right")
+                    Text("退出登录")
+                    Spacer()
+                }
+                .font(.subheadline)
+                .foregroundStyle(.red)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
-            .font(.subheadline)
-            .foregroundStyle(.red)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(AppTheme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
-            .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+
+            Divider().padding(.leading, 48)
+
+            Button(role: .destructive) {
+                showDeleteAccountConfirm = true
+            } label: {
+                HStack {
+                    Image(systemName: "person.crop.circle.badge.xmark")
+                    Text("注销账号")
+                    Spacer()
+                    if isDeletingAccount {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.red)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+            }
+            .disabled(isDeletingAccount)
+
+            if let accountActionError {
+                Text(accountActionError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            }
         }
+        .background(AppTheme.cardBackground)
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+        .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
         .alert("确定退出？", isPresented: $showLogoutConfirm) {
             Button("取消", role: .cancel) {}
             Button("退出", role: .destructive) {
                 dataStore.logout()
             }
         } message: {
-            Text("退出后将清除本地数据，需要重新注册。")
+            Text("退出后会清除本机登录信息，可使用手机号重新登录。")
+        }
+        .confirmationDialog(
+            "永久注销账号？",
+            isPresented: $showDeleteAccountConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("永久删除账号", role: .destructive) {
+                deleteAccount()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("注销后将永久删除你的个人资料、活动、聊天室、记忆和邀请数据，且无法恢复。")
+        }
+    }
+
+    private func deleteAccount() {
+        isDeletingAccount = true
+        accountActionError = nil
+        Task {
+            do {
+                try await dataStore.deleteAccount()
+            } catch {
+                accountActionError = "注销失败，请检查网络后重试"
+            }
+            isDeletingAccount = false
         }
     }
 

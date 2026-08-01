@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.models.user import User
 
 security_scheme = HTTPBearer()
 
@@ -47,6 +48,7 @@ def decode_token(token: str) -> dict:
 
 async def get_current_user_id(
     credentials: HTTPAuthorizationCredentials = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
 ) -> UUID:
     payload = decode_token(credentials.credentials)
     if payload.get("type") != "access":
@@ -54,4 +56,13 @@ async def get_current_user_id(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token type",
         )
-    return UUID(payload["user_id"])
+    user_id = UUID(payload["user_id"])
+    result = await db.execute(
+        select(User.id).where(User.id == user_id, User.is_active == True)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User no longer exists",
+        )
+    return user_id

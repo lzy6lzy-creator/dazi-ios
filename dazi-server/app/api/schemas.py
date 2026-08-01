@@ -98,6 +98,11 @@ class RegistrationPolicyResponse(BaseModel):
     download_url: Optional[str] = None
 
 
+class AccountDeletionResponse(BaseModel):
+    message: str
+    deleted_event_count: int
+
+
 class InvitationMeResponse(BaseModel):
     code: Optional[str] = None
     status: Optional[str] = None

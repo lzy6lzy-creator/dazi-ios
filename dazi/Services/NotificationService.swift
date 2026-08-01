@@ -126,6 +126,12 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 
+    func clearAccountNotifications() {
+        center.removeAllPendingNotificationRequests()
+        center.removeAllDeliveredNotifications()
+        updateBadge(0)
+    }
+
     private func schedule(
         identifier: String,
         title: String,

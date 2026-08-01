@@ -266,6 +266,12 @@ async def refresh_token(req: AuthRefreshRequest, db: AsyncSession = Depends(get_
 
     user_id = UUID(payload["user_id"])
 
+    user_result = await db.execute(
+        select(User.id).where(User.id == user_id, User.is_active == True)
+    )
+    if user_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=401, detail="用户不存在或已注销")
+
     return AuthTokenResponse(
         access_token=create_access_token(user_id),
         refresh_token=create_refresh_token(user_id),

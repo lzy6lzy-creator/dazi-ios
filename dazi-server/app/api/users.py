@@ -15,11 +15,13 @@ from app.core.security import get_current_user_id
 from app.models.user import User, Agent, AgentMemory
 from app.models.event import Event
 from app.services.embedding_service import embedding_service
+from app.services.account_deletion_service import delete_user_account
 from app.api.schemas import (
     UserResponse, UserUpdate,
     AgentResponse, AgentUpdate,
     MemoryResponse, MemoryUpdate,
     PublicProfileEventResponse, PublicUserProfileResponse,
+    AccountDeletionResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["users"])
@@ -74,6 +76,20 @@ async def update_me(
 
     await db.flush()
     return user
+
+
+@router.delete("/users/me", response_model=AccountDeletionResponse)
+async def delete_me(
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    deletion = await delete_user_account(db, user_id=user_id)
+    if deletion is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return AccountDeletionResponse(
+        message="账号已注销",
+        deleted_event_count=deletion.deleted_event_count,
+    )
 
 
 @router.get("/users/{profile_user_id}/profile", response_model=PublicUserProfileResponse)
