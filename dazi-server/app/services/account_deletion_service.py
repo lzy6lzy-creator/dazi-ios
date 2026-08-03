@@ -69,7 +69,9 @@ async def delete_user_account(
         phone=user.phone,
         deleted_event_count=len(event_ids),
     )
-    await db.delete(user)
+    # Use a SQL delete so PostgreSQL owns the ON DELETE behavior. Deleting the
+    # loaded ORM object would first try to detach Agent by setting user_id NULL.
+    await db.execute(delete(User).where(User.id == user_id))
     await db.flush()
     await ChatHistoryCache.clear_user_state(str(user_id))
     return result

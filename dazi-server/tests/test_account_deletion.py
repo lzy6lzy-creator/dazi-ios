@@ -67,7 +67,7 @@ class AccountDeletionServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(result.user_id, user_id)
         self.assertEqual(result.deleted_event_count, 2)
-        self.assertEqual(db.deleted, [user])
+        self.assertEqual(db.deleted, [])
         self.assertEqual(db.flush_count, 1)
         clear_user_state.assert_awaited_once_with(str(user_id))
         statements = "\n".join(db.statements)
@@ -79,6 +79,7 @@ class AccountDeletionServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("signup_admissions.invitation_account_user_id", statements)
         self.assertIn("DELETE FROM invitation_ledger", statements)
         self.assertIn("invitation_ledger.invitee_user_id", statements)
+        self.assertIn("DELETE FROM users", statements)
 
     async def test_missing_user_returns_none_without_deleting(self):
         db = FakeDb(None, [])

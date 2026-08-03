@@ -30,6 +30,15 @@ class AccountDeletionStaticTests(unittest.TestCase):
         self.assertIn("永久删除你的个人资料、活动、聊天室、记忆和邀请数据", profile)
         self.assertIn("try await dataStore.deleteAccount()", profile)
 
+    def test_profile_and_agent_cards_have_separate_edit_actions(self):
+        profile = (ROOT / "dazi/Views/Profile/ProfileView.swift").read_text(encoding="utf-8")
+
+        self.assertIn('cardEditButton(label: "编辑个人资料"', profile)
+        self.assertIn('cardEditButton(label: "编辑 Agent"', profile)
+        self.assertIn("showEditProfile = true", profile)
+        self.assertIn("showEditAgent = true", profile)
+        self.assertNotIn('Label("编辑个人资料", systemImage:', profile)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -34,25 +34,6 @@ struct ProfileView: View {
             }
             .background(AppTheme.backgroundColor)
             .navigationTitle("我的")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            showEditProfile = true
-                        } label: {
-                            Label("编辑个人资料", systemImage: "person.crop.circle")
-                        }
-                        Button {
-                            showEditAgent = true
-                        } label: {
-                            Label("编辑Agent资料", systemImage: "brain.head.profile")
-                        }
-                    } label: {
-                        Image(systemName: "pencil.line")
-                            .font(.subheadline)
-                    }
-                }
-            }
             .sheet(isPresented: $showEditGallery) {
                 EditGalleryView()
                     .environment(dataStore)
@@ -148,6 +129,12 @@ struct ProfileView: View {
         .background(AppTheme.cardBackground)
         .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusXL))
         .shadow(color: AppTheme.shadowColor, radius: AppTheme.shadowRadius, y: AppTheme.shadowY)
+        .overlay(alignment: .topTrailing) {
+            cardEditButton(label: "编辑个人资料", tint: AppTheme.primaryColor) {
+                showEditProfile = true
+            }
+            .padding(12)
+        }
     }
 
     private var agentCard: some View {
@@ -183,6 +170,10 @@ struct ProfileView: View {
             }
 
             Spacer()
+
+            cardEditButton(label: "编辑 Agent", tint: AppTheme.agentColor) {
+                showEditAgent = true
+            }
         }
         .padding(16)
         .background(AppTheme.cardBackground)
@@ -556,10 +547,41 @@ struct ProfileView: View {
             do {
                 try await dataStore.deleteAccount()
             } catch {
-                accountActionError = "注销失败，请检查网络后重试"
+                accountActionError = accountDeletionErrorMessage(for: error)
             }
             isDeletingAccount = false
         }
+    }
+
+    private func accountDeletionErrorMessage(for error: Error) -> String {
+        if case APIError.serverError(let statusCode, _) = error, statusCode >= 500 {
+            return "注销失败，服务暂时不可用，请稍后重试"
+        }
+        if case APIError.unauthorized = error {
+            return "登录状态已失效，请重新登录后再试"
+        }
+        if (error as NSError).domain == NSURLErrorDomain {
+            return "网络连接异常，请检查网络后重试"
+        }
+        return "注销失败，请稍后重试"
+    }
+
+    private func cardEditButton(
+        label: String,
+        tint: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: "pencil")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 36, height: 36)
+                .background(tint.opacity(0.1))
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityLabel(label)
     }
 
     private func aboutRow(icon: String, title: String, value: String) -> some View {
