@@ -23,6 +23,7 @@ struct LoginView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showsNetworkSettingsButton = false
+    @State private var hasRequestedInitialNetworkAccess = false
     @State private var didAppear = false
     @AppStorage("pendingInvitationCode") private var pendingInvitationCode = ""
     @FocusState private var focusedField: Field?
@@ -85,6 +86,9 @@ struct LoginView: View {
         }
         .onChange(of: pendingInvitationCode) { _, _ in
             applyPendingInvitationCode()
+        }
+        .task {
+            await requestInitialNetworkAccess()
         }
     }
 
@@ -352,6 +356,19 @@ struct LoginView: View {
                     }
                 }
             }
+        }
+    }
+
+    private func requestInitialNetworkAccess() async {
+        guard !hasRequestedInitialNetworkAccess else { return }
+        hasRequestedInitialNetworkAccess = true
+
+        do {
+            _ = try await api.getRegistrationPolicy()
+        } catch {
+            guard !Task.isCancelled, isConnectivityError(error) else { return }
+            showsNetworkSettingsButton = true
+            errorMessage = messageForSendCodeError(error)
         }
     }
 

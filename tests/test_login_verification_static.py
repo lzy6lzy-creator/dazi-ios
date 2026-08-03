@@ -60,6 +60,13 @@ class LoginVerificationStaticTests(unittest.TestCase):
         self.assertIn(".notConnectedToInternet, .dataNotAllowed", source)
         self.assertIn("允许 i搭不搭使用无线局域网与蜂窝数据", source)
 
+    def test_login_requests_network_access_before_sms_action(self):
+        source = (ROOT / "dazi/Views/Onboarding/LoginView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("await requestInitialNetworkAccess()", source)
+        self.assertIn("_ = try await api.getRegistrationPolicy()", source)
+        self.assertIn("hasRequestedInitialNetworkAccess", source)
+
 
 if __name__ == "__main__":
     unittest.main()
