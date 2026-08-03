@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 private enum LoginInvitationState: Equatable {
     case hidden
@@ -9,6 +10,7 @@ private enum LoginInvitationState: Equatable {
 struct LoginView: View {
     @Environment(DataStore.self) private var dataStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.openURL) private var openURL
     var onLoginComplete: (_ isNewUser: Bool) -> Void
 
     @State private var phone = ""
@@ -20,6 +22,7 @@ struct LoginView: View {
     @State private var countdown = 0
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var showsNetworkSettingsButton = false
     @State private var didAppear = false
     @AppStorage("pendingInvitationCode") private var pendingInvitationCode = ""
     @FocusState private var focusedField: Field?
@@ -124,11 +127,24 @@ struct LoginView: View {
             codeField
 
             if let errorMessage {
-                Text(errorMessage)
-                    .font(.system(size: 12))
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.opacity)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(errorMessage)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.red)
+
+                    if showsNetworkSettingsButton {
+                        Button {
+                            openNetworkSettings()
+                        } label: {
+                            Label("打开系统设置", systemImage: "gearshape")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(LoginPalette.accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .transition(.opacity)
             }
 
             Button {
@@ -309,6 +325,7 @@ struct LoginView: View {
     private func sendCode() {
         guard canSendCode else { return }
         errorMessage = nil
+        showsNetworkSettingsButton = false
         focusedField = .code
 
         Task {
@@ -325,6 +342,7 @@ struct LoginView: View {
                 }
             } catch {
                 await MainActor.run {
+                    showsNetworkSettingsButton = isConnectivityError(error)
                     if let detail = invitationRequiredDetail(from: error) {
                         invitationState = .required(target: detail.qualifiedTarget)
                         focusedField = .inviteCode
@@ -385,7 +403,35 @@ struct LoginView: View {
                 return "短信服务暂时不可用，请稍后重试"
             }
         }
+        if let code = urlErrorCode(from: error) {
+            switch code {
+            case .notConnectedToInternet, .dataNotAllowed:
+                return "当前无法联网，请确认网络已连接，并允许 i搭不搭使用无线局域网与蜂窝数据"
+            case .timedOut:
+                return "网络连接超时，请稍后重试"
+            case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return "暂时无法连接服务器，请稍后重试"
+            default:
+                break
+            }
+        }
         return "发送失败，请检查网络"
+    }
+
+    private func urlErrorCode(from error: Error) -> URLError.Code? {
+        let nsError = error as NSError
+        guard nsError.domain == NSURLErrorDomain else { return nil }
+        return URLError.Code(rawValue: nsError.code)
+    }
+
+    private func isConnectivityError(_ error: Error) -> Bool {
+        guard let code = urlErrorCode(from: error) else { return false }
+        return code == .notConnectedToInternet || code == .dataNotAllowed
+    }
+
+    private func openNetworkSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        openURL(url)
     }
 
     private func startCountdown() {
@@ -402,6 +448,7 @@ struct LoginView: View {
         guard canLogin else { return }
         isLoading = true
         errorMessage = nil
+        showsNetworkSettingsButton = false
         focusedField = nil
 
         Task {
@@ -418,7 +465,10 @@ struct LoginView: View {
             } catch {
                 await MainActor.run {
                     isLoading = false
-                    errorMessage = "登录失败，请检查验证码"
+                    showsNetworkSettingsButton = isConnectivityError(error)
+                    errorMessage = showsNetworkSettingsButton
+                        ? messageForSendCodeError(error)
+                        : "登录失败，请检查验证码"
                 }
             }
         }
@@ -446,6 +496,8 @@ struct LoginView: View {
 
     private func resetForPhoneChange() {
         invalidateSentCode()
+        errorMessage = nil
+        showsNetworkSettingsButton = false
         if pendingInvitationCode.isEmpty {
             inviteCode = ""
             invitationState = .hidden

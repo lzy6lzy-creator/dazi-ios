@@ -52,6 +52,14 @@ class LoginVerificationStaticTests(unittest.TestCase):
         self.assertIn("invitationNeedsInput", source)
         self.assertNotIn("前 500 位用户免邀请码", source)
 
+    def test_offline_error_offers_system_network_settings(self):
+        source = (ROOT / "dazi/Views/Onboarding/LoginView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("UIApplication.openSettingsURLString", source)
+        self.assertIn('Label("打开系统设置", systemImage: "gearshape")', source)
+        self.assertIn(".notConnectedToInternet, .dataNotAllowed", source)
+        self.assertIn("允许 i搭不搭使用无线局域网与蜂窝数据", source)
+
 
 if __name__ == "__main__":
     unittest.main()
