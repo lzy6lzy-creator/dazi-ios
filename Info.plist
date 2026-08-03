@@ -7,6 +7,6 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>需要获取你的位置来为你匹配附近的搭子</string>
+	<string>用于确认服务区域，并为你匹配附近的搭子</string>
 </dict>
 </plist>

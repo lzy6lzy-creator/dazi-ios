@@ -14,6 +14,7 @@ class InvitationIosStaticTests(unittest.TestCase):
         self.assertIn("func getRegistrationPolicy()", text)
         self.assertIn("inviteCode: String?", text)
         self.assertIn('body["invite_code"]', text)
+        self.assertIn('body["location"]', text)
         self.assertIn('"install_id": InstallationIdentity.current', text)
         self.assertIn("admissionToken: String", text)
         self.assertIn('body["admission_token"] = admissionToken', text)
@@ -44,7 +45,14 @@ class InvitationIosStaticTests(unittest.TestCase):
         self.assertIn("func verifyLaunchCityLocation", api)
         self.assertIn("location.horizontalAccuracy", location)
         self.assertIn("location.timestamp", location)
+        self.assertIn("signupLocationSnapshot", location)
         self.assertIn("verifyLaunchCityLocation", location)
+
+    def test_login_requests_location_before_sms_and_sends_fresh_fix(self):
+        login = (ROOT / "dazi" / "Views" / "Onboarding" / "LoginView.swift").read_text(encoding="utf-8")
+
+        self.assertIn("dataStore.locationManager.requestPermission()", login)
+        self.assertIn("location: dataStore.locationManager.signupLocationSnapshot", login)
 
     def test_profile_has_invitation_center_with_system_share(self):
         api = (ROOT / "dazi" / "Services" / "APIClient.swift").read_text(encoding="utf-8")

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -107,6 +108,43 @@ class SmsAuthApiTests(unittest.IsolatedAsyncioTestCase):
         })
         self.assertEqual(service.sent, ["13800000000"])
         self.assertEqual(limiter.calls, [("13800000000", "127.0.0.1")])
+
+    async def test_send_code_assesses_and_binds_fresh_location_to_admission(self):
+        service = FakeSmsService()
+        limiter = FakeRateLimiter()
+        issued_kwargs = {}
+
+        async def issue_with_location(_db, **kwargs):
+            issued_kwargs.update(kwargs)
+            return IssuedAdmission(
+                raw_token="admission-token",
+                expires_in=600,
+                registration_mode="open",
+                admission_type="open",
+                qualified_target=500,
+            )
+
+        with patch("app.api.auth.issue_signup_admission", issue_with_location):
+            await send_code(
+                AuthSendCodeRequest(
+                    phone="13800000000",
+                    location={
+                        "latitude": 31.2304,
+                        "longitude": 121.4737,
+                        "accuracy_meters": 40,
+                        "captured_at": datetime.now(timezone.utc),
+                    },
+                ),
+                request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1")),
+                db=object(),
+                sms_service=service,
+                rate_limiter=limiter,
+            )
+
+        self.assertTrue(issued_kwargs["location_is_launch_city"])
+        self.assertEqual(issued_kwargs["location_city_code"], "310000")
+        self.assertEqual(issued_kwargs["location_accuracy_meters"], 40)
+        self.assertIsNotNone(issued_kwargs["location_verified_at"])
 
     async def test_send_code_whitelist_user_still_sends_real_sms(self):
         service = FakeSmsService()
@@ -270,6 +308,45 @@ class SmsAuthApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(response["is_new_user"])
         self.assertEqual(service.checked, [])
         self.assertEqual(len(db.added), 2)
+
+    async def test_new_user_materializes_location_from_consumed_admission(self):
+        service = FakeSmsService(verified=True)
+        db = FakeAuthDb(None)
+        verified_at = datetime.now(timezone.utc)
+        consumed = SimpleNamespace(
+            location_city_code="310000",
+            location_is_launch_city=True,
+            location_accuracy_meters=40,
+            location_verified_at=verified_at,
+        )
+        record_location = AsyncMock(return_value=(SimpleNamespace(), []))
+
+        with patch(
+            "app.api.auth.consume_signup_admission",
+            AsyncMock(return_value=consumed),
+        ), patch(
+            "app.api.auth.record_launch_city_assessment",
+            record_location,
+        ):
+            response = await login(
+                AuthLoginRequest(
+                    phone="13800000000",
+                    code="654321",
+                    admission_token="admission-token",
+                ),
+                db=db,
+                sms_service=service,
+            )
+
+        self.assertTrue(response["is_new_user"])
+        record_location.assert_awaited_once_with(
+            db,
+            user_id=db.added[0].id,
+            is_launch_city=True,
+            city_code="310000",
+            accuracy_meters=40,
+            verified_at=verified_at,
+        )
 
     async def test_whitelist_dynamic_code_still_uses_sms_provider(self):
         service = FakeSmsService(verified=True)

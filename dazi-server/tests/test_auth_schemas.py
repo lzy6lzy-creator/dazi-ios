@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from datetime import datetime, timezone
 
 from pydantic import ValidationError
 
@@ -45,6 +46,32 @@ class AuthSchemaTests(unittest.TestCase):
         self.assertEqual(send_request.invite_code, "ABCD2345")
         self.assertEqual(send_request.install_id, "install-1")
         self.assertEqual(login_request.admission_token, "admission-token")
+
+    def test_send_code_accepts_timezone_aware_device_location(self):
+        request = AuthSendCodeRequest(
+            phone="13800000000",
+            location={
+                "latitude": 31.2304,
+                "longitude": 121.4737,
+                "accuracy_meters": 40,
+                "captured_at": datetime(2026, 8, 3, 8, 0, tzinfo=timezone.utc),
+            },
+        )
+
+        self.assertEqual(request.location.latitude, 31.2304)
+        self.assertEqual(request.location.accuracy_meters, 40)
+
+    def test_send_code_rejects_location_without_timezone(self):
+        with self.assertRaises(ValidationError):
+            AuthSendCodeRequest(
+                phone="13800000000",
+                location={
+                    "latitude": 31.2304,
+                    "longitude": 121.4737,
+                    "accuracy_meters": 40,
+                    "captured_at": datetime(2026, 8, 3, 8, 0),
+                },
+            )
 
 
 if __name__ == "__main__":

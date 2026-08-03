@@ -164,6 +164,10 @@ async def issue_signup_admission(
     install_id: Optional[str] = None,
     client_ip: Optional[str] = None,
     whitelist_bypass: bool = False,
+    location_city_code: Optional[str] = None,
+    location_is_launch_city: Optional[bool] = None,
+    location_accuracy_meters: Optional[float] = None,
+    location_verified_at: Optional[datetime] = None,
     now: Optional[datetime] = None,
 ) -> IssuedAdmission:
     current_time = now or utc_now()
@@ -221,6 +225,10 @@ async def issue_signup_admission(
         failed_attempts=0,
         install_id_hash=hash_identifier(install_id, "install"),
         ip_hash=hash_identifier(client_ip, "ip"),
+        location_city_code=location_city_code,
+        location_is_launch_city=location_is_launch_city,
+        location_accuracy_meters=location_accuracy_meters,
+        location_verified_at=location_verified_at,
         expires_at=current_time + timedelta(seconds=ADMISSION_TTL_SECONDS),
         created_at=current_time,
     )
@@ -263,13 +271,14 @@ async def cancel_signup_admission(
     *,
     raw_token: str,
     status: str = "cancelled",
-) -> None:
+) -> Optional[SignupAdmission]:
     admission = await _locked_admission(db, raw_token)
     if admission is None or admission.status != "issued":
-        return
+        return None
     await _release_reservation(db, admission)
     admission.status = status
     await db.flush()
+    return admission
 
 
 async def record_failed_verification(

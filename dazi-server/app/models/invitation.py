@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, String, TIMESTAMP, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Float, ForeignKey, Integer, String, TIMESTAMP, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -102,6 +102,10 @@ class SignupAdmission(Base):
     failed_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     install_id_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     ip_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    location_city_code: Mapped[Optional[str]] = mapped_column(String(12), nullable=True)
+    location_is_launch_city: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
+    location_accuracy_meters: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    location_verified_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, index=True)
     consumed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=utc_now, nullable=False)

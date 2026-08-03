@@ -6,6 +6,7 @@ Auth API - 用户注册/登录
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -41,6 +42,11 @@ from app.services.invitation_service import (
 from app.services.internal_test_access import (
     is_internal_test_code,
     is_internal_test_phone,
+)
+from app.services.invitation_reward_service import (
+    LocationSubmissionError,
+    assess_launch_city_location,
+    record_launch_city_assessment,
 )
 from app.services.sms_verification_service import (
     AliyunSmsVerificationService,
@@ -82,6 +88,24 @@ def _request_client_ip(request: Request) -> str | None:
     return client.host if client else None
 
 
+async def _record_admission_location(db: AsyncSession, *, user_id: UUID, admission) -> None:
+    if admission is None:
+        return
+    is_launch_city = getattr(admission, "location_is_launch_city", None)
+    accuracy_meters = getattr(admission, "location_accuracy_meters", None)
+    verified_at = getattr(admission, "location_verified_at", None)
+    if is_launch_city is None or accuracy_meters is None or verified_at is None:
+        return
+    await record_launch_city_assessment(
+        db,
+        user_id=user_id,
+        is_launch_city=is_launch_city,
+        city_code=getattr(admission, "location_city_code", None),
+        accuracy_meters=accuracy_meters,
+        verified_at=verified_at,
+    )
+
+
 @router.get("/registration-policy", response_model=RegistrationPolicyResponse)
 async def registration_policy(db: AsyncSession = Depends(get_db)):
     policy = await get_registration_policy(db)
@@ -110,6 +134,26 @@ async def send_code(
 ):
     """Check registration access and send a real PNVS verification code."""
     client_ip = _request_client_ip(request)
+    location_fields = {}
+    if req.location is not None:
+        verified_at = datetime.now(timezone.utc)
+        try:
+            location = assess_launch_city_location(
+                latitude=req.location.latitude,
+                longitude=req.location.longitude,
+                accuracy_meters=req.location.accuracy_meters,
+                captured_at=req.location.captured_at,
+                now=verified_at,
+            )
+        except LocationSubmissionError as exc:
+            logger.info("Ignoring unavailable signup location: %s", str(exc))
+        else:
+            location_fields = {
+                "location_city_code": location.city_code,
+                "location_is_launch_city": location.is_launch_city,
+                "location_accuracy_meters": req.location.accuracy_meters,
+                "location_verified_at": verified_at,
+            }
     whitelisted = is_internal_test_phone(
         phone=req.phone,
         allowed_phones_csv=settings.INTERNAL_TEST_PHONES,
@@ -123,6 +167,7 @@ async def send_code(
             install_id=req.install_id,
             client_ip=client_ip,
             whitelist_bypass=whitelisted,
+            **location_fields,
         )
     except RegistrationPausedError as exc:
         raise HTTPException(status_code=503, detail="新用户注册暂时关闭") from exc
@@ -221,6 +266,7 @@ async def login(
     user = result.scalar_one_or_none()
 
     is_new = False
+    admission_for_location = None
     if not user:
         if not req.admission_token and not fixed_code_verified:
             raise HTTPException(status_code=403, detail="注册凭证已失效，请重新获取验证码")
@@ -235,7 +281,7 @@ async def login(
         await db.flush()
         if req.admission_token:
             try:
-                await consume_signup_admission(
+                admission_for_location = await consume_signup_admission(
                     db,
                     raw_token=req.admission_token,
                     invitee_user_id=user.id,
@@ -247,7 +293,16 @@ async def login(
                 ) from exc
         is_new = True
     elif req.admission_token:
-        await cancel_signup_admission(db, raw_token=req.admission_token)
+        admission_for_location = await cancel_signup_admission(
+            db,
+            raw_token=req.admission_token,
+        )
+
+    await _record_admission_location(
+        db,
+        user_id=user.id,
+        admission=admission_for_location,
+    )
 
     return {
         "access_token": create_access_token(user.id),

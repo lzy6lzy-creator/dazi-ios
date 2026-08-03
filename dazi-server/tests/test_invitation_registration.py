@@ -98,6 +98,28 @@ class InvitationRegistrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(admission.token_hash, hash_admission_token(issued.raw_token))
         self.assertNotEqual(admission.token_hash, issued.raw_token)
 
+    async def test_admission_stores_only_derived_location_result(self):
+        verified_at = self.now - timedelta(seconds=10)
+        db = FakeDb(None, SimpleNamespace(registration_mode="open"))
+
+        await issue_signup_admission(
+            db,
+            phone="13800000000",
+            location_city_code="310000",
+            location_is_launch_city=True,
+            location_accuracy_meters=36.5,
+            location_verified_at=verified_at,
+            now=self.now,
+        )
+
+        admission = db.added[0]
+        self.assertEqual(admission.location_city_code, "310000")
+        self.assertTrue(admission.location_is_launch_city)
+        self.assertEqual(admission.location_accuracy_meters, 36.5)
+        self.assertEqual(admission.location_verified_at, verified_at)
+        self.assertFalse(hasattr(admission, "latitude"))
+        self.assertFalse(hasattr(admission, "longitude"))
+
     async def test_existing_user_bypasses_paused_mode(self):
         program = SimpleNamespace(registration_mode="paused")
         db = FakeDb(uuid.uuid4(), program)

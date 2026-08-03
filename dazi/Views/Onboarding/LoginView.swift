@@ -88,6 +88,7 @@ struct LoginView: View {
             applyPendingInvitationCode()
         }
         .task {
+            dataStore.locationManager.requestPermission()
             await requestInitialNetworkAccess()
         }
     }
@@ -336,7 +337,8 @@ struct LoginView: View {
             do {
                 let response = try await api.sendVerificationCode(
                     phone: phone,
-                    inviteCode: invitationNeedsInput ? inviteCode : nil
+                    inviteCode: invitationNeedsInput ? inviteCode : nil,
+                    location: dataStore.locationManager.signupLocationSnapshot
                 )
                 await MainActor.run {
                     applySendCodeResponse(response)

@@ -761,13 +761,25 @@ final class APIClient {
         )
     }
 
-    func sendVerificationCode(phone: String, inviteCode: String? = nil) async throws -> APISendCodeResponse {
+    func sendVerificationCode(
+        phone: String,
+        inviteCode: String? = nil,
+        location: DeviceLocationSnapshot? = nil
+    ) async throws -> APISendCodeResponse {
         var body: [String: Any] = [
             "phone": phone,
             "install_id": InstallationIdentity.current,
         ]
         if let inviteCode, !inviteCode.isEmpty {
             body["invite_code"] = inviteCode
+        }
+        if let location {
+            body["location"] = [
+                "latitude": location.latitude,
+                "longitude": location.longitude,
+                "accuracy_meters": location.accuracyMeters,
+                "captured_at": ISO8601DateFormatter().string(from: location.capturedAt),
+            ]
         }
         return try await request(
             method: "POST",

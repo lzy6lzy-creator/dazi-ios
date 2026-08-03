@@ -1,6 +1,13 @@
 import CoreLocation
 import Foundation
 
+struct DeviceLocationSnapshot {
+    let latitude: Double
+    let longitude: Double
+    let accuracyMeters: Double
+    let capturedAt: Date
+}
+
 @Observable
 class LocationManager: NSObject, CLLocationManagerDelegate {
     private let clManager = CLLocationManager()
@@ -24,7 +31,16 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     }
 
     func requestPermission() {
-        clManager.requestWhenInUseAuthorization()
+        switch clManager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            isAuthorized = true
+            clManager.requestLocation()
+        case .notDetermined:
+            clManager.requestWhenInUseAuthorization()
+        default:
+            isAuthorized = false
+            locationString = "位置权限未授予"
+        }
     }
 
     func refreshLocation() {
@@ -42,6 +58,23 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         if !districtName.isEmpty { parts.append(districtName) }
         if !streetName.isEmpty { parts.append(streetName) }
         return parts.isEmpty ? "位置未知" : parts.joined(separator: " ")
+    }
+
+    var signupLocationSnapshot: DeviceLocationSnapshot? {
+        guard hasLocation,
+              let capturedAt,
+              accuracyMeters > 0,
+              accuracyMeters <= 1000 else {
+            return nil
+        }
+        let age = Date().timeIntervalSince(capturedAt)
+        guard age >= -60, age <= 5 * 60 else { return nil }
+        return DeviceLocationSnapshot(
+            latitude: latitude,
+            longitude: longitude,
+            accuracyMeters: accuracyMeters,
+            capturedAt: capturedAt
+        )
     }
 
     // MARK: - CLLocationManagerDelegate

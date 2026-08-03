@@ -268,6 +268,10 @@ async def _ensure_runtime_schema(conn) -> None:
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ"))
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'"))
     await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS superseded_by_id UUID"))
+    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_city_code VARCHAR(12)"))
+    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_is_launch_city BOOLEAN"))
+    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_accuracy_meters DOUBLE PRECISION"))
+    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_verified_at TIMESTAMPTZ"))
     await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_push_device_tokens_token_unique ON push_device_tokens(token)"))
     await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_push_device_tokens_user_active ON push_device_tokens(user_id, is_active)"))
     await conn.execute(

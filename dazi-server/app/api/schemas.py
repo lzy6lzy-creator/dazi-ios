@@ -23,10 +23,25 @@ def normalize_mainland_phone(value: object) -> str:
     return phone
 
 
+class DeviceLocationRequest(BaseModel):
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    accuracy_meters: float = Field(gt=0)
+    captured_at: datetime
+
+    @field_validator("captured_at")
+    @classmethod
+    def require_timezone(cls, value: datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("captured_at 必须包含时区")
+        return value
+
+
 class AuthSendCodeRequest(BaseModel):
     phone: str
     invite_code: Optional[str] = Field(default=None, max_length=32)
     install_id: Optional[str] = Field(default=None, max_length=128)
+    location: Optional[DeviceLocationRequest] = None
 
     @field_validator("phone", mode="before")
     @classmethod
@@ -119,18 +134,8 @@ class InvitationStatusResponse(BaseModel):
     available: int
 
 
-class LocationVerificationRequest(BaseModel):
-    latitude: float = Field(ge=-90, le=90)
-    longitude: float = Field(ge=-180, le=180)
-    accuracy_meters: float = Field(gt=0)
-    captured_at: datetime
-
-    @field_validator("captured_at")
-    @classmethod
-    def require_timezone(cls, value: datetime):
-        if value.tzinfo is None or value.utcoffset() is None:
-            raise ValueError("captured_at 必须包含时区")
-        return value
+class LocationVerificationRequest(DeviceLocationRequest):
+    pass
 
 
 class LocationVerificationResponse(BaseModel):

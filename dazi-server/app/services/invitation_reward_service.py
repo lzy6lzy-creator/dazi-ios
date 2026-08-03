@@ -97,15 +97,39 @@ async def verify_launch_city_location(
         captured_at=captured_at,
         now=current_time,
     )
+    return await record_launch_city_assessment(
+        db,
+        user_id=user_id,
+        is_launch_city=assessment.is_launch_city,
+        city_code=assessment.city_code,
+        accuracy_meters=accuracy_meters,
+        verified_at=current_time,
+        risk_flags=assessment.risk_flags,
+        now=current_time,
+    )
+
+
+async def record_launch_city_assessment(
+    db: AsyncSession,
+    *,
+    user_id: uuid.UUID,
+    is_launch_city: bool,
+    city_code: Optional[str],
+    accuracy_meters: float,
+    verified_at: datetime,
+    risk_flags: tuple[str, ...] = (),
+    now: Optional[datetime] = None,
+) -> tuple[LocationVerification, list[str]]:
+    current_time = now or utc_now()
     program = await get_invitation_program(db)
     verification = LocationVerification(
         user_id=user_id,
-        city_code=assessment.city_code,
-        is_launch_city=assessment.is_launch_city,
+        city_code=city_code,
+        is_launch_city=is_launch_city,
         accuracy_meters=accuracy_meters,
-        risk_flags=list(assessment.risk_flags),
-        verified_at=current_time,
-        expires_at=current_time + timedelta(days=program.location_valid_days),
+        risk_flags=list(risk_flags),
+        verified_at=verified_at,
+        expires_at=verified_at + timedelta(days=program.location_valid_days),
     )
     db.add(verification)
     await db.flush()
