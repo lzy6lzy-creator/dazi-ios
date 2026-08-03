@@ -177,6 +177,36 @@ class SmsAuthApiTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response["invitation_state"], "hidden")
         self.assertEqual(service.sent, ["13800000000"])
 
+    async def test_send_code_open_whitelist_user_shows_free_invitation_target(self):
+        service = FakeSmsService()
+        limiter = FakeRateLimiter()
+
+        with patch.object(settings, "INTERNAL_TEST_PHONES", "13800000000"), patch.object(
+            settings, "INTERNAL_TEST_PHONES_FILE", ""
+        ), patch(
+            "app.api.auth.issue_signup_admission",
+            AsyncMock(return_value=IssuedAdmission(
+                raw_token="whitelist-admission",
+                expires_in=600,
+                registration_mode="open",
+                admission_type="whitelist",
+                qualified_user_count=1,
+                qualified_target=500,
+            )),
+        ):
+            response = await send_code(
+                AuthSendCodeRequest(phone="13800000000"),
+                request=SimpleNamespace(client=SimpleNamespace(host="127.0.0.1")),
+                db=object(),
+                sms_service=service,
+                rate_limiter=limiter,
+            )
+
+        self.assertEqual(response["user_state"], "whitelist")
+        self.assertEqual(response["invitation_state"], "not_required")
+        self.assertEqual(response["qualified_target"], 500)
+        self.assertEqual(service.sent, ["13800000000"])
+
     async def test_send_code_missing_invite_returns_target_without_sending_sms(self):
         service = FakeSmsService()
         limiter = FakeRateLimiter()

@@ -210,7 +210,9 @@ async def send_code(
         invitation_state = "hidden"
     elif admission.admission_type == "whitelist":
         user_state = "whitelist"
-        invitation_state = "hidden"
+        invitation_state = (
+            "not_required" if admission.registration_mode == "open" else "hidden"
+        )
     elif admission.admission_type == "open":
         user_state = "new"
         invitation_state = "not_required"
