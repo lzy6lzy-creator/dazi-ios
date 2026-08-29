@@ -74,8 +74,11 @@ Memory 和 Agent 配置不会出现在其他用户的公开主页。
 | PUT | `/api/v1/events/{event_id}` | JWT | 更新待匹配事件 |
 | DELETE | `/api/v1/events/{event_id}` | JWT | 取消事件 |
 | POST | `/api/v1/events/{event_id}/match` | JWT | 手动触发匹配 |
+| POST | `/api/v1/events/{event_id}/feedback` | JWT | 结束自己的活动并幂等保存体验/搭子评价 |
 
 事件地点的唯一业务字段是 `location`。请求中的旧 `city` 字段只作为兼容输入合并到 `location`，新建和更新事件不会再写 `events.city`。
+
+评价后只把当前用户的事件标为 `completed`；双方关联事件都完成（或另一方已取消）后才关闭聊天室。评价同时更新当前用户自己的 feedback Memory，不会向对方公开。
 
 ## 6. Chat Rooms
 

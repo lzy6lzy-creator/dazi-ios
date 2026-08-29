@@ -22,7 +22,7 @@ from app.services.service_reminder_monitor import service_reminder_monitor
 
 # 导入所有 model 以确保建表时能发现它们
 from app.models.user import User, Agent, AgentMemory, EventMemory, MemoryEvidence, AgentChatMessage, PushDeviceToken  # noqa: F401
-from app.models.event import Event, MatchLog, MatchBlocklist  # noqa: F401
+from app.models.event import Event, EventFeedback, MatchLog, MatchBlocklist  # noqa: F401
 from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage, ChatRoomVote, PassiveMatchRequest  # noqa: F401
 from app.models.prompt import PromptTemplate  # noqa: F401
 from app.models.beta_signup import BetaSignup  # noqa: F401

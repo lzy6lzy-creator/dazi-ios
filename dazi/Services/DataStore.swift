@@ -388,28 +388,31 @@ class DataStore {
 
     // MARK: - Event Feedback
 
-    func submitFeedback(eventId: String, rating: Int, comment: String) {
-        if let idx = events.firstIndex(where: { $0.id == eventId }) {
-            events[idx].status = .completed
-        }
-
-        if let roomIdx = chatRooms.firstIndex(where: { $0.eventId == eventId }) {
-            chatRooms[roomIdx].isActive = false
-            chatRooms[roomIdx].closedAt = .now
-            let closeMsg = Message.systemMessage("活动已结束，聊天室已关闭。感谢参与！")
-            chatRooms[roomIdx].messages.append(closeMsg)
-        }
-
-        // Feedback进入hidden memory (memory设计.md 2.5 + prd.md 7.4)
-        if !comment.isEmpty {
-            let memory = AgentMemory(
-                userId: currentUser.id,
-                type: .feedback,
-                content: comment,
-                confidence: 0.8,
-                source: "event_feedback"
+    func submitFeedback(
+        eventId: String,
+        experienceRating: Int,
+        experienceComment: String,
+        partnerRating: Int?,
+        partnerComment: String
+    ) async -> Bool {
+        do {
+            let response = try await api.submitEventFeedback(
+                eventId: eventId,
+                experienceRating: experienceRating,
+                experienceComment: experienceComment,
+                partnerRating: partnerRating,
+                partnerComment: partnerComment
             )
-            memories.append(memory)
+            if let index = events.firstIndex(where: { $0.id == eventId }) {
+                events[index].status = EventStatus.fromServer(response.eventStatus)
+            }
+            await fetchMemoriesFromServer()
+            await fetchChatRoomsFromServer()
+            showToast(response.roomClosed ? "评价已保存，聊天室已关闭" : "评价已保存", type: .info)
+            return true
+        } catch {
+            showToast(userFriendlyError(error), type: .error)
+            return false
         }
     }
 
@@ -823,6 +826,14 @@ class DataStore {
         }
         ws.onRoomCreated = { [weak self] roomData in
             self?.handleWSRoomCreated(roomData: roomData)
+        }
+        ws.onRoomClosed = { [weak self] roomId in
+            guard let self else { return }
+            if let index = self.chatRooms.firstIndex(where: { $0.id == roomId }) {
+                self.chatRooms[index].isActive = false
+                self.chatRooms[index].phase = "closed"
+                self.chatRooms[index].closedAt = .now
+            }
         }
         ws.onMatchRequestCreated = { [weak self] _ in
             Task { [weak self] in

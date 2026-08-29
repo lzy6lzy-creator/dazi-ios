@@ -10,6 +10,7 @@ struct EventFeedbackView: View {
     @State private var partnerRating: Int = 0
     @State private var partnerComment = ""
     @State private var submitted = false
+    @State private var isSubmitting = false
 
     var body: some View {
         NavigationStack {
@@ -83,15 +84,20 @@ struct EventFeedbackView: View {
                 Button {
                     submitFeedback()
                 } label: {
-                    Text("提交评价")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(rating > 0 ? AppTheme.primaryColor : Color.gray)
-                        .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+                    Group {
+                        if isSubmitting {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text("提交评价").font(.headline)
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(rating > 0 ? AppTheme.primaryColor : Color.gray)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
                 }
-                .disabled(rating == 0)
+                .disabled(rating == 0 || isSubmitting)
             }
             .padding()
         }
@@ -117,7 +123,7 @@ struct EventFeedbackView: View {
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("你的反馈将帮助点点更好地了解你的偏好")
+            Text("你的反馈将帮助\(dataStore.currentUser.agentName)更好地了解你的偏好")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -143,18 +149,21 @@ struct EventFeedbackView: View {
     }
 
     private func submitFeedback() {
-        let fullComment = [experienceComment, partnerComment]
-            .filter { !$0.isEmpty }
-            .joined(separator: " | ")
-
-        dataStore.submitFeedback(
-            eventId: eventId,
-            rating: rating,
-            comment: fullComment
-        )
-
-        withAnimation {
-            submitted = true
+        guard !isSubmitting else { return }
+        isSubmitting = true
+        Task {
+            let didSubmit = await dataStore.submitFeedback(
+                eventId: eventId,
+                experienceRating: rating,
+                experienceComment: experienceComment,
+                partnerRating: partnerRating > 0 ? partnerRating : nil,
+                partnerComment: partnerComment
+            )
+            isSubmitting = false
+            guard didSubmit else { return }
+            withAnimation {
+                submitted = true
+            }
         }
     }
 }

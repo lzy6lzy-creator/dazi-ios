@@ -51,6 +51,7 @@ FastAPI Backend
 - `agent_chat_messages`：用户和 AI 的对话历史。
 - `agent_memories`、`event_memories`、`memory_evidence`：分层记忆和证据。
 - `events`：活动意图、结构化字段、状态、向量、匹配轮次。
+- `event_feedbacks`：用户对自己事件的体验评分、搭子评分和私有评论。
 - `chat_rooms`、`messages`、`passive_match_requests`：聊天室、消息、被动邀请。
 - `match_logs`、`match_blocklists`：匹配日志和黑名单。
 - `prompt_templates`：管理后台可编辑 prompt。
@@ -107,7 +108,6 @@ Chat Room -> REST 历史消息 -> WebSocket 实时消息 -> APNs -> 投票/关�
 
 ## 7. 当前技术债
 
-- 活动评价当前只在 iOS 本地改变状态和记忆，缺少后端持久化，不能作为可靠数据链路。
 - 用户/Agent 自定义头像和活动相册仍以本机数据为主，缺少服务端媒体存储与跨设备同步。
 - 聊天室列表存在逐房间/逐成员查询，房间规模增长前应改为批量查询或 eager loading。
 - WebSocket 连接管理仍是单进程内存实现，多 worker 前需要 Redis Pub/Sub 或独立消息层。

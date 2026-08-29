@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import String, Integer, Boolean, Text, ARRAY, TIMESTAMP, Float, ForeignKey, Index
+from sqlalchemy import String, Integer, Boolean, Text, ARRAY, TIMESTAMP, Float, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from pgvector.sqlalchemy import Vector
@@ -39,6 +39,33 @@ class Event(Base):
     match_round: Mapped[int] = mapped_column(Integer, default=0)
     embedding = mapped_column(Vector(768), nullable=True)
     city_normalized: Mapped[Optional[str]] = mapped_column(String(50), index=True, nullable=True)
+
+
+class EventFeedback(Base):
+    __tablename__ = "event_feedbacks"
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", name="uq_event_feedback_event_user"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    experience_rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    experience_comment: Mapped[Optional[str]] = mapped_column(Text)
+    partner_rating: Mapped[Optional[int]] = mapped_column(Integer)
+    partner_comment: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
 
 
 class MatchLog(Base):

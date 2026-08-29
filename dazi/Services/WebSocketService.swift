@@ -17,6 +17,8 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
     var onEventUpdate: ((_ eventId: String, _ status: String) -> Void)?
     /// 收到新聊天室创建通知
     var onRoomCreated: ((_ roomData: [String: Any]) -> Void)?
+    /// 收到聊天室关闭通知
+    var onRoomClosed: ((_ roomId: String) -> Void)?
     /// 收到被动匹配邀请
     var onMatchRequestCreated: ((_ requestId: String) -> Void)?
     /// 收到记忆更新
@@ -142,6 +144,12 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
             } else if let roomId = json["room_id"] as? String {
                 DispatchQueue.main.async {
                     self.onRoomCreated?(["id": roomId])
+                }
+            }
+        case "room_closed":
+            if let roomId = json["room_id"] as? String {
+                DispatchQueue.main.async {
+                    self.onRoomClosed?(roomId)
                 }
             }
         case "match_request_created":

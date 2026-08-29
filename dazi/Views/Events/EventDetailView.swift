@@ -53,7 +53,11 @@ struct EventDetailView: View {
         .background(AppTheme.backgroundColor)
         .navigationTitle(event.title)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showFeedback) {
+        .sheet(isPresented: $showFeedback, onDismiss: {
+            if dataStore.events.first(where: { $0.id == event.id })?.status == .completed {
+                dismiss()
+            }
+        }) {
             EventFeedbackView(eventId: event.id)
         }
         .alert("确定取消活动？", isPresented: $showCancelConfirm) {

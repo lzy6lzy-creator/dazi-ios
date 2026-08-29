@@ -424,6 +424,32 @@ struct APIPlazaEventResponse: Codable {
     }
 }
 
+struct APIEventFeedbackResponse: Codable {
+    let id: String
+    let eventId: String
+    let experienceRating: Int
+    let experienceComment: String?
+    let partnerRating: Int?
+    let partnerComment: String?
+    let eventStatus: String
+    let roomClosed: Bool
+    let createdAt: String
+    let updatedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case eventId = "event_id"
+        case experienceRating = "experience_rating"
+        case experienceComment = "experience_comment"
+        case partnerRating = "partner_rating"
+        case partnerComment = "partner_comment"
+        case eventStatus = "event_status"
+        case roomClosed = "room_closed"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
 // MARK: - Chat Room Response Types
 
 struct APIChatRoomMemberResponse: Codable {
@@ -1103,6 +1129,26 @@ final class APIClient {
 
     func cancelEvent(id: String) async throws -> [String: Any] {
         try await requestDict(method: "DELETE", path: "/api/v1/events/\(id)")
+    }
+
+    func submitEventFeedback(
+        eventId: String,
+        experienceRating: Int,
+        experienceComment: String,
+        partnerRating: Int?,
+        partnerComment: String
+    ) async throws -> APIEventFeedbackResponse {
+        var body: [String: Any] = ["experience_rating": experienceRating]
+        let trimmedExperience = experienceComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedPartner = partnerComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedExperience.isEmpty { body["experience_comment"] = trimmedExperience }
+        if let partnerRating { body["partner_rating"] = partnerRating }
+        if !trimmedPartner.isEmpty { body["partner_comment"] = trimmedPartner }
+        return try await request(
+            method: "POST",
+            path: "/api/v1/events/\(eventId)/feedback",
+            body: body
+        )
     }
 
     /// Start editing an event via agent chat - returns agent's reply with current event info

@@ -483,6 +483,26 @@ class EventPlazaResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class EventFeedbackCreate(BaseModel):
+    experience_rating: int = Field(ge=1, le=5)
+    experience_comment: Optional[str] = Field(default=None, max_length=2000)
+    partner_rating: Optional[int] = Field(default=None, ge=1, le=5)
+    partner_comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+class EventFeedbackResponse(BaseModel):
+    id: UUID
+    event_id: UUID
+    experience_rating: int
+    experience_comment: Optional[str] = None
+    partner_rating: Optional[int] = None
+    partner_comment: Optional[str] = None
+    event_status: str
+    room_closed: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+
 # ── ChatRoom ──
 
 class ChatRoomMemberResponse(BaseModel):
