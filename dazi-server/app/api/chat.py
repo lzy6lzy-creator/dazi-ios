@@ -16,7 +16,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import aliased
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
@@ -354,84 +355,124 @@ async def list_my_rooms(
     db: AsyncSession = Depends(get_db),
 ):
     """获取我的聊天室列表（含成员和事件信息）"""
-    # 查找用户参与的聊天室
     result = await db.execute(
-        select(ChatRoom)
+        select(ChatRoom, ChatRoomMember)
         .join(ChatRoomMember, ChatRoomMember.room_id == ChatRoom.id)
         .where(ChatRoomMember.user_id == user_id, ChatRoomMember.role == "user")
         .order_by(ChatRoom.created_at.desc())
     )
-    rooms = result.scalars().all()
+    room_rows = result.all()
+    if not room_rows:
+        return []
+
+    rooms = [room for room, _ in room_rows]
+    room_ids = [room.id for room in rooms]
+
+    event_ids = {room.event_id_a for room in rooms if room.event_id_a}
+    events_by_id = {}
+    if event_ids:
+        events_result = await db.execute(select(Event).where(Event.id.in_(event_ids)))
+        events_by_id = {event.id: event for event in events_result.scalars().all()}
+
+    members_result = await db.execute(
+        select(ChatRoomMember).where(ChatRoomMember.room_id.in_(room_ids))
+    )
+    members_by_room: dict[UUID, list[ChatRoomMember]] = {room_id: [] for room_id in room_ids}
+    all_members = members_result.scalars().all()
+    for member in all_members:
+        members_by_room.setdefault(member.room_id, []).append(member)
+
+    user_ids = {member.user_id for member in all_members if member.role == "user"}
+    users_by_id = {}
+    if user_ids:
+        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        users_by_id = {user.id: user for user in users_result.scalars().all()}
+
+    agent_ids = {member.agent_id for member in all_members if member.role == "agent" and member.agent_id}
+    agents_by_id = {}
+    if agent_ids:
+        agents_result = await db.execute(select(Agent).where(Agent.id.in_(agent_ids)))
+        agents_by_id = {agent.id: agent for agent in agents_result.scalars().all()}
+
+    visible_message_filter = or_(
+        ChatMessage.visibility.is_(None),
+        ChatMessage.visibility.in_([VISIBILITY_PUBLIC_ROOM, VISIBILITY_SYSTEM]),
+        and_(
+            ChatMessage.visibility == VISIBILITY_PRIVATE_TO_AGENT,
+            ChatMessage.recipient_user_id == user_id,
+        ),
+    )
+    ranked_messages = (
+        select(
+            ChatMessage.id.label("message_id"),
+            func.row_number().over(
+                partition_by=ChatMessage.room_id,
+                order_by=(ChatMessage.created_at.desc(), ChatMessage.id.desc()),
+            ).label("row_number"),
+        )
+        .where(ChatMessage.room_id.in_(room_ids), visible_message_filter)
+        .subquery()
+    )
+    latest_result = await db.execute(
+        select(ChatMessage)
+        .join(ranked_messages, ranked_messages.c.message_id == ChatMessage.id)
+        .where(ranked_messages.c.row_number == 1)
+    )
+    latest_by_room = {message.room_id: message for message in latest_result.scalars().all()}
+
+    current_member_alias = aliased(ChatRoomMember)
+    unread_result = await db.execute(
+        select(ChatMessage.room_id)
+        .join(
+            current_member_alias,
+            and_(
+                current_member_alias.room_id == ChatMessage.room_id,
+                current_member_alias.user_id == user_id,
+                current_member_alias.role == "user",
+            ),
+        )
+        .where(
+            ChatMessage.room_id.in_(room_ids),
+            visible_message_filter,
+            or_(
+                current_member_alias.last_read_at.is_(None),
+                ChatMessage.created_at > current_member_alias.last_read_at,
+            ),
+            or_(
+                ChatMessage.sender_type != "user",
+                ChatMessage.sender_id != user_id,
+            ),
+        )
+        .distinct()
+    )
+    unread_room_ids = set(unread_result.scalars().all())
 
     response = []
     for room in rooms:
-        current_member_r = await db.execute(
-            select(ChatRoomMember).where(
-                ChatRoomMember.room_id == room.id,
-                ChatRoomMember.user_id == user_id,
-                ChatRoomMember.role == "user",
-            )
-        )
-        current_member = current_member_r.scalar_one_or_none()
-        if not current_member:
-            continue
-
-        # 加载事件标题
-        event_title = None
-        if room.event_id_a:
-            ev_r = await db.execute(select(Event).where(Event.id == room.event_id_a))
-            ev = ev_r.scalar_one_or_none()
-            if ev:
-                event_title = ev.title
-
-        # 加载成员列表
-        members_r = await db.execute(
-            select(ChatRoomMember).where(ChatRoomMember.room_id == room.id)
-        )
         members = []
-        for m in members_r.scalars().all():
-            if m.role == "agent":
-                agent_r = await db.execute(select(Agent).where(Agent.id == m.agent_id))
-                agent = agent_r.scalar_one_or_none()
-                members.append(_chat_room_member_response(m, agent=agent))
-            else:
-                user_r = await db.execute(select(User).where(User.id == m.user_id))
-                user = user_r.scalar_one_or_none()
-                anonymize = (
-                    m.user_id != user_id
-                    and _room_is_anonymous_for_user(room, user_id)
-                )
+        for member in members_by_room.get(room.id, []):
+            if member.role == "agent":
                 members.append(_chat_room_member_response(
-                    m,
-                    user=user,
-                    anonymize=anonymize,
+                    member,
+                    agent=agents_by_id.get(member.agent_id),
+                ))
+            else:
+                members.append(_chat_room_member_response(
+                    member,
+                    user=users_by_id.get(member.user_id),
+                    anonymize=(
+                        member.user_id != user_id
+                        and _room_is_anonymous_for_user(room, user_id)
+                    ),
                     candidate_rank=room.a2a_candidate_rank,
                 ))
 
-        # 加载最新一条消息
-        last_msg_r = await db.execute(
-            select(ChatMessage)
-            .where(ChatMessage.room_id == room.id)
-            .where(
-                or_(
-                    ChatMessage.visibility.is_(None),
-                    ChatMessage.visibility.in_([VISIBILITY_PUBLIC_ROOM, VISIBILITY_SYSTEM]),
-                    and_(
-                        ChatMessage.visibility == VISIBILITY_PRIVATE_TO_AGENT,
-                        ChatMessage.recipient_user_id == user_id,
-                    ),
-                )
-            )
-            .order_by(ChatMessage.created_at.desc())
-            .limit(1)
-        )
-        last_msg = last_msg_r.scalar_one_or_none()
-
+        last_message = latest_by_room.get(room.id)
         response.append(ChatRoomResponse(
             id=room.id,
             event_id_a=room.event_id_a,
             event_id_b=room.event_id_b,
-            event_title=event_title,
+            event_title=events_by_id.get(room.event_id_a).title if room.event_id_a in events_by_id else None,
             match_summary=room.match_summary,
             agent_dialogue=room.agent_dialogue,
             phase=room.phase or ROOM_PHASE_MATCHED,
@@ -442,8 +483,8 @@ async def list_my_rooms(
             created_at=room.created_at,
             closed_at=room.closed_at,
             members=members,
-            last_message=MessageResponse.model_validate(last_msg) if last_msg else None,
-            has_unread=await _room_has_unread(current_member, db),
+            last_message=MessageResponse.model_validate(last_message) if last_message else None,
+            has_unread=room.id in unread_room_ids,
         ))
 
     return response

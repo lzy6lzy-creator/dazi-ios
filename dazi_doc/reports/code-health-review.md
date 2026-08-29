@@ -24,11 +24,10 @@
 
 ### 扩容前
 
-1. `GET /api/v1/chat/rooms` 对每个房间继续查询当前成员、事件、成员资料、最新消息和未读状态，属于 N+1 查询；应批量查询或使用明确的 eager loading。
-2. WebSocket 连接表只存在单个 API 进程内；多 worker/多实例前需要 Redis Pub/Sub 或独立消息层。
-3. 匹配、内测邀请和提醒监控都运行在 API 进程内；扩容前应迁到独立 worker，并增加分布式锁。
-4. 数据库仍依赖 `create_all()` 和启动时 `ALTER TABLE`，缺少可审计、可回滚的迁移版本。
-5. `/health` 只检查进程存活；应增加 PostgreSQL/Redis readiness 和外部服务指标。
+1. WebSocket 连接表只存在单个 API 进程内；多 worker/多实例前需要 Redis Pub/Sub 或独立消息层。
+2. 匹配、内测邀请和提醒监控都运行在 API 进程内；扩容前应迁到独立 worker，并增加分布式锁。
+3. 数据库仍依赖 `create_all()` 和启动时 `ALTER TABLE`，缺少可审计、可回滚的迁移版本。
+4. `/health` 只检查进程存活；应增加 PostgreSQL/Redis readiness 和外部服务指标。
 
 ### 工程保障
 

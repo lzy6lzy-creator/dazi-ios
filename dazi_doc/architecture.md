@@ -103,6 +103,8 @@ Chat Room -> REST 历史消息 -> WebSocket 实时消息 -> APNs -> 投票/关�
 
 用户消息通过 REST 写库，同时广播 WebSocket，并给离线/后台设备发送 APNs。@AI 时后端生成 AI 回复并广播。iOS WebSocket 使用 Bearer header，断线后指数退避重连。
 
+聊天室列表采用固定批量查询加载事件、成员、用户/Agent、最新消息和未读房间；返回房间数量增加时不会按房间追加 SQL 查询。
+
 ## 6. 部署
 
 生产服务器是 `47.103.127.95`，远端目录 `/opt/dazi-server`。生产 compose 中 API 只发布在服务器本机 `127.0.0.1:8000`，公网流量应经 Nginx 暴露。

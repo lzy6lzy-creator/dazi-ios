@@ -33,7 +33,8 @@ class EventDetailStaticTests(unittest.TestCase):
         self.assertIn("self.hasUnread = api.hasUnread", CHAT_ROOM)
         self.assertIn("has_unread: bool = False", SERVER_SCHEMA)
         self.assertIn("last_read_at", SERVER_CHAT_MODEL)
-        self.assertIn("has_unread=await _room_has_unread", SERVER_CHAT)
+        self.assertIn("has_unread=room.id in unread_room_ids", SERVER_CHAT)
+        self.assertIn("unread_room_ids = set", SERVER_CHAT)
 
     def test_opening_chat_room_marks_server_room_read(self):
         self.assertIn("func markRoomAsRead(_ roomId: String)", DATASTORE)
