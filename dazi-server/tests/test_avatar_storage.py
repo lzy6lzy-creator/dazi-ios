@@ -67,7 +67,7 @@ class AvatarStorageTests(unittest.TestCase):
         self.assertIn("./uploads:/code/uploads", compose)
         self.assertIn("./uploads:/usr/share/nginx/dazi-media:ro", compose)
         self.assertIn("location /media/", nginx)
-        self.assertIn("delete_user_avatar_files(user_id)", deletion)
+        self.assertIn("delete_user_media_files(user_id)", deletion)
 
 
 if __name__ == "__main__":

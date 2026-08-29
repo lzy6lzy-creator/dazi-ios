@@ -41,6 +41,11 @@
 | DELETE | `/api/v1/users/me` | JWT | 注销账号并清除事件及关联数据 |
 | PUT | `/api/v1/users/me/avatar` | JWT | 上传当前用户头像（JPEG/PNG/WebP，最大 1MB） |
 | DELETE | `/api/v1/users/me/avatar` | JWT | 删除当前用户图片头像，回退 Emoji |
+| GET | `/api/v1/users/me/gallery` | JWT | 当前用户活动相册 |
+| PUT | `/api/v1/users/me/gallery/{event_id}` | JWT | 开启或关闭单个已完成活动的相册展示 |
+| POST | `/api/v1/users/me/gallery/{event_id}/photos` | JWT | 上传相册照片，每个活动最多 3 张 |
+| DELETE | `/api/v1/users/me/gallery/{event_id}/photos/{photo_name}` | JWT | 删除相册照片 |
+| GET | `/api/v1/gallery/media/{photo_name}` | JWT | 按本人/公开主页权限读取相册照片 |
 | GET | `/api/v1/users/{user_id}/profile` | JWT | 查看其他用户公开资料，过往事件服从可见性设置 |
 | GET | `/api/v1/agents/me` | JWT | 当前用户的 AI 搭子经纪人资料 |
 | PUT | `/api/v1/agents/me` | JWT | 更新 AI 名称、Emoji 和性格 |
@@ -53,6 +58,8 @@
 Memory 和 Agent 配置不会出现在其他用户的公开主页。
 
 头像文件通过 `/media/avatars/*` 公开读取，文件名包含内容哈希用于缓存刷新；用户 Emoji 使用独立 `avatar_emoji` 字段，不与图片 URL 混用。
+
+相册照片不走公开静态目录。本人始终可以读取自己的照片；其他用户只有在资料设置为“全部能看”、相册项开启展示且事件已完成时才能读取。部分隐藏和全部隐藏均不返回相册。
 
 ## 4. Agent Chat 与 Clarify
 

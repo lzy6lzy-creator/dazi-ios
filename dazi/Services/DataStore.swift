@@ -24,6 +24,7 @@ class DataStore {
     let locationManager = LocationManager()
     private let profileStore = UserProfileStore()
     private let galleryStore = GalleryStore()
+    private var pendingLegacyGalleryItems: [LegacyGalleryItem] = []
     private let api = APIClient.shared
     private let ws = WebSocketService.shared
     private let notifications = NotificationService.shared
@@ -84,6 +85,7 @@ class DataStore {
         pendingChatRoomId = nil
         notifiedRoomCreationIds = []
         galleryItems = []
+        pendingLegacyGalleryItems = []
         galleryStore.clear()
         notifications.clearAccountNotifications()
     }
@@ -559,7 +561,8 @@ class DataStore {
 
     func loadInitialData() {
         agentMessages = [agentGreetingMessage()]
-        galleryItems = galleryStore.loadItems()
+        pendingLegacyGalleryItems = galleryStore.loadLegacyItems()
+        galleryItems = []
         notifications.requestAuthorizationIfNeeded()
         notifications.registerStoredRemoteDeviceTokenIfAvailable()
 
@@ -984,6 +987,7 @@ class DataStore {
         async let m: () = fetchMemoriesFromServer()
         async let r: () = fetchPassiveMatchRequestsFromServer()
         _ = await (e, p, c, m, r)
+        await fetchGalleryFromServer()
     }
 
     func fetchEventsFromServer() async {
@@ -1125,25 +1129,82 @@ class DataStore {
 
     // MARK: - Gallery
 
-    func addGalleryItem(_ item: GalleryItem) {
-        galleryItems.append(item)
-        galleryStore.saveItems(galleryItems)
-    }
-
-    func removeGalleryItem(id: String) {
-        galleryItems.removeAll { $0.id == id }
-        galleryStore.saveItems(galleryItems)
-    }
-
-    func updateGalleryItem(_ item: GalleryItem) {
-        if let idx = galleryItems.firstIndex(where: { $0.id == item.id }) {
-            galleryItems[idx] = item
-            galleryStore.saveItems(galleryItems)
+    func setGalleryDisplay(eventId: String, isDisplayed: Bool) async -> Bool {
+        do {
+            let response = try await api.updateGalleryDisplay(eventId: eventId, isDisplayed: isDisplayed)
+            upsertGalleryItem(response)
+            return true
+        } catch {
+            showToast(userFriendlyError(error), type: .error)
+            return false
         }
     }
 
-    func saveGalleryItems() {
-        galleryStore.saveItems(galleryItems)
+    func uploadGalleryPhotos(eventId: String, photos: [Data]) async -> Bool {
+        do {
+            for photo in photos {
+                let response = try await api.uploadGalleryPhoto(eventId: eventId, data: photo)
+                upsertGalleryItem(response)
+            }
+            showToast("照片已上传", type: .info)
+            return true
+        } catch {
+            showToast(userFriendlyError(error), type: .error)
+            return false
+        }
+    }
+
+    func deleteGalleryPhoto(eventId: String, photoURL: String) async -> Bool {
+        do {
+            let response = try await api.deleteGalleryPhoto(eventId: eventId, photoURL: photoURL)
+            upsertGalleryItem(response)
+            return true
+        } catch {
+            showToast(userFriendlyError(error), type: .error)
+            return false
+        }
+    }
+
+    private func fetchGalleryFromServer() async {
+        do {
+            let response = try await api.getMyGallery()
+            galleryItems = response.map(GalleryItem.init(from:))
+            await migrateLegacyGalleryIfNeeded()
+        } catch {
+            print("Fetch gallery error: \(error)")
+        }
+    }
+
+    private func upsertGalleryItem(_ response: APIGalleryItemResponse) {
+        let item = GalleryItem(from: response)
+        if let index = galleryItems.firstIndex(where: { $0.eventId == item.eventId }) {
+            galleryItems[index] = item
+        } else {
+            galleryItems.append(item)
+        }
+    }
+
+    private func migrateLegacyGalleryIfNeeded() async {
+        guard !pendingLegacyGalleryItems.isEmpty else { return }
+        var failedItems: [LegacyGalleryItem] = []
+        for legacy in pendingLegacyGalleryItems {
+            do {
+                var response = try await api.updateGalleryDisplay(
+                    eventId: legacy.eventId,
+                    isDisplayed: legacy.isDisplayed
+                )
+                for photo in legacy.photos.prefix(3) {
+                    response = try await api.uploadGalleryPhoto(eventId: legacy.eventId, data: photo)
+                }
+                upsertGalleryItem(response)
+            } catch {
+                failedItems.append(legacy)
+            }
+        }
+        pendingLegacyGalleryItems = failedItems
+        if failedItems.isEmpty {
+            galleryStore.clear()
+        }
     }
 
     // MARK: - Polling

@@ -141,6 +141,27 @@ class AvatarUploadResponse(BaseModel):
     avatar_url: Optional[str] = None
 
 
+class GalleryItemUpdate(BaseModel):
+    is_displayed: bool
+
+
+class GalleryPhotoUploadRequest(BaseModel):
+    image_base64: str = Field(min_length=4, max_length=2_800_000)
+    mime_type: Literal["image/jpeg", "image/png", "image/webp"]
+
+
+class GalleryItemResponse(BaseModel):
+    id: UUID
+    event_id: UUID
+    activity_type: str
+    title: str
+    start_time: Optional[datetime] = None
+    location: Optional[str] = None
+    photo_urls: list[str] = Field(default_factory=list)
+    is_displayed: bool
+    added_at: datetime
+
+
 class InvitationMeResponse(BaseModel):
     code: Optional[str] = None
     status: Optional[str] = None
@@ -274,6 +295,7 @@ class PublicUserProfileResponse(BaseModel):
     welcome_disturb: bool = False
     profile_event_visibility: str = "partial"
     past_events: list[PublicProfileEventResponse] = Field(default_factory=list)
+    gallery_items: list[GalleryItemResponse] = Field(default_factory=list)
     created_at: datetime
 
     model_config = {"from_attributes": True}

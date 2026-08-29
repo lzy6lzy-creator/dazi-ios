@@ -1,51 +1,33 @@
 import Foundation
 
-struct GalleryItem: Identifiable, Codable, Sendable {
+struct GalleryItem: Identifiable, Sendable {
     let id: String
     var eventId: String
     var activityType: String
     var title: String
     var startTime: Date?
     var location: String
-    var city: String
-    var photos: [Data]
+    var photoURLs: [String]
     var isDisplayed: Bool
     var addedAt: Date
 
-    init(
-        id: String = UUID().uuidString,
-        eventId: String,
-        activityType: String,
-        title: String,
-        startTime: Date? = nil,
-        location: String = "",
-        city: String = "",
-        photos: [Data] = [],
-        isDisplayed: Bool = true,
-        addedAt: Date = .now
-    ) {
-        self.id = id
-        self.eventId = eventId
-        self.activityType = activityType
-        self.title = title
-        self.startTime = startTime
-        self.location = location
-        self.city = city
-        self.photos = photos
-        self.isDisplayed = isDisplayed
-        self.addedAt = addedAt
+    init(from api: APIGalleryItemResponse) {
+        id = api.id
+        eventId = api.eventId
+        activityType = api.activityType
+        title = api.title
+        startTime = api.startTime.flatMap(Self.parseDate)
+        location = api.location ?? ""
+        photoURLs = api.photoUrls
+        isDisplayed = api.isDisplayed
+        addedAt = Self.parseDate(api.addedAt) ?? .now
     }
 
-    init(from event: Event) {
-        self.id = UUID().uuidString
-        self.eventId = event.id
-        self.activityType = event.activityType
-        self.title = event.title
-        self.startTime = event.startTime
-        self.location = event.location
-        self.city = event.city
-        self.photos = []
-        self.isDisplayed = true
-        self.addedAt = .now
+    private static func parseDate(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: value) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: value)
     }
 }

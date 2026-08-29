@@ -52,6 +52,7 @@ FastAPI Backend
 - `agent_memories`、`event_memories`、`memory_evidence`：分层记忆和证据。
 - `events`：活动意图、结构化字段、状态、向量、匹配轮次。
 - `event_feedbacks`：用户对自己事件的体验评分、搭子评分和私有评论。
+- `event_gallery_items`：已完成事件的照片 URL、展示开关和更新时间。
 - `chat_rooms`、`messages`、`passive_match_requests`：聊天室、消息、被动邀请。
 - `match_logs`、`match_blocklists`：匹配日志和黑名单。
 - `prompt_templates`：管理后台可编辑 prompt。
@@ -60,6 +61,7 @@ FastAPI Backend
 - `push_device_tokens`：iOS APNs token 与环境。
 - `service_reminders`：服务到期、核查和余额提醒。
 - `uploads/avatars`：用户与 Agent 的持久化图片头像；数据库只保存媒体 URL。
+- `uploads/gallery`：活动相册原图；通过鉴权 API 按公开主页设置读取，不由 Nginx 公开暴露。
 
 事件的新写入只使用 `location`。`events.city` 和 `city_normalized` 暂时保留用于旧数据兼容，不应作为新业务槽位。
 
@@ -109,7 +111,6 @@ Chat Room -> REST 历史消息 -> WebSocket 实时消息 -> APNs -> 投票/关�
 
 ## 7. 当前技术债
 
-- 活动相册仍以本机数据为主，缺少服务端媒体存储与跨设备同步。
 - 聊天室列表存在逐房间/逐成员查询，房间规模增长前应改为批量查询或 eager loading。
 - WebSocket 连接管理仍是单进程内存实现，多 worker 前需要 Redis Pub/Sub 或独立消息层。
 - 定时匹配任务仍在 API 进程内，正式生产建议拆独立 worker。

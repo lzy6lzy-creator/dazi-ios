@@ -38,6 +38,35 @@ struct AvatarView: View {
     }
 }
 
+struct AuthenticatedMediaImage: View {
+    let path: String
+    let width: CGFloat
+    let height: CGFloat
+    var cornerRadius: CGFloat = 8
+    var placeholderColor: Color = AppTheme.systemBubbleColor
+
+    @State private var imageData: Data?
+
+    var body: some View {
+        ZStack {
+            placeholderColor
+            if let imageData, let image = UIImage(data: imageData) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .frame(width: width, height: height)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .task(id: path) {
+            imageData = try? await APIClient.shared.getAuthenticatedMedia(path: path)
+        }
+    }
+}
+
 // MARK: - Emoji Data
 
 struct EmojiCategory {

@@ -68,6 +68,31 @@ class EventFeedback(Base):
     )
 
 
+class EventGalleryItem(Base):
+    __tablename__ = "event_gallery_items"
+    __table_args__ = (
+        UniqueConstraint("event_id", "user_id", name="uq_event_gallery_event_user"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    photo_urls: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+    is_displayed: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class MatchLog(Base):
     """匹配日志 - 记录每次匹配过程"""
     __tablename__ = "match_logs"

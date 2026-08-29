@@ -26,6 +26,7 @@ struct PartnerProfileView: View {
                     bioSection
                     joinedSection
                     pastEventsSection
+                    gallerySection
                 }
                 .padding()
             }
@@ -267,6 +268,31 @@ struct PartnerProfileView: View {
         .padding(12)
         .background(AppTheme.systemBubbleColor.opacity(0.55))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    @ViewBuilder
+    private var gallerySection: some View {
+        if let items = profileData?.galleryItems, !items.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionTitle(icon: "photo.stack", title: "活动相册", tint: AppTheme.primaryColor)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(items, id: \.id) { item in
+                            VStack(alignment: .leading, spacing: 6) {
+                                if let photoURL = item.photoUrls.first {
+                                    AuthenticatedMediaImage(path: photoURL, width: 150, height: 96)
+                                }
+                                Text(item.title)
+                                    .font(.caption.weight(.medium))
+                                    .lineLimit(1)
+                            }
+                            .frame(width: 150, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            .profileCardStyle()
+        }
     }
 
     private func profileChip(text: String, tint: Color) -> some View {

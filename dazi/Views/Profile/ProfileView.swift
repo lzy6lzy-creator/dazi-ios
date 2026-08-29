@@ -311,12 +311,14 @@ struct ProfileView: View {
 
     private func galleryCard(_ item: GalleryItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let photoData = item.photos.first, let uiImage = UIImage(data: photoData) {
-                Image(uiImage: uiImage)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 140, height: 90)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusSM))
+            if let photoURL = item.photoURLs.first {
+                AuthenticatedMediaImage(
+                    path: photoURL,
+                    width: 140,
+                    height: 90,
+                    cornerRadius: AppTheme.radiusSM,
+                    placeholderColor: AppTheme.activityTypeColor(item.activityType).opacity(0.12)
+                )
             } else {
                 RoundedRectangle(cornerRadius: AppTheme.radiusSM)
                     .fill(AppTheme.activityTypeColor(item.activityType).opacity(0.12))
@@ -926,32 +928,31 @@ private struct GalleryEventRow: View {
     private func photoSection(_ item: GalleryItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                ForEach(Array(item.photos.enumerated()), id: \.offset) { index, photoData in
-                    if let uiImage = UIImage(data: photoData) {
-                        ZStack(alignment: .topTrailing) {
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 70, height: 70)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                ForEach(item.photoURLs, id: \.self) { photoURL in
+                    ZStack(alignment: .topTrailing) {
+                        AuthenticatedMediaImage(path: photoURL, width: 70, height: 70)
 
-                            Button {
-                                removePhoto(at: index, from: item)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(.white)
-                                    .shadow(radius: 2)
+                        Button {
+                            Task {
+                                _ = await dataStore.deleteGalleryPhoto(
+                                    eventId: item.eventId,
+                                    photoURL: photoURL
+                                )
                             }
-                            .offset(x: 4, y: -4)
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.white)
+                                .shadow(radius: 2)
                         }
+                        .offset(x: 4, y: -4)
                     }
                 }
 
-                if item.photos.count < 3 {
+                if item.photoURLs.count < 3 {
                     PhotosPicker(
                         selection: $selectedPhotos,
-                        maxSelectionCount: 3 - item.photos.count,
+                        maxSelectionCount: 3 - item.photoURLs.count,
                         matching: .images
                     ) {
                         VStack(spacing: 4) {
@@ -978,41 +979,25 @@ private struct GalleryEventRow: View {
     }
 
     private func toggleDisplay(_ show: Bool) {
-        if show {
-            if galleryItem == nil {
-                let newItem = GalleryItem(from: event)
-                dataStore.addGalleryItem(newItem)
-            } else {
-                var updated = galleryItem!
-                updated.isDisplayed = true
-                dataStore.updateGalleryItem(updated)
-            }
-        } else if var existing = galleryItem {
-            existing.isDisplayed = false
-            dataStore.updateGalleryItem(existing)
+        Task {
+            _ = await dataStore.setGalleryDisplay(eventId: event.id, isDisplayed: show)
         }
-    }
-
-    private func removePhoto(at index: Int, from item: GalleryItem) {
-        var updated = item
-        updated.photos.remove(at: index)
-        dataStore.updateGalleryItem(updated)
     }
 
     private func loadPhotos(_ pickerItems: [PhotosPickerItem], for item: GalleryItem) async {
-        var updated = item
+        var photos: [Data] = []
         for pickerItem in pickerItems {
-            guard updated.photos.count < 3 else { break }
+            guard item.photoURLs.count + photos.count < 3 else { break }
             if let data = try? await pickerItem.loadTransferable(type: Data.self),
                let uiImage = UIImage(data: data),
                let compressed = compressImage(uiImage) {
-                updated.photos.append(compressed)
+                photos.append(compressed)
             }
         }
-        await MainActor.run {
-            dataStore.updateGalleryItem(updated)
-            selectedPhotos = []
+        if !photos.isEmpty {
+            _ = await dataStore.uploadGalleryPhotos(eventId: item.eventId, photos: photos)
         }
+        selectedPhotos = []
     }
 
     private func compressImage(_ image: UIImage) -> Data? {

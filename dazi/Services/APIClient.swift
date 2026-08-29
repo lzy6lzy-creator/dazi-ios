@@ -251,6 +251,7 @@ struct APIPublicUserProfileResponse: Codable {
     let welcomeDisturb: Bool?
     let profileEventVisibility: String?
     let pastEvents: [APIPublicProfileEventResponse]?
+    let galleryItems: [APIGalleryItemResponse]?
     let createdAt: String?
 
     enum CodingKeys: String, CodingKey {
@@ -263,6 +264,7 @@ struct APIPublicUserProfileResponse: Codable {
         case welcomeDisturb = "welcome_disturb"
         case profileEventVisibility = "profile_event_visibility"
         case pastEvents = "past_events"
+        case galleryItems = "gallery_items"
         case createdAt = "created_at"
     }
 }
@@ -470,6 +472,28 @@ struct APIEventFeedbackResponse: Codable {
         case roomClosed = "room_closed"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+    }
+}
+
+struct APIGalleryItemResponse: Codable {
+    let id: String
+    let eventId: String
+    let activityType: String
+    let title: String
+    let startTime: String?
+    let location: String?
+    let photoUrls: [String]
+    let isDisplayed: Bool
+    let addedAt: String
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, location
+        case eventId = "event_id"
+        case activityType = "activity_type"
+        case startTime = "start_time"
+        case photoUrls = "photo_urls"
+        case isDisplayed = "is_displayed"
+        case addedAt = "added_at"
     }
 }
 
@@ -803,6 +827,33 @@ final class APIClient {
         WebSocketService.shared.connect()
     }
 
+    func getAuthenticatedMedia(path: String) async throws -> Data {
+        guard let url = URL(string: APIConfig.baseURL + (path.hasPrefix("/") ? path : "/\(path)")) else {
+            throw APIError.invalidURL
+        }
+        var request = URLRequest(url: url)
+        guard let token = accessToken else { throw APIError.noToken }
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 30
+
+        var (data, response) = try await session.data(for: request)
+        if (response as? HTTPURLResponse)?.statusCode == 401, refreshToken != nil {
+            try await doRefreshToken()
+            request.setValue("Bearer \(accessToken ?? "")", forHTTPHeaderField: "Authorization")
+            (data, response) = try await session.data(for: request)
+        }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.networkError("Invalid response")
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.serverError(
+                httpResponse.statusCode,
+                String(data: data, encoding: .utf8) ?? "Media request failed"
+            )
+        }
+        return data
+    }
+
     // MARK: - Auth
 
     func getRegistrationPolicy() async throws -> APIRegistrationPolicyResponse {
@@ -875,6 +926,45 @@ final class APIClient {
 
     func deleteMyAvatar() async throws -> APIAvatarUploadResponse {
         try await request(method: "DELETE", path: "/api/v1/users/me/avatar")
+    }
+
+    func getMyGallery() async throws -> [APIGalleryItemResponse] {
+        try await request(method: "GET", path: "/api/v1/users/me/gallery")
+    }
+
+    func updateGalleryDisplay(eventId: String, isDisplayed: Bool) async throws -> APIGalleryItemResponse {
+        try await request(
+            method: "PUT",
+            path: "/api/v1/users/me/gallery/\(eventId)",
+            body: ["is_displayed": isDisplayed]
+        )
+    }
+
+    func uploadGalleryPhoto(eventId: String, data: Data) async throws -> APIGalleryItemResponse {
+        guard data.count <= 2_000_000 else {
+            throw APIError.networkError("相册照片大小不能超过 2MB")
+        }
+        return try await request(
+            method: "POST",
+            path: "/api/v1/users/me/gallery/\(eventId)/photos",
+            body: [
+                "image_base64": data.base64EncodedString(),
+                "mime_type": "image/jpeg",
+            ],
+            timeout: 60
+        )
+    }
+
+    func deleteGalleryPhoto(eventId: String, photoURL: String) async throws -> APIGalleryItemResponse {
+        let photoName = photoURL.split(separator: "/").last.map(String.init) ?? ""
+        guard !photoName.isEmpty,
+              let encodedName = photoName.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
+            throw APIError.invalidURL
+        }
+        return try await request(
+            method: "DELETE",
+            path: "/api/v1/users/me/gallery/\(eventId)/photos/\(encodedName)"
+        )
     }
 
     func deleteMyAccount() async throws {
