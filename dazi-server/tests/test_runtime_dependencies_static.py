@@ -7,10 +7,10 @@ REQUIREMENTS = (ROOT / "requirements.txt").read_text(encoding="utf-8")
 
 
 class RuntimeDependenciesStaticTests(unittest.TestCase):
-    def test_removed_unused_password_form_and_migration_dependencies(self):
+    def test_runtime_dependencies_match_active_features(self):
         self.assertNotIn("passlib", REQUIREMENTS)
         self.assertNotIn("python-multipart", REQUIREMENTS)
-        self.assertNotIn("alembic==", REQUIREMENTS)
+        self.assertIn("alembic==", REQUIREMENTS)
 
 
 if __name__ == "__main__":

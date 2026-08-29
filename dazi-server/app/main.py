@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 
-from app.core.database import engine, Base, async_session
+from app.core.database import async_session, engine
 from app.core.config import settings
 from app.core.redis import close_redis
 from app.core.log_buffer import log_buffer
@@ -21,22 +21,7 @@ from app.services.scheduler import beta_invite_scheduler, match_scheduler
 from app.services.service_reminder_monitor import service_reminder_monitor
 from app.services.media_storage import UPLOAD_ROOT, ensure_upload_directories
 
-# 导入所有 model 以确保建表时能发现它们
-from app.models.user import User, Agent, AgentMemory, EventMemory, MemoryEvidence, AgentChatMessage, PushDeviceToken  # noqa: F401
-from app.models.event import Event, EventFeedback, EventGalleryItem, MatchLog, MatchBlocklist  # noqa: F401
-from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage, ChatRoomVote, PassiveMatchRequest  # noqa: F401
 from app.models.prompt import PromptTemplate  # noqa: F401
-from app.models.beta_signup import BetaSignup  # noqa: F401
-from app.models.site_feedback import SiteFeedback  # noqa: F401
-from app.models.service_reminder import ServiceReminder  # noqa: F401
-from app.models.invitation import (  # noqa: F401
-    InvitationLedger,
-    InvitationMilestone,
-    InvitationProgram,
-    LocationVerification,
-    SignupAdmission,
-    UserInvitationAccount,
-)
 
 # 导入路由
 from app.api.auth import router as auth_router
@@ -76,12 +61,10 @@ async def lifespan(app: FastAPI):
             "This is insecure for production. Set a strong JWT_SECRET in environment variables."
         )
 
-    # 启动时建表 + 启用 pgvector 扩展
+    # Schema changes are applied by Alembic before the API process starts.
     async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.run_sync(Base.metadata.create_all)
-        await _ensure_runtime_schema(conn)
-    logging.info("Database tables created.")
+        await _ensure_runtime_data(conn)
+    logging.info("Runtime database data initialized.")
 
     # 从 DB 加载 prompt 覆盖到内存
     from sqlalchemy import select as sa_select
@@ -113,8 +96,8 @@ async def lifespan(app: FastAPI):
     logging.info("Resources cleaned up.")
 
 
-async def _ensure_runtime_schema(conn) -> None:
-    """Backfill additive columns and bootstrap singleton runtime state."""
+async def _ensure_runtime_data(conn) -> None:
+    """Bootstrap singleton and reference data after migrations have run."""
     await conn.execute(
         text(
             """
@@ -244,46 +227,12 @@ async def _ensure_runtime_schema(conn) -> None:
             """
         )
     )
-    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
-    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_emoji VARCHAR(10) DEFAULT '😊'"))
-    await conn.execute(text("UPDATE users SET avatar_emoji = '😊' WHERE avatar_emoji IS NULL OR BTRIM(avatar_emoji) = ''"))
-    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_event_visibility VARCHAR(20) DEFAULT 'partial'"))
-    await conn.execute(text("UPDATE users SET profile_event_visibility = 'partial' WHERE profile_event_visibility IS NULL"))
     await conn.execute(
         text(
             "UPDATE users SET gender = NULL "
             "WHERE BTRIM(gender) IN ('保密', '暂时保密', '不透露', '不公开')"
         )
     )
-    await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS clarification_answers JSONB"))
-    await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_min INTEGER"))
-    await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_max INTEGER"))
-    await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_mode VARCHAR(20)"))
-    await conn.execute(text("ALTER TABLE chat_room_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ DEFAULT NOW()"))
-    await conn.execute(text("ALTER TABLE chat_room_members ALTER COLUMN last_read_at DROP DEFAULT"))
-    await conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS phase VARCHAR(30) DEFAULT 'matched'"))
-    await conn.execute(text("UPDATE chat_rooms SET phase = 'matched' WHERE phase IS NULL"))
-    await conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS a2a_candidate_rank INTEGER"))
-    await conn.execute(text("ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS a2a_result VARCHAR(40)"))
-    await conn.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS visibility VARCHAR(30) DEFAULT 'public_room'"))
-    await conn.execute(text("UPDATE chat_messages SET visibility = 'public_room' WHERE visibility IS NULL"))
-    await conn.execute(text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS recipient_user_id UUID REFERENCES users(id) ON DELETE CASCADE"))
-    await conn.execute(text("ALTER TABLE match_logs ADD COLUMN IF NOT EXISTS score_breakdown JSONB"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS key VARCHAR(100)"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS category VARCHAR(40)"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS scope VARCHAR(20) DEFAULT 'long_term'"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS value JSONB"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS occurrence_count INTEGER DEFAULT 1"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active'"))
-    await conn.execute(text("ALTER TABLE agent_memories ADD COLUMN IF NOT EXISTS superseded_by_id UUID"))
-    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_city_code VARCHAR(12)"))
-    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_is_launch_city BOOLEAN"))
-    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_accuracy_meters DOUBLE PRECISION"))
-    await conn.execute(text("ALTER TABLE signup_admissions ADD COLUMN IF NOT EXISTS location_verified_at TIMESTAMPTZ"))
-    await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_push_device_tokens_token_unique ON push_device_tokens(token)"))
-    await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_push_device_tokens_user_active ON push_device_tokens(user_id, is_active)"))
     await conn.execute(
         text(
             """

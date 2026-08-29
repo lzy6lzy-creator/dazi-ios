@@ -50,6 +50,8 @@ class BetaSignupStaticTests(unittest.TestCase):
         beta_api = ROOT / "app/api/beta.py"
         beta_model = ROOT / "app/models/beta_signup.py"
         main = read_text("app/main.py")
+        migration_env = read_text("migrations/env.py")
+        baseline = read_text("migrations/sql/0001_baseline.sql")
 
         self.assertTrue(beta_api.exists())
         self.assertTrue(beta_model.exists())
@@ -57,7 +59,8 @@ class BetaSignupStaticTests(unittest.TestCase):
         self.assertIn('__tablename__ = "beta_signups"', beta_model.read_text(encoding="utf-8"))
         self.assertIn("from app.api.beta import router as beta_router", main)
         self.assertIn("app.include_router(beta_router)", main)
-        self.assertIn("from app.models.beta_signup import BetaSignup", main)
+        self.assertIn("beta_signup", migration_env)
+        self.assertIn("CREATE TABLE beta_signups", baseline)
 
     def test_admin_can_view_and_export_beta_signups(self):
         admin_api = read_text("app/api/admin.py")

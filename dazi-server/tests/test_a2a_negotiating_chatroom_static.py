@@ -11,7 +11,7 @@ class A2ANegotiatingChatroomStaticTests(unittest.TestCase):
     def test_backend_models_add_room_phase_and_message_visibility(self):
         chat_model = (SERVER / "models" / "chat.py").read_text(encoding="utf-8")
         schemas = (SERVER / "api" / "schemas.py").read_text(encoding="utf-8")
-        main = (SERVER / "main.py").read_text(encoding="utf-8")
+        baseline = (ROOT / "migrations/sql/0001_baseline.sql").read_text(encoding="utf-8")
 
         self.assertIn('phase: Mapped[str] = mapped_column(String(30), default="matched")', chat_model)
         self.assertIn("a2a_candidate_rank", chat_model)
@@ -21,8 +21,8 @@ class A2ANegotiatingChatroomStaticTests(unittest.TestCase):
         self.assertIn('phase: str = "matched"', schemas)
         self.assertIn("is_anonymous: bool = False", schemas)
         self.assertIn('visibility: str = "public_room"', schemas)
-        self.assertIn("ALTER TABLE chat_rooms ADD COLUMN IF NOT EXISTS phase", main)
-        self.assertIn("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS visibility", main)
+        self.assertIn("phase VARCHAR(30)", baseline)
+        self.assertIn("visibility VARCHAR(30)", baseline)
 
     def test_chat_api_filters_private_messages_and_anonymizes_negotiating_partner(self):
         chat_api = (SERVER / "api" / "chat.py").read_text(encoding="utf-8")

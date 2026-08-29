@@ -5,7 +5,7 @@ from datetime import date
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import String, Integer, Float, Boolean, Text, ARRAY, TIMESTAMP, ForeignKey, Date
+from sqlalchemy import ARRAY, TIMESTAMP, Boolean, Date, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pgvector.sqlalchemy import Vector
@@ -48,6 +48,9 @@ class User(Base):
 
 class PushDeviceToken(Base):
     __tablename__ = "push_device_tokens"
+    __table_args__ = (
+        Index("ix_push_device_tokens_user_active", "user_id", "is_active"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

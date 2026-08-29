@@ -31,6 +31,8 @@ class FeedbackStaticTests(unittest.TestCase):
         feedback_api = ROOT / "app/api/feedback.py"
         feedback_model = ROOT / "app/models/site_feedback.py"
         main = read_text("app/main.py")
+        migration_env = read_text("migrations/env.py")
+        baseline = read_text("migrations/sql/0001_baseline.sql")
 
         self.assertTrue(feedback_api.exists())
         self.assertTrue(feedback_model.exists())
@@ -38,7 +40,8 @@ class FeedbackStaticTests(unittest.TestCase):
         self.assertIn('__tablename__ = "site_feedback"', feedback_model.read_text(encoding="utf-8"))
         self.assertIn("from app.api.feedback import router as feedback_router", main)
         self.assertIn("app.include_router(feedback_router)", main)
-        self.assertIn("from app.models.site_feedback import SiteFeedback", main)
+        self.assertIn("site_feedback", migration_env)
+        self.assertIn("CREATE TABLE site_feedback", baseline)
 
     def test_admin_can_view_and_export_feedback(self):
         admin_api = read_text("app/api/admin.py")

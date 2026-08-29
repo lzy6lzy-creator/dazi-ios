@@ -14,8 +14,10 @@ RUN pip install --no-cache-dir --timeout 120 \
     --trusted-host mirrors.aliyun.com \
     -r requirements.txt
 
-# Copy app code
+# Copy application code and database migrations.
 COPY app/ /code/app/
+COPY migrations/ /code/migrations/
+COPY alembic.ini /code/alembic.ini
 
 EXPOSE 8000
 
