@@ -17,7 +17,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, noload
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
@@ -385,7 +385,11 @@ async def list_my_rooms(
     user_ids = {member.user_id for member in all_members if member.role == "user"}
     users_by_id = {}
     if user_ids:
-        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        users_result = await db.execute(
+            select(User)
+            .options(noload(User.agent), noload(User.memories))
+            .where(User.id.in_(user_ids))
+        )
         users_by_id = {user.id: user for user in users_result.scalars().all()}
 
     agent_ids = {member.agent_id for member in all_members if member.role == "agent" and member.agent_id}

@@ -32,6 +32,8 @@ class ChatRoomBatchingTests(unittest.TestCase):
         self.assertIn("unread_room_ids = set", source)
         self.assertIn("ChatRoomMember.room_id.in_(room_ids)", source)
         self.assertIn("User.id.in_(user_ids)", source)
+        self.assertIn("noload(User.agent)", source)
+        self.assertIn("noload(User.memories)", source)
         self.assertIn("Agent.id.in_(agent_ids)", source)
 
 
