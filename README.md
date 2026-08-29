@@ -18,11 +18,19 @@ cd dazi-server
 .venv311/bin/python -m pytest
 ```
 
+iOS 静态回归：
+
+```bash
+python3 -m unittest discover tests
+```
+
 iOS Debug 构建：
 
 ```bash
 xcodebuild -project dazi.xcodeproj -scheme dazi -configuration Debug -destination 'generic/platform=iOS Simulator' build
 ```
+
+当前发布和文档维护范围是 iOS + FastAPI 后端。`dazi-android` 是独立仓库，除非产品明确重新开启 Android，否则不要把 iOS 改动自动同步过去。
 
 ## iOS 两人协作：Bundle ID 本地私有配置
 

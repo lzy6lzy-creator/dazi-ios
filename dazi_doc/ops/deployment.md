@@ -14,7 +14,7 @@
 | Cache | Redis 7 |
 | Web | Nginx |
 
-生产 compose 中 API 监听服务器本机 `127.0.0.1:8000`。公网流量应通过 Nginx 暴露，优先使用 `https://idabuda.com`，域名未完全可用时使用 `http://47.103.127.95`。
+生产 compose 中 API 只映射到宿主机 `127.0.0.1:8000`，公网流量通过 Nginx 和 `https://idabuda.com` 暴露。
 
 ## 2. 敏感信息规则
 
@@ -84,6 +84,7 @@ docker compose -f docker-compose.prod.yml ps
 
 ```bash
 curl -fsS http://47.103.127.95/health
+curl -fsS https://idabuda.com/health
 ```
 
 服务器本机：
@@ -99,6 +100,8 @@ curl -fsS http://localhost:8000/docs
 cd /opt/dazi-server
 docker compose -f docker-compose.prod.yml ps
 ```
+
+`/health` 当前只证明 API 进程可以响应，不代表 PostgreSQL、Redis、LLM、短信或 APNs 均健康。部署验证仍需检查容器状态、Redis ping、关键 API 和日志。
 
 ## 6. 常用运维命令
 

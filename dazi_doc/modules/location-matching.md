@@ -1,6 +1,6 @@
 # 地点匹配设计
 
-最后更新：2026-06-05
+最后更新：2026-08-29
 
 ## 1. 背景
 
@@ -17,9 +17,9 @@
 
 第一阶段采用 **规则/词典 + 活动严格度 + 轻量 fallback**：
 
-- 不新增生产表字段。
+- 新业务只写单一 `location` 字段；旧 `city` 列仅用于历史兼容。
 - 不新增独立 Kimi 地点抽取链路。
-- 运行时从 `city`、`location`、`activity_type` 构造地点理解。
+- 运行时优先从 `location`、`activity_type` 构造地点理解；读取旧事件时仍兼容 `city`。
 - 用地点相容性参与候选过滤。
 
 ## 3. Place Profile
@@ -72,4 +72,3 @@ Embedding 可以辅助未知地点召回，但不能替代地点硬过滤。
 - `dazi-server/experiments/location_matching/`
 - `dazi-server/tests/test_event_location_vector_experiment.py`
 - `dazi-server/tests/test_location_policy.py`
-

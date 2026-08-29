@@ -3,13 +3,19 @@ import SwiftUI
 struct CoinTabBar: View {
     @Binding var selection: Int
     var unreadCount: Int = 0
+    let agentName: String
+    let agentEmoji: String
+    let agentAvatarImageData: Data?
 
-    private let items: [(icon: String, label: String)] = [
-        ("sparkles",                     "点点"),
-        ("calendar",                     "活动"),
-        ("ellipsis.bubble",              "聊天"),
-        ("person",                       "我的")
-    ]
+    private var items: [(icon: String, label: String)] {
+        let trimmedAgentName = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [
+            ("sparkles", trimmedAgentName.isEmpty ? "AI" : trimmedAgentName),
+            ("calendar", "活动"),
+            ("ellipsis.bubble", "聊天"),
+            ("person", "我的")
+        ]
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -18,7 +24,9 @@ struct CoinTabBar: View {
                     icon: items[i].icon,
                     label: items[i].label,
                     isActive: selection == i,
-                    showBadge: i == 2 && unreadCount > 0
+                    showBadge: i == 2 && unreadCount > 0,
+                    agentEmoji: i == 0 ? agentEmoji : nil,
+                    agentAvatarImageData: i == 0 ? agentAvatarImageData : nil
                 )
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
@@ -46,6 +54,8 @@ private struct CoinTab: View {
     let label: String
     let isActive: Bool
     var showBadge: Bool = false
+    var agentEmoji: String?
+    var agentAvatarImageData: Data?
 
     private var iconSize: CGFloat {
         icon == "ellipsis.bubble" ? 19 : 21
@@ -76,9 +86,22 @@ private struct CoinTab: View {
                     .scaleEffect(isActive ? 1 : 0.1)
                     .opacity(isActive ? 1 : 0)
 
-                Image(systemName: isActive ? activeIcon : icon)
-                    .font(.system(size: iconSize, weight: isActive ? .semibold : .regular))
-                    .foregroundColor(isActive ? .white : Color(.systemGray2))
+                if let agentEmoji {
+                    AvatarView(
+                        imageData: agentAvatarImageData,
+                        emoji: agentEmoji,
+                        size: 24,
+                        backgroundColor: isActive ? Color.white.opacity(0.92) : AppTheme.agentColor.opacity(0.12)
+                    )
+                    .overlay {
+                        Circle()
+                            .stroke(isActive ? Color.white.opacity(0.8) : Color.black.opacity(0.06), lineWidth: 1)
+                    }
+                } else {
+                    Image(systemName: isActive ? activeIcon : icon)
+                        .font(.system(size: iconSize, weight: isActive ? .semibold : .regular))
+                        .foregroundColor(isActive ? .white : Color(.systemGray2))
+                }
             }
             .frame(width: 40, height: 40)
             .offset(y: isActive ? -2 : 0)
@@ -115,6 +138,9 @@ private struct CoinTab: View {
             Text(label)
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(isActive ? AppTheme.primaryColor : Color(.systemGray2))
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .frame(height: 14)
         }
         .animation(spring, value: isActive)
     }

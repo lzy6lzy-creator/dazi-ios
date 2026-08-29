@@ -310,7 +310,7 @@ async def _generate_user_embedding(user: User) -> list[float] | None:
     if user.custom_interests:
         parts.append(user.custom_interests)
     if user.occupation:
-        parts.append(f"职业: {user.occupation}")
+        parts.append(f"工作内容: {user.occupation}")
     if not parts:
         return None
     text = ". ".join(parts)

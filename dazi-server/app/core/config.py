@@ -1,10 +1,12 @@
 import sys
 import logging
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     # Database — 必须通过环境变量或 .env 提供，无默认值
     DATABASE_URL: str
 
@@ -66,18 +68,9 @@ class Settings(BaseSettings):
     AGENT_MODEL: str = ""
     AGENT_BASE_URL: str = ""
     AGENT_API_KEY: str = ""
-    AGENT_DRAFT_MODEL_PROVIDER: str = ""
-    AGENT_DRAFT_MODEL: str = ""
-    AGENT_DRAFT_BASE_URL: str = ""
-    AGENT_DRAFT_API_KEY: str = ""
-
     # Embedding
     EMBEDDING_MODEL: str = "BAAI/bge-base-zh-v1.5"
     EMBEDDING_DIMENSION: int = 768
-
-    class Config:
-        env_file = ".env"
-        extra = "ignore"
 
 
 try:

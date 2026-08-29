@@ -34,6 +34,12 @@ class EventPlazaStaticTests(unittest.TestCase):
         self.assertIn("PlazaEventCard", EVENT_LIST)
         self.assertIn("dataStore.plazaEvents", EVENT_LIST)
 
+    def test_event_scopes_support_horizontal_paging(self):
+        self.assertIn("TabView(selection: $listScope)", EVENT_LIST)
+        self.assertIn(".tag(EventListScope.mine)", EVENT_LIST)
+        self.assertIn(".tag(EventListScope.plaza)", EVENT_LIST)
+        self.assertIn(".tabViewStyle(.page(indexDisplayMode: .never))", EVENT_LIST)
+
 
 if __name__ == "__main__":
     unittest.main()

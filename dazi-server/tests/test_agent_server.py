@@ -58,7 +58,6 @@ class AgentServerTests(unittest.IsolatedAsyncioTestCase):
                 base_url="https://example.test/v1",
                 api_key="key",
             ),
-            draft_config=None,
         )
         fake = FakeClient()
         server._client = fake
@@ -66,7 +65,6 @@ class AgentServerTests(unittest.IsolatedAsyncioTestCase):
         chunks = []
         async for item in server.stream_chat(
             [{"role": "user", "content": "hi"}],
-            purpose="conversation",
             temperature=0.1,
             max_tokens=128,
         ):
@@ -88,14 +86,12 @@ class AgentServerTests(unittest.IsolatedAsyncioTestCase):
                 base_url="https://api.deepseek.com",
                 api_key="key",
             ),
-            draft_config=None,
         )
         fake = FakeClient()
         server._client = fake
 
         async for _ in server.stream_chat(
             [{"role": "user", "content": "hi"}],
-            purpose="conversation",
             temperature=0.2,
             max_tokens=128,
         ):

@@ -934,13 +934,6 @@ label.field {
                 <option>桌游</option><option>摄影</option><option>演出</option><option>运动</option>
               </select>
             </label>
-            <label class="field">城市
-              <select id="testCityFilter" onchange="loadTestPreview()">
-                <option value="">全部</option>
-                <option>上海</option><option>北京</option><option>深圳</option><option>广州</option>
-                <option>杭州</option><option>成都</option><option>南京</option><option>武汉</option>
-              </select>
-            </label>
             <label class="field">显示数量<input id="testLimit" type="number" min="1" max="200" value="30" onchange="loadTestPreview()"></label>
           </div>
           <div class="toolbar" style="margin-top:12px;">
@@ -1559,7 +1552,7 @@ function eventsTableHTML(rows, compact = false) {
         <td class="truncate">${escapeHtml(event.user_name || shortId(event.user_id))}</td>
         <td>${escapeHtml(event.activity_type || '-')}</td>
         <td class="nowrap">${fmtTime(event.start_time)}</td>
-        <td><div class="truncate">${escapeHtml(event.city || '-')} / ${escapeHtml(event.location || '-')}</div></td>
+        <td><div class="truncate">${escapeHtml(event.location || event.city || '-')}</div></td>
         <td>${statusBadge(event.status)}</td>
         <td>${event.match_score == null ? '-' : Number(event.match_score).toFixed(2)}</td>
         ${compact ? '' : `<td><div class="toolbar">
@@ -2023,7 +2016,6 @@ function renderSinglePreview(data) {
           <div class="cell-strong">${escapeHtml(event.title || '-')}</div>
           <div class="preview-meta">
             <span>${escapeHtml(event.activity_type || '-')}</span>
-            <span>${escapeHtml(event.city || '-')} / ${escapeHtml(event.city_normalized || data.city_normalized || '-')}</span>
             <span>${escapeHtml(event.location || '-')}</span>
             <span>${fmtTime(event.start_time)}</span>
           </div>
@@ -2055,7 +2047,7 @@ function renderMatchedEventPreview(matchedEvent, sourceEventId) {
         <div class="preview-meta">
           <span>${escapeHtml(event.title || '-')}</span>
           <span>${escapeHtml(event.activity_type || '-')}</span>
-          <span>${escapeHtml(event.city || '-')} / ${escapeHtml(event.location || '-')}</span>
+          <span>${escapeHtml(event.location || event.city || '-')}</span>
           <span>${fmtTime(event.start_time)}</span>
         </div>
       </div>
@@ -2085,7 +2077,6 @@ function renderPreviewCards(previews) {
           <div class="cell-strong">${escapeHtml(event.title || '-')}</div>
           <div class="preview-meta">
             <span>${escapeHtml(event.activity_type || '-')}</span>
-            <span>${escapeHtml(event.city || '-')} / ${escapeHtml(preview.city_normalized || event.city_normalized || '-')}</span>
             <span>${escapeHtml(event.location || '-')}</span>
             <span>${fmtTime(event.start_time)}</span>
           </div>
@@ -2105,7 +2096,7 @@ function renderCandidateTable(candidates, sourceEventId) {
       <th style="width:48px;">#</th>
       <th style="width:22%;">候选事件</th>
       <th style="width:10%;">活动</th>
-      <th style="width:14%;">城市/地点</th>
+      <th style="width:14%;">地点</th>
       <th style="width:12%;">时间</th>
       <th style="width:12%;">相似度</th>
       <th style="width:11%;">状态</th>
@@ -2121,7 +2112,7 @@ function renderCandidateTable(candidates, sourceEventId) {
         <td class="mono">${index + 1}</td>
         <td><div class="cell-strong truncate">${escapeHtml(event.title || '-')}</div><div class="subtle mono">${shortId(event.id)}</div></td>
         <td>${escapeHtml(event.activity_type || '-')}</td>
-        <td><div class="truncate">${escapeHtml(event.city || '-')} / ${escapeHtml(event.location || '-')}</div></td>
+        <td><div class="truncate">${escapeHtml(event.location || event.city || '-')}</div></td>
         <td class="nowrap">${fmtTime(event.start_time)}</td>
         <td>${scoreHTML(candidate.similarity)}</td>
         <td>${statusBadge(candidate.status || (candidate.passed ? 'passed' : 'filtered'))}</td>
@@ -2330,7 +2321,6 @@ async function loadTestStats() {
   $('#testStatsGrid').innerHTML = `
     <div class="stat"><div class="value">${fmtNum(data.total_pending)}</div><div class="label">Pending 事件</div></div>
     <div class="stat"><div class="label">活动类型</div><div class="tags" style="margin-top:8px;">${statTags(data.by_activity_type, 'type')}</div></div>
-    <div class="stat"><div class="label">城市</div><div class="tags" style="margin-top:8px;">${statTags(data.by_city, 'city')}</div></div>
   `;
 }
 
@@ -2343,7 +2333,6 @@ async function loadTestPreview() {
   const params = new URLSearchParams();
   params.set('limit', $('#testLimit').value || '30');
   if ($('#testTypeFilter').value) params.set('activity_type', $('#testTypeFilter').value);
-  if ($('#testCityFilter').value) params.set('city', $('#testCityFilter').value);
   const data = await guarded($('#testPreviewContent'), async () => requestAdmin(`/api/admin/test/match-preview-all?${params.toString()}`));
   if (!data) return;
   $('#testPreviewMeta').textContent = `${fmtNum(data.total_events)} 个事件`;

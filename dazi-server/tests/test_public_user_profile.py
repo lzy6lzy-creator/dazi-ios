@@ -21,7 +21,7 @@ class PublicUserProfileTests(unittest.TestCase):
             id=user_id,
             name="阿树",
             phone="13800000000",
-            gender="暂时保密",
+            gender="女",
             birth_year=1998,
             birth_date=None,
             bio="喜欢周末看展",

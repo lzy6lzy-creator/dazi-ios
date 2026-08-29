@@ -1,5 +1,6 @@
 import CoreLocation
 import Foundation
+import MapKit
 
 struct DeviceLocationSnapshot {
     let latitude: Double
@@ -11,6 +12,7 @@ struct DeviceLocationSnapshot {
 @Observable
 class LocationManager: NSObject, CLLocationManagerDelegate {
     private let clManager = CLLocationManager()
+    private var reverseGeocodingRequest: MKReverseGeocodingRequest?
 
     var latitude: Double = 0
     var longitude: Double = 0
@@ -126,20 +128,28 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
     // MARK: - Reverse Geocoding
 
     private func reverseGeocode(location: CLLocation) {
-        let geocoder = CLGeocoder()
-        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
-            guard let self, let placemark = placemarks?.first else { return }
-            Task { @MainActor in
-                self.cityName = placemark.locality ?? placemark.administrativeArea ?? ""
-                self.districtName = placemark.subLocality ?? ""
-                self.streetName = placemark.thoroughfare ?? ""
+        reverseGeocodingRequest?.cancel()
+        guard let request = MKReverseGeocodingRequest(location: location) else { return }
+        request.preferredLocale = Locale(identifier: "zh_CN")
+        reverseGeocodingRequest = request
 
-                var parts: [String] = []
-                if !self.cityName.isEmpty { parts.append(self.cityName) }
-                if !self.districtName.isEmpty { parts.append(self.districtName) }
-                if !self.streetName.isEmpty { parts.append(self.streetName) }
-                self.locationString = parts.isEmpty ? "未知位置" : parts.joined(separator: " ")
+        request.getMapItems { [weak self, weak request] mapItems, _ in
+            guard let self, let request, self.reverseGeocodingRequest === request else { return }
+            self.reverseGeocodingRequest = nil
+
+            guard let mapItem = mapItems?.first else {
+                self.locationString = "未知位置"
+                return
             }
+
+            let city = mapItem.addressRepresentations?.cityName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let shortAddress = mapItem.address?.shortAddress?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            self.cityName = city
+            self.districtName = ""
+            self.streetName = shortAddress == city ? "" : shortAddress
+
+            let parts = [self.cityName, self.streetName].filter { !$0.isEmpty }
+            self.locationString = parts.isEmpty ? "未知位置" : parts.joined(separator: " ")
         }
     }
 

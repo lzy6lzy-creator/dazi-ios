@@ -77,8 +77,8 @@ struct ProfileView: View {
                 .fontWeight(.bold)
 
             HStack(spacing: 8) {
-                if !dataStore.currentUser.gender.isEmpty {
-                    Text(dataStore.currentUser.gender)
+                if let gender = User.normalizedGender(dataStore.currentUser.gender) {
+                    Text(gender)
                         .font(.caption)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
@@ -103,6 +103,17 @@ struct ProfileView: View {
                     .font(.subheadline)
             }
             .foregroundStyle(.secondary)
+
+            if !dataStore.currentUser.occupation.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    Image(systemName: "briefcase")
+                        .font(.caption)
+                    Text(dataStore.currentUser.occupation)
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                }
+                .foregroundStyle(.secondary)
+            }
 
             if !dataStore.currentUser.bio.isEmpty {
                 Text(dataStore.currentUser.bio)
@@ -1068,6 +1079,7 @@ struct EditProfileView: View {
     @State private var welcomeDisturb = false
     @State private var profileEventVisibility = "partial"
     @State private var bio = ""
+    @State private var isSaving = false
 
     private static let avatarOptions = [
         "😊", "😎", "🤗", "🥰", "😄", "🤓",
@@ -1159,7 +1171,6 @@ struct EditProfileView: View {
                         HStack(spacing: 12) {
                             genderButton(label: "男", value: "男", icon: "sun.max")
                             genderButton(label: "女", value: "女", icon: "moon.stars")
-                            genderButton(label: "保密", value: "暂时保密", icon: "sparkles")
                         }
                     }
                     .listRowBackground(Color.clear)
@@ -1174,7 +1185,7 @@ struct EditProfileView: View {
                         .frame(height: 150)
 
                     TextField("城市或常驻地点", text: $city)
-                    TextField("职业", text: $occupation)
+                    TextField("工作时间常做的事", text: $occupation)
                 }
 
                 Section("兴趣") {
@@ -1229,13 +1240,14 @@ struct EditProfileView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { save() }
                         .fontWeight(.semibold)
+                        .disabled(User.normalizedGender(gender) == nil || isSaving)
                 }
             }
             .onAppear {
                 avatarEmoji = dataStore.currentUser.avatarEmoji
                 avatarImageData = dataStore.currentUser.avatarImageData
                 name = dataStore.currentUser.name
-                gender = dataStore.currentUser.gender.isEmpty ? "暂时保密" : dataStore.currentUser.gender
+                gender = User.normalizedGender(dataStore.currentUser.gender) ?? ""
                 birthDate = Self.parseBirthDate(dataStore.currentUser.birthDate) ?? Self.defaultBirthDate
                 city = dataStore.currentUser.city
                 occupation = dataStore.currentUser.occupation
@@ -1293,32 +1305,19 @@ struct EditProfileView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
+        guard let selectedGender = User.normalizedGender(gender) else { return }
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let trimmedCity = city.trimmingCharacters(in: .whitespaces)
         let trimmedOccupation = occupation.trimmingCharacters(in: .whitespaces)
         let trimmedCustomInterests = customInterests.trimmingCharacters(in: .whitespaces)
         let interests = Array(selectedInterests).sorted()
-        dataStore.currentUser.avatarEmoji = avatarEmoji
-        dataStore.currentUser.avatarImageData = avatarImageData
-        dataStore.currentUser.name = trimmedName.isEmpty ? dataStore.currentUser.name : trimmedName
-        dataStore.currentUser.gender = gender
-        dataStore.currentUser.birthYear = birthYear
-        dataStore.currentUser.birthDate = birthDateString
-        dataStore.currentUser.city = trimmedCity
-        dataStore.currentUser.occupation = trimmedOccupation
-        dataStore.currentUser.interests = interests
-        dataStore.currentUser.customInterests = trimmedCustomInterests
-        dataStore.currentUser.welcomeDisturb = welcomeDisturb
-        dataStore.currentUser.profileEventVisibility = profileEventVisibility
-        dataStore.currentUser.bio = bio
-        User.currentUser = dataStore.currentUser
-        UserProfileStore().saveUser(dataStore.currentUser)
-        dismiss()
+        isSaving = true
 
         Task {
             do {
                 var data: [String: Any] = [
-                    "gender": gender,
+                    "gender": selectedGender,
                     "birth_year": birthYear,
                     "birth_date": birthDateString,
                     "bio": bio,
@@ -1331,14 +1330,29 @@ struct EditProfileView: View {
                 ]
                 if !trimmedName.isEmpty { data["name"] = trimmedName }
                 let _ = try await APIClient.shared.updateMe(data: data)
-                await MainActor.run {
-                    dataStore.showToast("资料已保存", type: .info)
-                }
+
+                dataStore.currentUser.avatarEmoji = avatarEmoji
+                dataStore.currentUser.avatarImageData = avatarImageData
+                dataStore.currentUser.name = trimmedName.isEmpty ? dataStore.currentUser.name : trimmedName
+                dataStore.currentUser.gender = selectedGender
+                dataStore.currentUser.birthYear = birthYear
+                dataStore.currentUser.birthDate = birthDateString
+                dataStore.currentUser.city = trimmedCity
+                dataStore.currentUser.occupation = trimmedOccupation
+                dataStore.currentUser.interests = interests
+                dataStore.currentUser.customInterests = trimmedCustomInterests
+                dataStore.currentUser.welcomeDisturb = welcomeDisturb
+                dataStore.currentUser.profileEventVisibility = profileEventVisibility
+                dataStore.currentUser.bio = bio
+                User.currentUser = dataStore.currentUser
+                UserProfileStore().saveUser(dataStore.currentUser)
+                isSaving = false
+                dismiss()
+                dataStore.showToast("资料已保存", type: .info)
             } catch {
                 print("Sync profile to server error: \(error)")
-                await MainActor.run {
-                    dataStore.showToast("资料同步失败，请稍后重试", type: .error)
-                }
+                isSaving = false
+                dataStore.showToast("资料同步失败，请稍后重试", type: .error)
             }
         }
     }
@@ -1357,6 +1371,7 @@ struct EditAgentView: View {
     @State private var agentEmoji = ""
     @State private var agentAvatarImageData: Data?
     @State private var agentPersonality = ""
+    @State private var isSaving = false
 
     private let emojiOptions = [
         "🤖", "✨", "🔮", "🧠", "💡", "🌟",
@@ -1415,6 +1430,7 @@ struct EditAgentView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { save() }
                         .fontWeight(.semibold)
+                        .disabled(isSaving)
                 }
             }
             .onAppear {
@@ -1427,26 +1443,33 @@ struct EditAgentView: View {
     }
 
     private func save() {
+        guard !isSaving else { return }
         let trimmedName = agentName.trimmingCharacters(in: .whitespaces)
-        dataStore.currentUser.agentName = trimmedName.isEmpty ? "点点" : trimmedName
-        dataStore.currentUser.agentEmoji = agentEmoji
-        dataStore.currentUser.agentAvatarImageData = agentAvatarImageData
-        dataStore.currentUser.agentPersonality = agentPersonality
-        User.currentUser = dataStore.currentUser
-        UserProfileStore().saveUser(dataStore.currentUser)
-        dismiss()
+        let finalName = trimmedName.isEmpty ? "点点" : trimmedName
+        isSaving = true
 
-        // 同步到后端
         Task {
             do {
                 let data: [String: Any] = [
-                    "name": trimmedName.isEmpty ? "点点" : trimmedName,
+                    "name": finalName,
                     "emoji": agentEmoji,
                     "personality": agentPersonality,
                 ]
                 let _ = try await APIClient.shared.updateMyAgent(data: data)
+
+                dataStore.currentUser.agentName = finalName
+                dataStore.currentUser.agentEmoji = agentEmoji
+                dataStore.currentUser.agentAvatarImageData = agentAvatarImageData
+                dataStore.currentUser.agentPersonality = agentPersonality
+                User.currentUser = dataStore.currentUser
+                UserProfileStore().saveUser(dataStore.currentUser)
+                isSaving = false
+                dismiss()
+                dataStore.showToast("Agent 已保存", type: .info)
             } catch {
                 print("Sync agent to server error: \(error)")
+                isSaving = false
+                dataStore.showToast("Agent 同步失败，请稍后重试", type: .error)
             }
         }
     }

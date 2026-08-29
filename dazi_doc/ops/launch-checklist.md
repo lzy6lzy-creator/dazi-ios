@@ -1,16 +1,17 @@
 # 上线清单
 
-最后更新：2026-06-05
+最后更新：2026-08-29
 
 ## 1. 当前状态
 
 - 后端已部署到 `47.103.127.95`。
-- 内测登录已切到环境变量验证码 + 手机号白名单。
-- 旧固定验证码和默认管理 token 已从代码与远端部署中移除。
+- 动态验证码已接入阿里云 PNVS；固定测试码只对服务端白名单生效。
+- 新用户已接入开放名额/邀请码准入和注册期定位判断。
 - 主动匹配已升级为向量召回、硬过滤、A2A 精排和聊天室创建。
 - 被动匹配已改为邀请确认制。
 - 地点匹配已拆出 normalizer/policy 并完成本地评测。
-- iOS 和 Android 已接入主要活动、聊天室、投票和被动邀请流程。
+- iOS 已接入主要活动、Clarify、匹配、推送、聊天室、投票、被动邀请、公开主页和账号注销流程。
+- Android 当前不在发布范围，本清单不代表 Android 已同步。
 
 ## 2. TestFlight 前 P0
 
@@ -21,17 +22,17 @@
 - [ ] 真机跑主链路：登录、首次注册、编辑资料、创建活动、匹配、聊天室、投票。
 - [ ] 真机跑被动邀请：接受、拒绝、拒绝后不重复推送同一用户对。
 - [ ] 真机跑异常链路：未白名单手机号、错误验证码、网络断开、退出重登。
-- [ ] 检查 iOS token 安全存储方案。
+- [x] access/refresh token 迁移到 Keychain，并兼容搬迁旧本地 token。
+- [ ] 真机验证 WebSocket 断线重连、前后台切换和 token 刷新后的重连。
+- [ ] 真机确认新聊天室/新消息只有一条 APNs 提醒，无本地通知重复。
 - [ ] 确认文档和代码里没有真实 key、密码、root 登录信息。
 
-## 3. Android 内测前 P0
+## 3. 当前已知不完整功能
 
-- [ ] 重新运行 `./gradlew :app:testDebugUnitTest`。
-- [ ] 重新运行 `./gradlew :app:assembleDebug`。
-- [ ] 真机检查登录、活动、聊天室、投票、被动邀请。
-- [ ] 检查输入法、权限弹窗、WebSocket 断线重连。
-- [ ] token 迁移到加密存储。
-- [ ] 域名切换后移除 cleartext 放行。
+- [ ] 活动评价接入后端持久化；当前 iOS 仅修改本地状态，刷新后会丢失。
+- [ ] 用户和 Agent 自定义头像接入媒体上传、URL 展示和跨设备同步。
+- [ ] 活动相册从单个本地 JSON 拆为图片文件 + 元数据，并明确公开主页同步协议。
+- [ ] 聊天室列表批量加载成员、事件、最新消息和未读数，消除 N+1 查询。
 
 ## 4. 后端 P0
 
@@ -43,23 +44,21 @@
 
 ## 5. 域名和 HTTPS
 
-- [ ] DNS 指向服务器。
-- [ ] Nginx 反代 API 和 WebSocket。
+- [x] DNS 指向服务器。
+- [x] Nginx 反代 API 和 WebSocket。
 - [ ] HTTPS 证书和自动续期。
-- [ ] iOS base URL 切到 HTTPS 域名。
-- [ ] Android base URL 和 WebSocket URL 切到 HTTPS/WSS。
-- [ ] 移除 iOS ATS 临时放行。
-- [ ] 移除 Android cleartext 临时放行。
-- [ ] 重新跑 iOS、Android 真机 smoke test。
+- [x] iOS base URL 使用 `https://idabuda.com`，WebSocket 使用 WSS。
+- [x] iOS 不使用 ATS cleartext 临时放行。
+- [ ] 重新跑 iOS 真机 smoke test。
 
 ## 6. 正式上线前 P1
 
-- [ ] 接入真实短信服务，关闭内测验证码模式。
+- [x] 接入真实 PNVS 动态验证码；保留白名单固定码仅用于内部测试。
 - [ ] 用 Alembic 正式迁移替代运行时 `create_all()` 依赖。
 - [ ] WebSocket ConnectionManager 改为 Redis Pub/Sub 或独立消息层。
 - [ ] 定时匹配任务从 API 进程拆到独立 worker。
 - [ ] PostgreSQL 定时备份、恢复演练和备份加密。
 - [ ] 基础监控：API 健康、错误日志、磁盘、内存、DB 连接数。
+- [ ] 增加 readiness 检查，区分 API 存活与 PostgreSQL/Redis 可用。
 - [ ] 生产 CORS 白名单收敛到正式域名。
 - [ ] 准备 App Store 素材、隐私政策、用户协议和客服反馈入口。
-

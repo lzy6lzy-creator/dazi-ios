@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import and_, or_, select
 
@@ -299,7 +299,6 @@ async def _room_agent_reply(messages: list[dict[str, str]]) -> str:
     raw_reply = ""
     async for piece in agent_server.stream_chat(
         messages,
-        purpose="conversation",
         max_tokens=300,
     ):
         raw_reply += piece
@@ -504,7 +503,7 @@ async def get_room_messages(
     room_id: UUID,
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     before_id: Optional[UUID] = None,
 ):
     """获取聊天室消息（分页）"""

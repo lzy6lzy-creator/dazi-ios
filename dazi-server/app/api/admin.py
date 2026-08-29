@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import calendar
 import csv
+import hmac
 import io
 import logging
 from typing import Optional
@@ -16,7 +17,7 @@ from uuid import UUID, uuid4
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +46,7 @@ security_scheme = HTTPBearer(auto_error=False)
 
 
 async def verify_admin(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
-    if not credentials or credentials.credentials != settings.ADMIN_TOKEN:
+    if not credentials or not hmac.compare_digest(credentials.credentials, settings.ADMIN_TOKEN):
         raise HTTPException(status_code=403, detail="Admin access denied")
 
 
@@ -578,7 +579,7 @@ async def reset_all_events(db: AsyncSession = Depends(get_db)):
 
 @router.get("/match-logs")
 async def get_match_logs(
-    limit: int = 20,
+    limit: int = Query(20, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
 ):
     """查看最近的匹配日志"""
@@ -643,7 +644,7 @@ async def list_all_rooms(db: AsyncSession = Depends(get_db)):
 # ── 日志查看 ──
 
 @router.get("/logs")
-async def get_logs(limit: int = 200, level: Optional[str] = None):
+async def get_logs(limit: int = Query(200, ge=1, le=2000), level: Optional[str] = None):
     """获取最近的应用日志"""
     return log_buffer.get_logs(limit=limit, level=level)
 
@@ -697,7 +698,7 @@ def beta_signup_query(status: Optional[str] = None, q: Optional[str] = None):
 async def list_beta_signups(
     status: Optional[str] = None,
     q: Optional[str] = None,
-    limit: int = 300,
+    limit: int = Query(300, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
 ):
     """查看官网内测报名。"""
@@ -1023,7 +1024,7 @@ async def list_feedback(
     status: Optional[str] = None,
     category: Optional[str] = None,
     q: Optional[str] = None,
-    limit: int = 300,
+    limit: int = Query(300, ge=1, le=1000),
     db: AsyncSession = Depends(get_db),
 ):
     """查看官网反馈。"""
@@ -1544,9 +1545,8 @@ async def cleanup_test_data(db: AsyncSession = Depends(get_db)):
 
 @router.get("/test/match-preview-all")
 async def match_preview_all(
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
     activity_type: Optional[str] = None,
-    city: Optional[str] = None,
     db: AsyncSession = Depends(get_db),
 ):
     """批量预览所有 pending 事件的匹配候选（向量搜索）"""
@@ -1555,8 +1555,6 @@ async def match_preview_all(
     query = select(Event).where(Event.status == "pending").order_by(Event.created_at.desc())
     if activity_type:
         query = query.where(Event.activity_type == activity_type)
-    if city:
-        query = query.where(Event.city == city)
     query = query.limit(limit)
 
     result = await db.execute(query)
@@ -1587,22 +1585,12 @@ async def match_stats(db: AsyncSession = Depends(get_db)):
     )
     by_type = [{"type": r[0], "count": r[1]} for r in type_result.fetchall()]
 
-    # 按城市统计
-    city_result = await db.execute(
-        select(Event.city, func.count(Event.id))
-        .where(Event.status == "pending")
-        .group_by(Event.city)
-        .order_by(func.count(Event.id).desc())
-    )
-    by_city = [{"city": r[0], "count": r[1]} for r in city_result.fetchall()]
-
     # 总计
     total = await db.execute(select(func.count(Event.id)).where(Event.status == "pending"))
 
     return {
         "total_pending": total.scalar(),
         "by_activity_type": by_type,
-        "by_city": by_city,
     }
 
 

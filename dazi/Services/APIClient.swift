@@ -572,6 +572,7 @@ final class APIClient {
     static let shared = APIClient()
 
     private let session = URLSession.shared
+    private let tokenStore = SecureTokenStore.shared
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
         return d
@@ -582,14 +583,16 @@ final class APIClient {
     // MARK: - Token Management
 
     private var accessToken: String? {
-        get { UserDefaults.standard.string(forKey: "dazi_access_token") }
-        set { UserDefaults.standard.set(newValue, forKey: "dazi_access_token") }
+        get { tokenStore.string(for: "access_token", migrating: "dazi_access_token") }
+        set { tokenStore.set(newValue, for: "access_token", removingLegacyDefaultsKey: "dazi_access_token") }
     }
 
     private var refreshToken: String? {
-        get { UserDefaults.standard.string(forKey: "dazi_refresh_token") }
-        set { UserDefaults.standard.set(newValue, forKey: "dazi_refresh_token") }
+        get { tokenStore.string(for: "refresh_token", migrating: "dazi_refresh_token") }
+        set { tokenStore.set(newValue, for: "refresh_token", removingLegacyDefaultsKey: "dazi_refresh_token") }
     }
+
+    var currentAccessToken: String? { accessToken }
 
     var serverUserId: String? {
         get { UserDefaults.standard.string(forKey: "dazi_server_user_id") }

@@ -33,7 +33,7 @@ class DataStore {
     private static let agentSessionResetPrefix = "[SESSION_RESET_AFTER_EVENT]"
 
     init() {
-        if let savedUser = profileStore.loadUser() {
+        if let savedUser = profileStore.loadUser(), api.isLoggedIn {
             currentUser = savedUser
             User.currentUser = savedUser
             isRegistered = true
@@ -41,6 +41,10 @@ class DataStore {
             DispatchQueue.main.async { [self] in
                 loadInitialData()
             }
+        } else if profileStore.isRegistered {
+            // A profile without credentials cannot make authenticated requests.
+            // Clear the stale local marker so the app returns to login cleanly.
+            profileStore.clearUser()
         }
     }
 

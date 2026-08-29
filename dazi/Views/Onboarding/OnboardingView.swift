@@ -14,8 +14,9 @@ struct OnboardingView: View {
     @State private var birthDate = OnboardingView.defaultBirthDate
     @State private var selectedInterests: Set<String> = []
     @State private var customInterests = ""
-    @State private var occupation = ""
-    @State private var selectedOccupation: String?
+    @State private var selectedWorkActivities: Set<String> = []
+    @State private var customWorkActivity = ""
+    @State private var showsCustomWorkActivity = false
     @State private var welcomeDisturb = false
     @State private var bio = ""
     @State private var agentName = ""
@@ -33,10 +34,13 @@ struct OnboardingView: View {
         "温柔、细心", "直爽、干脆", "可爱、活泼",
     ]
 
-    private static let occupationPresets = [
-        "学生", "互联网", "金融", "设计",
-        "医疗", "教育", "自由职业", "其他",
+    private static let workActivityPresets = [
+        "学习", "查资料", "写论文", "写方案", "做PPT", "做表格",
+        "看数据", "写代码", "做产品", "做设计", "做内容", "做运营",
+        "开会", "聊需求", "教学", "谈客户", "做生意", "服务顾客",
     ]
+
+    private static let maxWorkActivityCount = 5
 
     private static let interestItems: [(String, String)] = [
         ("电影", "film"),
@@ -90,6 +94,19 @@ struct OnboardingView: View {
 
     private var birthDateString: String {
         Self.birthDateFormatter.string(from: birthDate)
+    }
+
+    private var workActivitiesValue: String {
+        var values = Self.workActivityPresets.filter { selectedWorkActivities.contains($0) }
+        let custom = customWorkActivity.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !custom.isEmpty {
+            values.append(custom)
+        }
+        return values.joined(separator: "、")
+    }
+
+    private var reservedWorkActivityCount: Int {
+        selectedWorkActivities.count + (showsCustomWorkActivity || !customWorkActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 1 : 0)
     }
 
     var body: some View {
@@ -211,7 +228,6 @@ struct OnboardingView: View {
                 HStack(spacing: 12) {
                     genderButton(label: "男", value: "男", icon: "sun.max")
                     genderButton(label: "女", value: "女", icon: "moon.stars")
-                    genderButton(label: "保密", value: "暂时保密", icon: "sparkles")
                 }
             }
 
@@ -260,51 +276,85 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             stepHeader(
                 title: "☀️ 工作时间在忙什么",
-                subtitle: "让搭子们认识你",
+                subtitle: "选 1–5 件最常占据你时间的事",
                 icon: nil
             )
 
             Spacer().frame(height: 8)
 
-            FlowLayout(spacing: 10) {
-                ForEach(Self.occupationPresets, id: \.self) { preset in
-                    occupationChip(preset)
+            ScrollView(.vertical, showsIndicators: false) {
+                FlowLayout(spacing: 10) {
+                    ForEach(Self.workActivityPresets, id: \.self) { activity in
+                        workActivityChip(activity)
+                    }
+
+                    customWorkActivityButton
                 }
             }
+            .frame(maxHeight: 280)
 
-            TextField("或者直接输入...", text: $occupation)
-                .font(.body)
-                .padding()
-                .background(AppTheme.systemBubbleColor)
-                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
-                .onChange(of: occupation) {
-                    if !occupation.isEmpty {
-                        selectedOccupation = nil
+            if showsCustomWorkActivity {
+                TextField("比如：做研究、值班、跑现场", text: $customWorkActivity)
+                    .font(.body)
+                    .padding()
+                    .background(AppTheme.systemBubbleColor)
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+                    .onChange(of: customWorkActivity) {
+                        if customWorkActivity.count > 20 {
+                            customWorkActivity = String(customWorkActivity.prefix(20))
+                        }
                     }
-                }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
     }
 
-    private func occupationChip(_ preset: String) -> some View {
-        let isSelected = selectedOccupation == preset
+    private func workActivityChip(_ activity: String) -> some View {
+        let isSelected = selectedWorkActivities.contains(activity)
+        let isDisabled = !isSelected && reservedWorkActivityCount >= Self.maxWorkActivityCount
         return Button {
             if isSelected {
-                selectedOccupation = nil
-                occupation = ""
+                selectedWorkActivities.remove(activity)
             } else {
-                selectedOccupation = preset
-                occupation = preset
+                selectedWorkActivities.insert(activity)
             }
         } label: {
-            Text(preset)
+            Text(activity)
                 .font(.subheadline)
                 .fontWeight(.medium)
                 .foregroundStyle(isSelected ? .white : .primary)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(isSelected ? AppTheme.primaryColor : AppTheme.systemBubbleColor)
-                .clipShape(Capsule())
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
         }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.45 : 1)
+    }
+
+    private var customWorkActivityButton: some View {
+        let hasCustomValue = !customWorkActivity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let isDisabled = !showsCustomWorkActivity && !hasCustomValue && reservedWorkActivityCount >= Self.maxWorkActivityCount
+        let label = showsCustomWorkActivity ? "收起填写" : (hasCustomValue ? "修改填写" : "自己填写")
+        let icon = showsCustomWorkActivity ? "chevron.up" : (hasCustomValue ? "pencil" : "plus")
+        return Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showsCustomWorkActivity.toggle()
+            }
+        } label: {
+            Label(label, systemImage: icon)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundStyle(AppTheme.primaryColor)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(AppTheme.primaryColor.opacity(0.1))
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusMD))
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.45 : 1)
     }
 
     // MARK: - Interests
@@ -312,8 +362,8 @@ struct OnboardingView: View {
     private var interestsStep: some View {
         VStack(spacing: 16) {
             stepHeader(
-                title: "🌙 休息时间喜欢做点什么",
-                subtitle: "让搭子们认识你 (至少选1个)",
+                title: "🌙 生活里通常在忙什么",
+                subtitle: "选几件下班后愿意投入时间的事（至少选 1 个）",
                 icon: nil
             )
 
@@ -602,6 +652,7 @@ struct OnboardingView: View {
                 }
                 if !gender.isEmpty { profileRow(label: "性别", value: gender) }
                 profileRow(label: "出生日期", value: birthDateString)
+                if !workActivitiesValue.isEmpty { profileRow(label: "工作时间", value: workActivitiesValue) }
                 profileRow(label: "兴趣", value: Array(selectedInterests).joined(separator: "、"))
                 if !bio.isEmpty { profileRow(label: "简介", value: bio) }
                 Divider().padding(.vertical, 4)
@@ -619,15 +670,23 @@ struct OnboardingView: View {
             Button {
                 completeRegistration()
             } label: {
-                Text("开始找搭子")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(AppTheme.primaryColor)
-                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
+                Group {
+                    if isRegistering {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Text("开始找搭子")
+                            .font(.headline)
+                    }
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(AppTheme.primaryColor)
+                .clipShape(RoundedRectangle(cornerRadius: AppTheme.radiusLG))
             }
             .buttonStyle(PrimaryButtonStyle())
+            .disabled(isRegistering)
         }
     }
 
@@ -692,8 +751,8 @@ struct OnboardingView: View {
         switch step {
         case .name: return name.trimmingCharacters(in: .whitespaces).count >= 1
         case .avatar: return true
-        case .genderAndBirth: return !gender.isEmpty
-        case .occupation: return true
+        case .genderAndBirth: return User.normalizedGender(gender) != nil
+        case .occupation: return !workActivitiesValue.isEmpty
         case .interests: return !selectedInterests.isEmpty
         case .bio: return true
         case .agentIntro: return true
@@ -730,12 +789,14 @@ struct OnboardingView: View {
 
     private func completeRegistration() {
         guard !isRegistering else { return }
+        guard let selectedGender = User.normalizedGender(gender) else { return }
         isRegistering = true
 
         let finalAgentName = agentName.trimmingCharacters(in: .whitespaces).isEmpty ? "点点" : agentName.trimmingCharacters(in: .whitespaces)
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         let cityName = dataStore.locationManager.cityName
         let interestsArray = Array(selectedInterests)
+        let finalWorkActivities = workActivitiesValue
         let finalBirthYear = selectedBirthYear
         let finalBirthDate = birthDateString
 
@@ -748,11 +809,11 @@ struct OnboardingView: View {
             avatarImageData: avatarImageData,
             city: cityName,
             bio: bio,
-            gender: gender,
+            gender: selectedGender,
             birthYear: finalBirthYear,
             birthDate: finalBirthDate,
             interests: interestsArray,
-            occupation: occupation.trimmingCharacters(in: .whitespaces),
+            occupation: finalWorkActivities,
             customInterests: customInterests.trimmingCharacters(in: .whitespaces),
             welcomeDisturb: welcomeDisturb,
             agentName: finalAgentName,
@@ -761,34 +822,36 @@ struct OnboardingView: View {
             agentPersonality: agentPersonality
         )
 
-        let store = UserProfileStore()
-        store.saveUser(user)
-
-        dataStore.currentUser = user
-        User.currentUser = user
-        dataStore.isRegistered = true
-        dataStore.locationManager.requestPermission()
-        dataStore.loadInitialData()
-
         Task {
-            await syncProfileToBackend(
+            let didSync = await syncProfileToBackend(
                 name: trimmedName,
-                gender: gender,
+                gender: selectedGender,
                 birthYear: finalBirthYear,
                 birthDate: finalBirthDate,
                 bio: bio,
                 interests: interestsArray,
                 city: cityName,
-                occupation: occupation.trimmingCharacters(in: .whitespaces),
+                occupation: finalWorkActivities,
                 customInterests: customInterests.trimmingCharacters(in: .whitespaces),
                 welcomeDisturb: welcomeDisturb,
                 agentName: finalAgentName,
                 agentEmoji: agentEmoji,
                 agentPersonality: agentPersonality
             )
-        }
+            guard didSync else {
+                isRegistering = false
+                dataStore.showToast("资料同步失败，请检查网络后重试", type: .error)
+                return
+            }
 
-        onComplete()
+            UserProfileStore().saveUser(user)
+            dataStore.currentUser = user
+            User.currentUser = user
+            dataStore.isRegistered = true
+            dataStore.locationManager.requestPermission()
+            dataStore.loadInitialData()
+            onComplete()
+        }
     }
 
     private func syncProfileToBackend(
@@ -805,7 +868,7 @@ struct OnboardingView: View {
         agentName: String,
         agentEmoji: String,
         agentPersonality: String
-    ) async {
+    ) async -> Bool {
         let api = APIClient.shared
         do {
             var userData: [String: Any] = ["name": name]
@@ -827,9 +890,10 @@ struct OnboardingView: View {
             _ = try await api.updateMyAgent(data: agentData)
 
             print("[Onboarding] Profile sync successful")
+            return true
         } catch {
             print("[Onboarding] Profile sync failed: \(error)")
-            dataStore.showToast("资料同步失败，请检查网络", type: .error)
+            return false
         }
     }
 }

@@ -10,6 +10,12 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 MAINLAND_PHONE_RE = re.compile(r"^1[3-9]\d{9}$")
 SMS_CODE_RE = re.compile(r"^\d{6}$")
+USER_GENDER_ALIASES = {
+    "男": "男",
+    "女": "女",
+    "male": "男",
+    "female": "女",
+}
 
 
 def normalize_mainland_phone(value: object) -> str:
@@ -21,6 +27,14 @@ def normalize_mainland_phone(value: object) -> str:
     if not MAINLAND_PHONE_RE.fullmatch(phone):
         raise ValueError("请填写 11 位中国大陆手机号")
     return phone
+
+
+def normalize_user_gender(value: object) -> str:
+    normalized = str(value or "").strip().lower()
+    gender = USER_GENDER_ALIASES.get(normalized)
+    if gender is None:
+        raise ValueError("性别必须选择男或女")
+    return gender
 
 
 class DeviceLocationRequest(BaseModel):
@@ -159,28 +173,38 @@ class AuthRefreshRequest(BaseModel):
 # ── User ──
 
 class UserCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=50)
     phone: Optional[str] = None
     gender: Optional[str] = None
-    birth_year: Optional[int] = None
+    birth_year: Optional[int] = Field(default=None, ge=1900, le=2100)
     birth_date: Optional[date] = None
-    bio: Optional[str] = None
-    interests: Optional[list[str]] = None
-    city: Optional[str] = None
+    bio: Optional[str] = Field(default=None, max_length=2000)
+    interests: Optional[list[str]] = Field(default=None, max_length=30)
+    city: Optional[str] = Field(default=None, max_length=50)
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def validate_gender(cls, value):
+        return normalize_user_gender(value)
 
 
 class UserUpdate(BaseModel):
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=50)
     gender: Optional[str] = None
-    birth_year: Optional[int] = None
+    birth_year: Optional[int] = Field(default=None, ge=1900, le=2100)
     birth_date: Optional[date] = None
-    bio: Optional[str] = None
-    interests: Optional[list[str]] = None
-    city: Optional[str] = None
-    occupation: Optional[str] = None
-    custom_interests: Optional[str] = None
+    bio: Optional[str] = Field(default=None, max_length=2000)
+    interests: Optional[list[str]] = Field(default=None, max_length=30)
+    city: Optional[str] = Field(default=None, max_length=50)
+    occupation: Optional[str] = Field(default=None, max_length=100)
+    custom_interests: Optional[str] = Field(default=None, max_length=2000)
     welcome_disturb: Optional[bool] = None
     profile_event_visibility: Optional[str] = None
+
+    @field_validator("gender", mode="before")
+    @classmethod
+    def validate_gender(cls, value):
+        return normalize_user_gender(value)
 
 
 class UserResponse(BaseModel):
@@ -245,7 +269,7 @@ class PublicUserProfileResponse(BaseModel):
 # ── Notifications ──
 
 class PushDeviceTokenRequest(BaseModel):
-    token: str
+    token: str = Field(max_length=255)
     platform: str = "ios"
     environment: str = "production"
 
@@ -284,9 +308,9 @@ class PushDeviceTokenResponse(BaseModel):
 # ── Agent ──
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = None
-    emoji: Optional[str] = None
-    personality: Optional[str] = None
+    name: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    emoji: Optional[str] = Field(default=None, max_length=10)
+    personality: Optional[str] = Field(default=None, max_length=1000)
 
 
 class AgentResponse(BaseModel):
@@ -303,8 +327,8 @@ class AgentResponse(BaseModel):
 # ── Agent Chat ──
 
 class AgentChatRequest(BaseModel):
-    message: str
-    current_location: Optional[str] = None
+    message: str = Field(min_length=1, max_length=4000)
+    current_location: Optional[str] = Field(default=None, max_length=200)
 
 
 class ClarificationOption(BaseModel):
@@ -327,15 +351,15 @@ class ClarificationQuestion(BaseModel):
 
 
 class ClarificationAnswer(BaseModel):
-    question_id: str
-    option_ids: Optional[list[str]] = None
+    question_id: str = Field(min_length=1, max_length=100)
+    option_ids: Optional[list[str]] = Field(default=None, max_length=20)
     custom_value: Optional[Any] = None
 
 
 class ClarificationAnswerRequest(BaseModel):
-    clarification_session_id: str
-    answers: list[ClarificationAnswer] = []
-    free_text: Optional[str] = None
+    clarification_session_id: str = Field(min_length=1, max_length=100)
+    answers: list[ClarificationAnswer] = Field(default_factory=list, max_length=50)
+    free_text: Optional[str] = Field(default=None, max_length=4000)
 
 
 class ClarificationStreamAnswerRequest(ClarificationAnswerRequest):
@@ -349,7 +373,7 @@ class AgentChatResponse(BaseModel):
     event_draft_pending: bool = False
     clarification_pending: bool = False
     clarification_session_id: Optional[str] = None
-    clarification_questions: list[ClarificationQuestion] = []
+    clarification_questions: list[ClarificationQuestion] = Field(default_factory=list)
 
 
 # ── Agent Memory ──
@@ -393,33 +417,33 @@ class MemoryUpdate(BaseModel):
 # ── Event ──
 
 class EventCreate(BaseModel):
-    title: str
-    activity_type: str
-    city: Optional[str] = None
+    title: str = Field(min_length=1, max_length=200)
+    activity_type: str = Field(min_length=1, max_length=50)
+    city: Optional[str] = Field(default=None, max_length=50)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    location: Optional[str] = None
-    preferences: Optional[list[str]] = None
-    constraints: Optional[list[str]] = None
-    clarification_answers: Optional[list[dict[str, Any]]] = None
-    age_filter_min: Optional[int] = None
-    age_filter_max: Optional[int] = None
-    age_filter_mode: Optional[str] = None
+    location: Optional[str] = Field(default=None, max_length=200)
+    preferences: Optional[list[str]] = Field(default=None, max_length=50)
+    constraints: Optional[list[str]] = Field(default=None, max_length=50)
+    clarification_answers: Optional[list[dict[str, Any]]] = Field(default=None, max_length=50)
+    age_filter_min: Optional[int] = Field(default=None, ge=0, le=120)
+    age_filter_max: Optional[int] = Field(default=None, ge=0, le=120)
+    age_filter_mode: Optional[str] = Field(default=None, max_length=20)
 
 
 class EventUpdate(BaseModel):
-    title: Optional[str] = None
-    activity_type: Optional[str] = None
+    title: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    activity_type: Optional[str] = Field(default=None, min_length=1, max_length=50)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    location: Optional[str] = None
-    city: Optional[str] = None
-    preferences: Optional[list[str]] = None
-    constraints: Optional[list[str]] = None
-    clarification_answers: Optional[list[dict[str, Any]]] = None
-    age_filter_min: Optional[int] = None
-    age_filter_max: Optional[int] = None
-    age_filter_mode: Optional[str] = None
+    location: Optional[str] = Field(default=None, max_length=200)
+    city: Optional[str] = Field(default=None, max_length=50)
+    preferences: Optional[list[str]] = Field(default=None, max_length=50)
+    constraints: Optional[list[str]] = Field(default=None, max_length=50)
+    clarification_answers: Optional[list[dict[str, Any]]] = Field(default=None, max_length=50)
+    age_filter_min: Optional[int] = Field(default=None, ge=0, le=120)
+    age_filter_max: Optional[int] = Field(default=None, ge=0, le=120)
+    age_filter_mode: Optional[str] = Field(default=None, max_length=20)
 
 
 class EventResponse(BaseModel):
@@ -488,13 +512,13 @@ class ChatRoomResponse(BaseModel):
     is_active: bool
     created_at: datetime
     closed_at: Optional[datetime] = None
-    members: list[ChatRoomMemberResponse] = []
+    members: list[ChatRoomMemberResponse] = Field(default_factory=list)
     last_message: Optional["MessageResponse"] = None
     has_unread: bool = False
 
 
 class VoteRequest(BaseModel):
-    vote: str  # "da" or "bu_da"
+    vote: Literal["da", "bu_da"]
 
 
 class VoteStatusResponse(BaseModel):
@@ -516,12 +540,12 @@ class PassiveMatchRequestResponse(BaseModel):
 
 
 class PassiveMatchRequestAction(BaseModel):
-    action: str  # accept / reject
+    action: Literal["accept", "reject"]
 
 
 class MessageCreate(BaseModel):
-    content: str
-    mentions: Optional[list[str]] = None
+    content: str = Field(min_length=1, max_length=4000)
+    mentions: Optional[list[str]] = Field(default=None, max_length=20)
 
 
 class MessageResponse(BaseModel):

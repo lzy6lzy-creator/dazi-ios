@@ -233,7 +233,6 @@ class A2AMatcher:
                     + json.dumps(payload, ensure_ascii=False, indent=2),
                 },
             ],
-            purpose="conversation",
             temperature=0.3,
             max_tokens=2048,
         )

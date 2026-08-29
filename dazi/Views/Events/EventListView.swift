@@ -13,16 +13,20 @@ struct EventListView: View {
             VStack(spacing: 0) {
                 scopePicker
 
-                switch listScope {
-                case .mine:
-                    if dataStore.events.isEmpty {
-                        emptyState
-                    } else {
-                        eventList
+                TabView(selection: $listScope) {
+                    Group {
+                        if dataStore.events.isEmpty {
+                            emptyState
+                        } else {
+                            eventList
+                        }
                     }
-                case .plaza:
+                    .tag(EventListScope.mine)
+
                     plazaList
+                        .tag(EventListScope.plaza)
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
             .background(AppTheme.backgroundColor)
             .navigationTitle("活动")

@@ -245,6 +245,12 @@ async def _ensure_runtime_schema(conn) -> None:
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_event_visibility VARCHAR(20) DEFAULT 'partial'"))
     await conn.execute(text("UPDATE users SET profile_event_visibility = 'partial' WHERE profile_event_visibility IS NULL"))
+    await conn.execute(
+        text(
+            "UPDATE users SET gender = NULL "
+            "WHERE BTRIM(gender) IN ('保密', '暂时保密', '不透露', '不公开')"
+        )
+    )
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS clarification_answers JSONB"))
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_min INTEGER"))
     await conn.execute(text("ALTER TABLE events ADD COLUMN IF NOT EXISTS age_filter_max INTEGER"))

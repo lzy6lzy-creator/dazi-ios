@@ -24,6 +24,7 @@ class AdminConsoleStaticTests(unittest.TestCase):
                         route_return = stmt.args[0].value
 
         self.assertEqual(route_return, "app/static/admin.html")
+        self.assertFalse((ROOT / "app/static/match_test.html").exists())
 
     def test_admin_console_contains_test_lab_with_shared_auth(self):
         html = self.admin_html()
@@ -36,18 +37,24 @@ class AdminConsoleStaticTests(unittest.TestCase):
         self.assertIn("/api/admin/test/stats", html)
         self.assertIn("/api/admin/test/cleanup", html)
 
+    def test_admin_token_uses_constant_time_comparison(self):
+        source = (ROOT / "app/api/admin.py").read_text(encoding="utf-8")
+        self.assertIn("hmac.compare_digest", source)
+
     def test_admin_preview_uses_current_matching_preview_contract(self):
         html = self.admin_html()
 
         self.assertIn("total_recalled", html)
         self.assertIn("total_passed", html)
-        self.assertIn("city_normalized", html)
         self.assertIn("candidates", html)
         self.assertIn("similarity", html)
         self.assertIn("filter_reason", html)
         self.assertNotIn("data.thresholds", html)
         self.assertNotIn("data.pipeline", html)
         self.assertNotIn("coarse_rank_top10", html)
+        self.assertNotIn("city_normalized", html)
+        self.assertNotIn('id="testCityFilter"', html)
+        self.assertNotIn("data.by_city", html)
 
     def test_matching_preview_selects_can_show_matched_events(self):
         html = self.admin_html()

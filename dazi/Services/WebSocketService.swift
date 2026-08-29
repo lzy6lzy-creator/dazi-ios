@@ -7,6 +7,7 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
     private var webSocketTask: URLSessionWebSocketTask?
     private var session: URLSession!
     private var pingTimer: Timer?
+    private var reconnectWorkItem: DispatchWorkItem?
     private var reconnectDelay: TimeInterval = 1
     private var isIntentionallyClosed = false
 
@@ -33,34 +34,41 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
     // MARK: - Connect / Disconnect
 
     func connect() {
-        guard let token = UserDefaults.standard.string(forKey: "dazi_access_token") else {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+
+        guard let token = APIClient.shared.currentAccessToken else {
             print("[WS] No token, skip connect")
             return
         }
-
-        isIntentionallyClosed = false
 
         let wsScheme = APIConfig.baseURL.hasPrefix("https") ? "wss" : "ws"
         let host = APIConfig.baseURL
             .replacingOccurrences(of: "https://", with: "")
             .replacingOccurrences(of: "http://", with: "")
 
-        guard let url = URL(string: "\(wsScheme)://\(host)/ws?token=\(token)") else {
+        guard let url = URL(string: "\(wsScheme)://\(host)/ws") else {
             print("[WS] Invalid URL")
             return
         }
 
         disconnect()
-        webSocketTask = session.webSocketTask(with: url)
-        webSocketTask?.resume()
-        startListening()
+        isIntentionallyClosed = false
+
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let task = session.webSocketTask(with: request)
+        webSocketTask = task
+        task.resume()
+        startListening(task)
         startPing()
-        reconnectDelay = 1
         print("[WS] Connecting to \(url.host ?? "")")
     }
 
     func disconnect() {
         isIntentionallyClosed = true
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
         pingTimer?.invalidate()
         pingTimer = nil
         webSocketTask?.cancel(with: .goingAway, reason: nil)
@@ -69,9 +77,10 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
 
     // MARK: - Receive
 
-    private func startListening() {
-        webSocketTask?.receive { [weak self] result in
+    private func startListening(_ task: URLSessionWebSocketTask) {
+        task.receive { [weak self] result in
             guard let self else { return }
+            guard self.webSocketTask === task else { return }
             switch result {
             case .success(let message):
                 switch message {
@@ -84,11 +93,10 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
                 @unknown default:
                     break
                 }
-                // 继续监听
-                self.startListening()
+                self.startListening(task)
             case .failure(let error):
                 print("[WS] Receive error: \(error.localizedDescription)")
-                self.handleDisconnect()
+                self.handleDisconnect(task)
             }
         }
     }
@@ -167,17 +175,20 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
     }
 
     private func sendPing() {
+        guard let task = webSocketTask else { return }
         let pingMsg = URLSessionWebSocketTask.Message.string("{\"type\":\"ping\"}")
-        webSocketTask?.send(pingMsg) { error in
+        task.send(pingMsg) { [weak self] error in
             if let error {
                 print("[WS] Ping error: \(error.localizedDescription)")
+                self?.handleDisconnect(task)
             }
         }
     }
 
     // MARK: - Reconnect
 
-    private func handleDisconnect() {
+    private func handleDisconnect(_ task: URLSessionWebSocketTask) {
+        guard webSocketTask === task else { return }
         pingTimer?.invalidate()
         pingTimer = nil
         webSocketTask = nil
@@ -187,23 +198,30 @@ final class WebSocketService: NSObject, URLSessionWebSocketDelegate {
         // 指数退避重连，最大 30 秒
         let delay = min(reconnectDelay, 30)
         print("[WS] Reconnecting in \(delay)s...")
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+        let workItem = DispatchWorkItem { [weak self] in
             guard let self, !self.isIntentionallyClosed else { return }
             self.reconnectDelay *= 2
             self.connect()
         }
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
     }
 
     // MARK: - URLSessionWebSocketDelegate
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
+        guard self.webSocketTask === webSocketTask else { return }
         print("[WS] Connected")
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
         reconnectDelay = 1
     }
 
     func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
+        guard self.webSocketTask === webSocketTask else { return }
         print("[WS] Closed: \(closeCode)")
-        handleDisconnect()
+        handleDisconnect(webSocketTask)
     }
 }
 

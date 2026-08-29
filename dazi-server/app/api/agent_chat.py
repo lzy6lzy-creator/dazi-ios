@@ -15,7 +15,7 @@ from collections.abc import AsyncIterator, Iterator
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -131,7 +131,6 @@ async def chat_with_agent_stream(
             visible_text_emitted = False
             async for chunk in agent_server.stream_chat(
                 context["messages"],
-                purpose="conversation",
                 temperature=0.3,
                 max_tokens=2048,
             ):
@@ -189,7 +188,7 @@ async def chat_with_agent_stream(
 async def get_chat_history(
     user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
-    limit: int = 50,
+    limit: int = Query(50, ge=1, le=200),
 ):
     """获取 Agent 对话历史"""
     result = await db.execute(
@@ -366,7 +365,6 @@ async def _collect_conversation_payload(messages: list[dict[str, str]]) -> dict:
     raw = ""
     async for chunk in agent_server.stream_chat(
         messages,
-        purpose="conversation",
         temperature=0.3,
         max_tokens=2048,
     ):
@@ -393,7 +391,6 @@ async def _stream_conversation_events(
 
     async for chunk in agent_server.stream_chat(
         context["messages"],
-        purpose="conversation",
         temperature=0.3,
         max_tokens=2048,
     ):

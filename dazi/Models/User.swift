@@ -23,6 +23,14 @@ struct User: Identifiable, Codable, Hashable, Sendable {
     var agentAvatarImageData: Data?
     var agentPersonality: String
 
+    static func normalizedGender(_ value: String) -> String? {
+        switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "男", "male": return "男"
+        case "女", "female": return "女"
+        default: return nil
+        }
+    }
+
     init(
         id: String,
         name: String,
@@ -53,7 +61,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         self.city = city
         self.bio = bio
         self.isAgent = isAgent
-        self.gender = gender
+        self.gender = Self.normalizedGender(gender) ?? ""
         self.birthYear = birthYear
         self.birthDate = birthDate
         self.interests = interests

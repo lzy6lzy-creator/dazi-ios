@@ -139,6 +139,9 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
         roomId: String,
         type: String
     ) {
+        // Real devices receive these events from APNs. Scheduling the same
+        // WebSocket event locally would show duplicate banners in foreground.
+        #if targetEnvironment(simulator)
         center.getNotificationSettings { [weak self] settings in
             guard let self else { return }
 
@@ -160,6 +163,7 @@ final class NotificationService: NSObject, UNUserNotificationCenterDelegate {
                 break
             }
         }
+        #endif
     }
 
     private func addRequest(

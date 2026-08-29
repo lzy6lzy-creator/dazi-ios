@@ -1,6 +1,6 @@
 # 地点匹配评测摘要
 
-最后更新：2026-06-05
+最后更新：2026-08-29
 
 ## 1. 结论
 
@@ -42,7 +42,7 @@ sentence_transformer     0.6538  0.6538    1.0000  0.7907  9  0
 
 ## 4. 上线判断
 
-第一阶段上线不新增独立地点抽取链路，不引入地图 API。服务端从已入库的 `city`、`location`、`activity_type` 运行时计算地点相容性。
+当前不新增独立地点抽取链路。新事件只写 `location`，服务端从 `location` 和 `activity_type` 运行时计算地点相容性；旧数据仍兼容读取 `city`。
 
 可以上线的理由：
 
@@ -62,4 +62,3 @@ dazi-server/tests/test_location_policy.py
 ```
 
 复跑前需要确认本地 Python 环境、sentence-transformers 和 Kimi key 配置在安全位置，不要写入文档。
-

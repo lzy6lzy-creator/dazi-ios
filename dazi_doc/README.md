@@ -1,6 +1,6 @@
 # i搭不搭 文档中心
 
-最后更新：2026-06-08
+最后更新：2026-08-29
 
 ## 阅读顺序
 
@@ -12,10 +12,11 @@
 4. [Agent 与 Memory 设计](modules/agent-memory.md)：AI 搭子经纪人、事件抽取、澄清卡片、长期记忆。
 5. [匹配系统设计](modules/matching.md)：主动匹配、被动邀请、A2A 精排、黑名单和投票。
 6. [地点匹配设计](modules/location-matching.md)：地点解析、活动严格度、评测结论和上线策略。
-7. [客户端设计](modules/clients.md)：iOS/Android 的信息架构和体验原则。
+7. [客户端设计](modules/clients.md)：iOS 主线的信息架构、状态同步和本地存储边界。
 8. [部署与运维](ops/deployment.md)：生产环境、同步规则、健康检查和常用命令。
 9. [上线清单](ops/launch-checklist.md)：TestFlight、内测、域名、正式上线前事项。
 10. [地点匹配评测摘要](reports/location-matching-eval.md)：当前最新评测结果和复跑入口。
+11. [代码健康审查](reports/code-health-review.md)：已清理问题、剩余风险和验证命令。
 
 ## 文档维护规则
 
@@ -36,6 +37,5 @@
 相关代码仓库：
 
 - iOS：`/Users/wuxing/Desktop/dazi/dazi`
-- Android：`/Users/wuxing/Desktop/dazi/dazi-android`
+- Android：`/Users/wuxing/Desktop/dazi/dazi-android`（保留，但当前不做同步开发）
 - 后端：`/Users/wuxing/Desktop/dazi/dazi/dazi-server`
-

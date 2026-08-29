@@ -111,7 +111,7 @@ struct PartnerProfileView: View {
     @ViewBuilder
     private var infoSection: some View {
         if let occupation = displayOccupation, !occupation.isEmpty {
-            profileInfoCard(icon: "briefcase", title: "职业", value: occupation)
+            profileInfoCard(icon: "briefcase", title: "工作时间", value: occupation)
         }
     }
 

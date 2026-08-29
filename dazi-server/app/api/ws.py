@@ -4,7 +4,7 @@ WebSocket API - 实时消息推送
 功能：
 - 用户连接 WebSocket 后，实时接收聊天室消息、事件状态更新
 - 替代客户端 30 秒轮询
-- token 通过 query param 传递（WebSocket 不支持自定义 header）
+- 新客户端使用 Authorization header，旧客户端 query token 暂时兼容
 """
 from __future__ import annotations
 
@@ -84,15 +84,25 @@ def _authenticate_token(token: str) -> str | None:
         return None
 
 
+def websocket_auth_token(authorization: str | None, query_token: str | None) -> str | None:
+    """Prefer a Bearer header while retaining compatibility with older clients."""
+    if authorization:
+        scheme, separator, credential = authorization.strip().partition(" ")
+        if separator and scheme.lower() == "bearer" and credential.strip():
+            return credential.strip()
+    return query_token
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(
     ws: WebSocket,
-    token: str = Query(...),
+    token: str | None = Query(default=None),
 ):
     """
     WebSocket 端点
 
-    连接: ws://host/ws?token=<jwt_access_token>
+    连接: Authorization: Bearer <jwt_access_token>
+    兼容旧客户端: ws://host/ws?token=<jwt_access_token>
 
     服务端推送消息格式:
     {
@@ -115,7 +125,8 @@ async def websocket_endpoint(
     服务端回复:
     { "type": "pong" }
     """
-    user_id = _authenticate_token(token)
+    raw_token = websocket_auth_token(ws.headers.get("authorization"), token)
+    user_id = _authenticate_token(raw_token or "")
     if not user_id:
         await ws.close(code=4001, reason="Invalid token")
         return

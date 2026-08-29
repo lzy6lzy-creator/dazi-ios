@@ -19,7 +19,13 @@ struct MainTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if !isKeyboardVisible {
-                CoinTabBar(selection: $store.selectedTab, unreadCount: dataStore.unreadChatCount)
+                CoinTabBar(
+                    selection: $store.selectedTab,
+                    unreadCount: dataStore.unreadChatCount,
+                    agentName: dataStore.currentUser.agentName,
+                    agentEmoji: dataStore.currentUser.agentEmoji,
+                    agentAvatarImageData: dataStore.currentUser.agentAvatarImageData
+                )
                     .padding(.bottom, 4)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }

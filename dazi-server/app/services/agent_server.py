@@ -48,31 +48,13 @@ def load_conversation_config() -> AgentModelConfig:
     )
 
 
-def load_draft_config() -> AgentModelConfig:
-    if any([
-        settings.AGENT_DRAFT_MODEL_PROVIDER,
-        settings.AGENT_DRAFT_MODEL,
-        settings.AGENT_DRAFT_BASE_URL,
-        settings.AGENT_DRAFT_API_KEY,
-    ]):
-        return _fallback_config(
-            provider=settings.AGENT_DRAFT_MODEL_PROVIDER,
-            model=settings.AGENT_DRAFT_MODEL,
-            base_url=settings.AGENT_DRAFT_BASE_URL,
-            api_key=settings.AGENT_DRAFT_API_KEY,
-        )
-    return load_conversation_config()
-
-
 class AgentServer:
     def __init__(
         self,
         *,
         conversation_config: AgentModelConfig | None = None,
-        draft_config: AgentModelConfig | None = None,
     ):
         self.conversation_config = conversation_config or load_conversation_config()
-        self.draft_config = draft_config or load_draft_config()
         self._client: httpx.AsyncClient | None = None
 
     def start(self) -> None:
@@ -100,14 +82,12 @@ class AgentServer:
         self,
         messages: list[dict[str, str]],
         *,
-        purpose: str,
         temperature: float = 0.3,
         max_tokens: int = 2048,
     ) -> Any:
         text = ""
         async for piece in self.stream_chat(
             messages,
-            purpose=purpose,
             temperature=temperature,
             max_tokens=max_tokens,
         ):
@@ -141,11 +121,10 @@ class AgentServer:
         self,
         messages: list[dict[str, str]],
         *,
-        purpose: str,
         temperature: float = 0.3,
         max_tokens: int = 2048,
     ) -> AsyncIterator[str]:
-        config = self.draft_config if purpose == "draft" else self.conversation_config
+        config = self.conversation_config
         payload = self._payload(config, messages, temperature=temperature, max_tokens=max_tokens)
         async with self.client.stream(
             "POST",
