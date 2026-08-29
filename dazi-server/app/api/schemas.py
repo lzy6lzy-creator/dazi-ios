@@ -132,6 +132,15 @@ class AccountDeletionResponse(BaseModel):
     deleted_event_count: int
 
 
+class AvatarUploadRequest(BaseModel):
+    image_base64: str = Field(min_length=4, max_length=1_400_000)
+    mime_type: Literal["image/jpeg", "image/png", "image/webp"]
+
+
+class AvatarUploadResponse(BaseModel):
+    avatar_url: Optional[str] = None
+
+
 class InvitationMeResponse(BaseModel):
     code: Optional[str] = None
     status: Optional[str] = None
@@ -181,6 +190,7 @@ class UserCreate(BaseModel):
     bio: Optional[str] = Field(default=None, max_length=2000)
     interests: Optional[list[str]] = Field(default=None, max_length=30)
     city: Optional[str] = Field(default=None, max_length=50)
+    avatar_emoji: Optional[str] = Field(default=None, max_length=10)
 
     @field_validator("gender", mode="before")
     @classmethod
@@ -200,6 +210,7 @@ class UserUpdate(BaseModel):
     custom_interests: Optional[str] = Field(default=None, max_length=2000)
     welcome_disturb: Optional[bool] = None
     profile_event_visibility: Optional[str] = None
+    avatar_emoji: Optional[str] = Field(default=None, max_length=10)
 
     @field_validator("gender", mode="before")
     @classmethod
@@ -216,6 +227,7 @@ class UserResponse(BaseModel):
     birth_date: Optional[date] = None
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
+    avatar_emoji: str = "😊"
     interests: Optional[list[str]] = None
     city: Optional[str] = None
     occupation: Optional[str] = None
@@ -254,6 +266,7 @@ class PublicUserProfileResponse(BaseModel):
     birth_date: Optional[date] = None
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
+    avatar_emoji: str = "😊"
     interests: Optional[list[str]] = None
     city: Optional[str] = None
     occupation: Optional[str] = None

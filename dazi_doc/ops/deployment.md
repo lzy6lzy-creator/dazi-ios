@@ -44,6 +44,7 @@ __pycache__
 .pytest_cache
 .mypy_cache
 certbot
+uploads
 ```
 
 示例：
@@ -58,6 +59,7 @@ rsync -az --delete \
   --exclude '.pytest_cache' \
   --exclude '.mypy_cache' \
   --exclude 'certbot' \
+  --exclude 'uploads' \
   /Users/wuxing/Desktop/dazi/dazi/dazi-server/ \
   root@47.103.127.95:/opt/dazi-server/
 ```
@@ -102,6 +104,8 @@ docker compose -f docker-compose.prod.yml ps
 ```
 
 `/health` 当前只证明 API 进程可以响应，不代表 PostgreSQL、Redis、LLM、短信或 APNs 均健康。部署验证仍需检查容器状态、Redis ping、关键 API 和日志。
+
+`/opt/dazi-server/uploads` 是用户媒体持久数据，API 和 Nginx 以不同只读/读写挂载共享。部署同步不得删除；备份和恢复时应与 PostgreSQL 一起处理。
 
 ## 6. 常用运维命令
 

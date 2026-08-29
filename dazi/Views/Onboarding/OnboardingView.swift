@@ -9,6 +9,7 @@ struct OnboardingView: View {
     @State private var name = ""
     @State private var avatarEmoji = "😊"
     @State private var avatarImageData: Data?
+    @State private var avatarURL: String?
     @State private var gender = ""
     @State private var birthYear = 2000
     @State private var birthDate = OnboardingView.defaultBirthDate
@@ -22,8 +23,14 @@ struct OnboardingView: View {
     @State private var agentName = ""
     @State private var agentEmoji = "🤖"
     @State private var agentAvatarImageData: Data?
+    @State private var agentAvatarURL: String?
     @State private var agentPersonality = "贴心、有趣"
     @State private var isAnimating = false
+
+    private struct RegistrationSyncResult {
+        let userAvatarURL: String?
+        let agentAvatarURL: String?
+    }
 
     enum OnboardingStep: Int, CaseIterable {
         case name, avatar, genderAndBirth, occupation, interests, bio, agentIntro, agentSetup, ready
@@ -204,6 +211,7 @@ struct OnboardingView: View {
 
             AvatarPickerView(
                 imageData: $avatarImageData,
+                imageURL: $avatarURL,
                 emoji: $avatarEmoji,
                 emojiOptions: [],
                 size: 100,
@@ -565,6 +573,7 @@ struct OnboardingView: View {
                     .foregroundStyle(.secondary)
                 AvatarPickerView(
                     imageData: $agentAvatarImageData,
+                    imageURL: $agentAvatarURL,
                     emoji: $agentEmoji,
                     emojiOptions: [],
                     size: 80,
@@ -607,6 +616,7 @@ struct OnboardingView: View {
                         imageData: avatarImageData,
                         emoji: avatarEmoji,
                         size: 64,
+                        imageURL: avatarURL,
                         backgroundColor: AppTheme.primaryColor.opacity(0.1)
                     )
                     Text(name)
@@ -622,6 +632,7 @@ struct OnboardingView: View {
                         imageData: agentAvatarImageData,
                         emoji: agentEmoji,
                         size: 64,
+                        imageURL: agentAvatarURL,
                         backgroundColor: AppTheme.agentColor.opacity(0.15)
                     )
                     HStack(spacing: 2) {
@@ -802,11 +813,12 @@ struct OnboardingView: View {
 
         let userId = APIClient.shared.serverUserId ?? UUID().uuidString
 
-        let user = User(
+        var user = User(
             id: userId,
             name: trimmedName,
             avatarEmoji: avatarEmoji,
             avatarImageData: avatarImageData,
+            avatarURL: avatarURL,
             city: cityName,
             bio: bio,
             gender: selectedGender,
@@ -819,11 +831,12 @@ struct OnboardingView: View {
             agentName: finalAgentName,
             agentEmoji: agentEmoji,
             agentAvatarImageData: agentAvatarImageData,
+            agentAvatarURL: agentAvatarURL,
             agentPersonality: agentPersonality
         )
 
         Task {
-            let didSync = await syncProfileToBackend(
+            let syncResult = await syncProfileToBackend(
                 name: trimmedName,
                 gender: selectedGender,
                 birthYear: finalBirthYear,
@@ -836,14 +849,18 @@ struct OnboardingView: View {
                 welcomeDisturb: welcomeDisturb,
                 agentName: finalAgentName,
                 agentEmoji: agentEmoji,
-                agentPersonality: agentPersonality
+                agentPersonality: agentPersonality,
+                avatarImageData: avatarImageData,
+                agentAvatarImageData: agentAvatarImageData
             )
-            guard didSync else {
+            guard let syncResult else {
                 isRegistering = false
                 dataStore.showToast("资料同步失败，请检查网络后重试", type: .error)
                 return
             }
 
+            user.avatarURL = syncResult.userAvatarURL
+            user.agentAvatarURL = syncResult.agentAvatarURL
             UserProfileStore().saveUser(user)
             dataStore.currentUser = user
             User.currentUser = user
@@ -867,11 +884,14 @@ struct OnboardingView: View {
         welcomeDisturb: Bool,
         agentName: String,
         agentEmoji: String,
-        agentPersonality: String
-    ) async -> Bool {
+        agentPersonality: String,
+        avatarImageData: Data?,
+        agentAvatarImageData: Data?
+    ) async -> RegistrationSyncResult? {
         let api = APIClient.shared
         do {
             var userData: [String: Any] = ["name": name]
+            userData["avatar_emoji"] = avatarEmoji
             if !gender.isEmpty { userData["gender"] = gender }
             if birthYear > 0 { userData["birth_year"] = birthYear }
             if !birthDate.isEmpty { userData["birth_date"] = birthDate }
@@ -889,11 +909,23 @@ struct OnboardingView: View {
             if !agentPersonality.isEmpty { agentData["personality"] = agentPersonality }
             _ = try await api.updateMyAgent(data: agentData)
 
+            var userAvatarURL: String?
+            if let avatarImageData {
+                userAvatarURL = try await api.uploadMyAvatar(avatarImageData).avatarUrl
+            }
+            var syncedAgentAvatarURL: String?
+            if let agentAvatarImageData {
+                syncedAgentAvatarURL = try await api.uploadMyAgentAvatar(agentAvatarImageData).avatarUrl
+            }
+
             print("[Onboarding] Profile sync successful")
-            return true
+            return RegistrationSyncResult(
+                userAvatarURL: userAvatarURL,
+                agentAvatarURL: syncedAgentAvatarURL
+            )
         } catch {
             print("[Onboarding] Profile sync failed: \(error)")
-            return false
+            return nil
         }
     }
 }

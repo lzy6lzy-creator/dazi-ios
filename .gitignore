@@ -38,6 +38,7 @@ dazi-server/.pytest_cache/
 dazi-server/.mypy_cache/
 dazi-server/.ruff_cache/
 dazi-server/certbot/
+dazi-server/uploads/
 
 # 部署敏感信息
 deploy.md

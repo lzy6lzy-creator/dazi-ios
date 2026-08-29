@@ -212,6 +212,7 @@ struct ChatRoomRow: View {
                     imageData: partner?.avatarImageData,
                     emoji: partner?.avatarEmoji ?? "🌸",
                     size: 50,
+                    imageURL: partner?.avatarURL,
                     backgroundColor: room.isActive ? AppTheme.secondaryColor.opacity(0.15) : Color.gray.opacity(0.1)
                 )
             }

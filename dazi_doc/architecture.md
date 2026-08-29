@@ -59,6 +59,7 @@ FastAPI Backend
 - `invitation_programs`、`signup_admissions`、`user_invitation_accounts`、`invitation_ledgers`：注册准入和邀请码账本。
 - `push_device_tokens`：iOS APNs token 与环境。
 - `service_reminders`：服务到期、核查和余额提醒。
+- `uploads/avatars`：用户与 Agent 的持久化图片头像；数据库只保存媒体 URL。
 
 事件的新写入只使用 `location`。`events.city` 和 `city_normalized` 暂时保留用于旧数据兼容，不应作为新业务槽位。
 
@@ -108,7 +109,7 @@ Chat Room -> REST 历史消息 -> WebSocket 实时消息 -> APNs -> 投票/关�
 
 ## 7. 当前技术债
 
-- 用户/Agent 自定义头像和活动相册仍以本机数据为主，缺少服务端媒体存储与跨设备同步。
+- 活动相册仍以本机数据为主，缺少服务端媒体存储与跨设备同步。
 - 聊天室列表存在逐房间/逐成员查询，房间规模增长前应改为批量查询或 eager loading。
 - WebSocket 连接管理仍是单进程内存实现，多 worker 前需要 Redis Pub/Sub 或独立消息层。
 - 定时匹配任务仍在 API 进程内，正式生产建议拆独立 worker。

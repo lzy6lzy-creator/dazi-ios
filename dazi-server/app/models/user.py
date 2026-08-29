@@ -24,6 +24,7 @@ class User(Base):
     birth_date: Mapped[Optional[date]] = mapped_column(Date)
     bio: Mapped[Optional[str]] = mapped_column(Text)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text)
+    avatar_emoji: Mapped[str] = mapped_column(String(10), default="😊", server_default="😊")
     interests: Mapped[Optional[list[str]]] = mapped_column(ARRAY(String), default=list)
     city: Mapped[Optional[str]] = mapped_column(String(50))
     occupation: Mapped[Optional[str]] = mapped_column(String(100))

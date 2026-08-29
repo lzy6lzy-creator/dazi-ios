@@ -69,6 +69,7 @@ services:
     volumes:
       - .:/code/runtime-config
       - /opt/dazi-secrets:/code/runtime-secrets:ro
+      - ./uploads:/code/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -87,6 +88,7 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./site:/usr/share/nginx/dazi-site:ro
       - ./travel-dist:/usr/share/nginx/travel:ro
+      - ./uploads:/usr/share/nginx/dazi-media:ro
       - ./certbot/www:/var/www/certbot:ro
       - ./certbot/conf:/etc/letsencrypt:ro
     depends_on:

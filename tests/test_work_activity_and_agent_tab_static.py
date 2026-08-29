@@ -34,17 +34,18 @@ class WorkActivityAndAgentTabStaticTests(unittest.TestCase):
         self.assertIn("let agentName: String", TAB_BAR)
         self.assertIn("let agentEmoji: String", TAB_BAR)
         self.assertIn("let agentAvatarImageData: Data?", TAB_BAR)
+        self.assertIn("let agentAvatarURL: String?", TAB_BAR)
         self.assertIn("AvatarView(", TAB_BAR)
         self.assertIn("agentName: dataStore.currentUser.agentName", MAIN_TAB)
         self.assertIn("agentAvatarImageData: dataStore.currentUser.agentAvatarImageData", MAIN_TAB)
 
     def test_registration_waits_for_server_profile_sync(self):
-        sync_call = ONBOARDING.index("let didSync = await syncProfileToBackend")
+        sync_call = ONBOARDING.index("let syncResult = await syncProfileToBackend")
         local_save = ONBOARDING.index("UserProfileStore().saveUser(user)")
         completion = ONBOARDING.index("onComplete()", sync_call)
         self.assertLess(sync_call, local_save)
         self.assertLess(local_save, completion)
-        self.assertIn("guard didSync else", ONBOARDING)
+        self.assertIn("guard let syncResult else", ONBOARDING)
 
 
 if __name__ == "__main__":

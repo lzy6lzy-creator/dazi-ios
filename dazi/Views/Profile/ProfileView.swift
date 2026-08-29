@@ -69,6 +69,7 @@ struct ProfileView: View {
                 imageData: dataStore.currentUser.avatarImageData,
                 emoji: dataStore.currentUser.avatarEmoji,
                 size: 80,
+                imageURL: dataStore.currentUser.avatarURL,
                 backgroundColor: AppTheme.primaryColor.opacity(0.1)
             )
 
@@ -154,6 +155,7 @@ struct ProfileView: View {
                 imageData: dataStore.currentUser.agentAvatarImageData,
                 emoji: dataStore.currentUser.agentEmoji,
                 size: 56,
+                imageURL: dataStore.currentUser.agentAvatarURL,
                 backgroundColor: AppTheme.agentColor.opacity(0.12)
             )
 
@@ -1069,6 +1071,7 @@ struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var avatarEmoji = ""
     @State private var avatarImageData: Data?
+    @State private var avatarURL: String?
     @State private var name = ""
     @State private var gender = ""
     @State private var birthDate = EditProfileView.defaultBirthDate
@@ -1150,6 +1153,7 @@ struct EditProfileView: View {
                 Section("头像") {
                     AvatarPickerView(
                         imageData: $avatarImageData,
+                        imageURL: $avatarURL,
                         emoji: $avatarEmoji,
                         emojiOptions: Self.avatarOptions,
                         size: 88,
@@ -1246,6 +1250,7 @@ struct EditProfileView: View {
             .onAppear {
                 avatarEmoji = dataStore.currentUser.avatarEmoji
                 avatarImageData = dataStore.currentUser.avatarImageData
+                avatarURL = dataStore.currentUser.avatarURL
                 name = dataStore.currentUser.name
                 gender = User.normalizedGender(dataStore.currentUser.gender) ?? ""
                 birthDate = Self.parseBirthDate(dataStore.currentUser.birthDate) ?? Self.defaultBirthDate
@@ -1317,6 +1322,7 @@ struct EditProfileView: View {
         Task {
             do {
                 var data: [String: Any] = [
+                    "avatar_emoji": avatarEmoji,
                     "gender": selectedGender,
                     "birth_year": birthYear,
                     "birth_date": birthDateString,
@@ -1331,8 +1337,16 @@ struct EditProfileView: View {
                 if !trimmedName.isEmpty { data["name"] = trimmedName }
                 let _ = try await APIClient.shared.updateMe(data: data)
 
+                var syncedAvatarURL = avatarURL
+                if let avatarImageData {
+                    syncedAvatarURL = try await APIClient.shared.uploadMyAvatar(avatarImageData).avatarUrl
+                } else if dataStore.currentUser.avatarURL != nil && avatarURL == nil {
+                    syncedAvatarURL = try await APIClient.shared.deleteMyAvatar().avatarUrl
+                }
+
                 dataStore.currentUser.avatarEmoji = avatarEmoji
                 dataStore.currentUser.avatarImageData = avatarImageData
+                dataStore.currentUser.avatarURL = syncedAvatarURL
                 dataStore.currentUser.name = trimmedName.isEmpty ? dataStore.currentUser.name : trimmedName
                 dataStore.currentUser.gender = selectedGender
                 dataStore.currentUser.birthYear = birthYear
@@ -1370,6 +1384,7 @@ struct EditAgentView: View {
     @State private var agentName = ""
     @State private var agentEmoji = ""
     @State private var agentAvatarImageData: Data?
+    @State private var agentAvatarURL: String?
     @State private var agentPersonality = ""
     @State private var isSaving = false
 
@@ -1389,6 +1404,7 @@ struct EditAgentView: View {
                 Section("Agent 头像") {
                     AvatarPickerView(
                         imageData: $agentAvatarImageData,
+                        imageURL: $agentAvatarURL,
                         emoji: $agentEmoji,
                         emojiOptions: emojiOptions,
                         size: 80,
@@ -1437,6 +1453,7 @@ struct EditAgentView: View {
                 agentName = dataStore.currentUser.agentName
                 agentEmoji = dataStore.currentUser.agentEmoji
                 agentAvatarImageData = dataStore.currentUser.agentAvatarImageData
+                agentAvatarURL = dataStore.currentUser.agentAvatarURL
                 agentPersonality = dataStore.currentUser.agentPersonality
             }
         }
@@ -1457,9 +1474,17 @@ struct EditAgentView: View {
                 ]
                 let _ = try await APIClient.shared.updateMyAgent(data: data)
 
+                var syncedAvatarURL = agentAvatarURL
+                if let agentAvatarImageData {
+                    syncedAvatarURL = try await APIClient.shared.uploadMyAgentAvatar(agentAvatarImageData).avatarUrl
+                } else if dataStore.currentUser.agentAvatarURL != nil && agentAvatarURL == nil {
+                    syncedAvatarURL = try await APIClient.shared.deleteMyAgentAvatar().avatarUrl
+                }
+
                 dataStore.currentUser.agentName = finalName
                 dataStore.currentUser.agentEmoji = agentEmoji
                 dataStore.currentUser.agentAvatarImageData = agentAvatarImageData
+                dataStore.currentUser.agentAvatarURL = syncedAvatarURL
                 dataStore.currentUser.agentPersonality = agentPersonality
                 User.currentUser = dataStore.currentUser
                 UserProfileStore().saveUser(dataStore.currentUser)

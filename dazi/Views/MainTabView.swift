@@ -24,7 +24,8 @@ struct MainTabView: View {
                     unreadCount: dataStore.unreadChatCount,
                     agentName: dataStore.currentUser.agentName,
                     agentEmoji: dataStore.currentUser.agentEmoji,
-                    agentAvatarImageData: dataStore.currentUser.agentAvatarImageData
+                    agentAvatarImageData: dataStore.currentUser.agentAvatarImageData,
+                    agentAvatarURL: dataStore.currentUser.agentAvatarURL
                 )
                     .padding(.bottom, 4)
                     .transition(.move(edge: .bottom).combined(with: .opacity))

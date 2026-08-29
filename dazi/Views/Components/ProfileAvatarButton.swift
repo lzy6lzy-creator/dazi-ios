@@ -38,6 +38,7 @@ struct ProfileAvatarButton: View {
             imageData: user.avatarImageData,
             emoji: user.avatarEmoji,
             size: size,
+            imageURL: user.avatarURL,
             backgroundColor: backgroundColor
         )
         .overlay {

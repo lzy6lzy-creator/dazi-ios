@@ -113,6 +113,7 @@ struct Message: Identifiable, Codable, Sendable {
     var senderUserId: String?
     var senderAvatar: String
     var senderAvatarImageData: Data?
+    var senderAvatarURL: String?
     var timestamp: Date
     var isTyping: Bool
     var showConfirmButtons: Bool
@@ -131,6 +132,7 @@ struct Message: Identifiable, Codable, Sendable {
         senderUserId: String? = nil,
         senderAvatar: String = "",
         senderAvatarImageData: Data? = nil,
+        senderAvatarURL: String? = nil,
         timestamp: Date = .now,
         isTyping: Bool = false,
         showConfirmButtons: Bool = false,
@@ -148,6 +150,7 @@ struct Message: Identifiable, Codable, Sendable {
         self.senderUserId = senderUserId
         self.senderAvatar = senderAvatar
         self.senderAvatarImageData = senderAvatarImageData
+        self.senderAvatarURL = senderAvatarURL
         self.timestamp = timestamp
         self.isTyping = isTyping
         self.showConfirmButtons = showConfirmButtons
@@ -172,6 +175,7 @@ struct Message: Identifiable, Codable, Sendable {
             senderUserId: u.id,
             senderAvatar: u.avatarEmoji,
             senderAvatarImageData: u.avatarImageData,
+            senderAvatarURL: u.avatarURL,
             visibility: visibility,
             recipientUserId: recipientUserId
         )
@@ -189,6 +193,7 @@ struct Message: Identifiable, Codable, Sendable {
             senderName: u.agentName,
             senderAvatar: u.agentEmoji,
             senderAvatarImageData: u.agentAvatarImageData,
+            senderAvatarURL: u.agentAvatarURL,
             clarificationSessionId: clarificationSessionId,
             clarificationQuestions: clarificationQuestions
         )
@@ -211,6 +216,7 @@ struct Message: Identifiable, Codable, Sendable {
             senderName: u.agentName,
             senderAvatar: u.agentEmoji,
             senderAvatarImageData: u.agentAvatarImageData,
+            senderAvatarURL: u.agentAvatarURL,
             isTyping: true
         )
     }

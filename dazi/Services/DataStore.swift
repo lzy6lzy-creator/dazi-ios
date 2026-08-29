@@ -101,6 +101,8 @@ class DataStore {
                     let user = User(
                         id: apiUser.id,
                         name: apiUser.name,
+                        avatarEmoji: apiUser.avatarEmoji ?? "😊",
+                        avatarURL: apiUser.avatarUrl,
                         city: apiUser.city ?? "",
                         bio: apiUser.bio ?? "",
                         gender: apiUser.gender ?? "",
@@ -113,6 +115,7 @@ class DataStore {
                         profileEventVisibility: apiUser.profileEventVisibility ?? "partial",
                         agentName: apiAgent.name,
                         agentEmoji: apiAgent.emoji ?? "🤖",
+                        agentAvatarURL: apiAgent.avatarUrl,
                         agentPersonality: apiAgent.personality ?? "贴心、有趣"
                     )
                     currentUser = user
@@ -380,6 +383,7 @@ class DataStore {
             senderUserId: apiMsg.senderId,
             senderAvatar: sender?.avatarEmoji ?? "😊",
             senderAvatarImageData: sender?.avatarImageData,
+            senderAvatarURL: sender?.avatarURL,
             timestamp: parseAgentHistoryDate(apiMsg.createdAt),
             visibility: apiMsg.visibility ?? "public_room",
             recipientUserId: apiMsg.recipientUserId
@@ -582,7 +586,8 @@ class DataStore {
             role: .agent,
             senderName: currentUser.agentName,
             senderAvatar: currentUser.agentEmoji,
-            senderAvatarImageData: currentUser.agentAvatarImageData
+            senderAvatarImageData: currentUser.agentAvatarImageData,
+            senderAvatarURL: currentUser.agentAvatarURL
         )
     }
 
@@ -607,22 +612,26 @@ class DataStore {
         let senderName: String
         let senderAvatar: String
         let senderAvatarImageData: Data?
+        let senderAvatarURL: String?
         switch apiMessage.role.lowercased() {
         case "user":
             role = .user
             senderName = currentUser.name
             senderAvatar = currentUser.avatarEmoji
             senderAvatarImageData = currentUser.avatarImageData
+            senderAvatarURL = currentUser.avatarURL
         case "assistant", "agent":
             role = .agent
             senderName = currentUser.agentName
             senderAvatar = currentUser.agentEmoji
             senderAvatarImageData = currentUser.agentAvatarImageData
+            senderAvatarURL = currentUser.agentAvatarURL
         case "session":
             role = .system
             senderName = "系统"
             senderAvatar = "ℹ️"
             senderAvatarImageData = nil
+            senderAvatarURL = nil
             if rawContent.hasPrefix(Self.agentSessionResetPrefix) {
                 content = Self.agentSessionDividerText
             }
@@ -631,6 +640,7 @@ class DataStore {
             senderName = "系统"
             senderAvatar = "ℹ️"
             senderAvatarImageData = nil
+            senderAvatarURL = nil
         }
         return Message(
             id: apiMessage.id,
@@ -639,6 +649,7 @@ class DataStore {
             senderName: senderName,
             senderAvatar: senderAvatar,
             senderAvatarImageData: senderAvatarImageData,
+            senderAvatarURL: senderAvatarURL,
             timestamp: parseAgentHistoryDate(apiMessage.createdAt)
         )
     }
@@ -881,7 +892,8 @@ class DataStore {
             senderName: sender?.name ?? (role == .system ? "系统" : "用户"),
             senderUserId: payload.senderId,
             senderAvatar: sender?.avatarEmoji ?? "😊",
-            senderAvatarImageData: sender?.avatarImageData
+            senderAvatarImageData: sender?.avatarImageData,
+            senderAvatarURL: sender?.avatarURL
         )
         chatRooms[idx].messages.append(message)
 
@@ -1023,10 +1035,12 @@ class DataStore {
             if room.participants[index].id == currentUser.id {
                 room.participants[index].avatarEmoji = currentUser.avatarEmoji
                 room.participants[index].avatarImageData = currentUser.avatarImageData
+                room.participants[index].avatarURL = currentUser.avatarURL
             } else if room.participants[index].id == "agent_\(currentUser.id)" {
                 room.participants[index].name = currentUser.agentName
                 room.participants[index].avatarEmoji = currentUser.agentEmoji
                 room.participants[index].avatarImageData = currentUser.agentAvatarImageData
+                room.participants[index].avatarURL = currentUser.agentAvatarURL
             }
         }
     }

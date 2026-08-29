@@ -232,6 +232,7 @@ struct ChatRoomDetailView: View {
                                 imageData: a1.avatarImageData,
                                 emoji: a1.avatarEmoji,
                                 size: 28,
+                                imageURL: a1.avatarURL,
                                 backgroundColor: AppTheme.agentColor.opacity(0.12)
                             )
                             .offset(x: -8)
@@ -241,6 +242,7 @@ struct ChatRoomDetailView: View {
                                 imageData: a2.avatarImageData,
                                 emoji: a2.avatarEmoji,
                                 size: 28,
+                                imageURL: a2.avatarURL,
                                 backgroundColor: AppTheme.agentColor.opacity(0.12)
                             )
                             .offset(x: 8)
@@ -289,6 +291,7 @@ struct ChatRoomDetailView: View {
                         imageData: agent?.avatarImageData,
                         emoji: agent?.avatarEmoji ?? "🤖",
                         size: 24,
+                        imageURL: agent?.avatarURL,
                         backgroundColor: AppTheme.agentColor.opacity(0.1)
                     )
 

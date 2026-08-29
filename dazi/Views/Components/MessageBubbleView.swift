@@ -805,6 +805,7 @@ struct MessageBubbleView: View {
             imageData: message.senderAvatarImageData,
             emoji: fallbackEmoji,
             size: 34,
+            imageURL: message.senderAvatarURL,
             backgroundColor: bgColor
         )
 

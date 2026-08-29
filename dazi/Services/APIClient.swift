@@ -5,6 +5,17 @@ import Foundation
 enum APIConfig {
     // 正式服务域名
     static let baseURL = "https://idabuda.com"
+
+    static func mediaURL(from value: String?) -> URL? {
+        guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else {
+            return nil
+        }
+        if value.hasPrefix("https://") || value.hasPrefix("http://") {
+            return URL(string: value)
+        }
+        let path = value.hasPrefix("/") ? value : "/\(value)"
+        return URL(string: baseURL + path)
+    }
 }
 
 // MARK: - API Errors
@@ -157,6 +168,7 @@ struct APIUserResponse: Codable {
     let birthDate: String?
     let bio: String?
     let avatarUrl: String?
+    let avatarEmoji: String?
     let interests: [String]?
     let city: String?
     let occupation: String?
@@ -170,6 +182,7 @@ struct APIUserResponse: Codable {
         case birthYear = "birth_year"
         case birthDate = "birth_date"
         case avatarUrl = "avatar_url"
+        case avatarEmoji = "avatar_emoji"
         case customInterests = "custom_interests"
         case welcomeDisturb = "welcome_disturb"
         case profileEventVisibility = "profile_event_visibility"
@@ -184,6 +197,14 @@ struct APIAccountDeletionResponse: Codable {
     enum CodingKeys: String, CodingKey {
         case message
         case deletedEventCount = "deleted_event_count"
+    }
+}
+
+struct APIAvatarUploadResponse: Codable {
+    let avatarUrl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case avatarUrl = "avatar_url"
     }
 }
 
@@ -222,6 +243,7 @@ struct APIPublicUserProfileResponse: Codable {
     let birthDate: String?
     let bio: String?
     let avatarUrl: String?
+    let avatarEmoji: String?
     let interests: [String]?
     let city: String?
     let occupation: String?
@@ -236,6 +258,7 @@ struct APIPublicUserProfileResponse: Codable {
         case birthYear = "birth_year"
         case birthDate = "birth_date"
         case avatarUrl = "avatar_url"
+        case avatarEmoji = "avatar_emoji"
         case customInterests = "custom_interests"
         case welcomeDisturb = "welcome_disturb"
         case profileEventVisibility = "profile_event_visibility"
@@ -846,6 +869,14 @@ final class APIClient {
         try await request(method: "PUT", path: "/api/v1/users/me", body: data)
     }
 
+    func uploadMyAvatar(_ data: Data) async throws -> APIAvatarUploadResponse {
+        try await uploadAvatar(data, path: "/api/v1/users/me/avatar")
+    }
+
+    func deleteMyAvatar() async throws -> APIAvatarUploadResponse {
+        try await request(method: "DELETE", path: "/api/v1/users/me/avatar")
+    }
+
     func deleteMyAccount() async throws {
         let _: APIAccountDeletionResponse = try await request(
             method: "DELETE", path: "/api/v1/users/me"
@@ -926,6 +957,29 @@ final class APIClient {
 
     func updateMyAgent(data: [String: Any]) async throws -> APIAgentResponse {
         try await request(method: "PUT", path: "/api/v1/agents/me", body: data)
+    }
+
+    func uploadMyAgentAvatar(_ data: Data) async throws -> APIAvatarUploadResponse {
+        try await uploadAvatar(data, path: "/api/v1/agents/me/avatar")
+    }
+
+    func deleteMyAgentAvatar() async throws -> APIAvatarUploadResponse {
+        try await request(method: "DELETE", path: "/api/v1/agents/me/avatar")
+    }
+
+    private func uploadAvatar(_ data: Data, path: String) async throws -> APIAvatarUploadResponse {
+        guard data.count <= 1_000_000 else {
+            throw APIError.networkError("头像大小不能超过 1MB")
+        }
+        return try await request(
+            method: "PUT",
+            path: path,
+            body: [
+                "image_base64": data.base64EncodedString(),
+                "mime_type": "image/jpeg",
+            ],
+            timeout: 60
+        )
     }
 
     func getMyMemories() async throws -> [APIMemoryResponse] {

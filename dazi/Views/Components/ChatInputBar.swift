@@ -79,6 +79,7 @@ struct ChatInputBar: View {
                                 imageData: user.avatarImageData,
                                 emoji: user.avatarEmoji,
                                 size: 28,
+                                imageURL: user.avatarURL,
                                 backgroundColor: user.isAgent ? AppTheme.agentColor.opacity(0.12) : AppTheme.primaryColor.opacity(0.08)
                             )
                             Text(user.name)

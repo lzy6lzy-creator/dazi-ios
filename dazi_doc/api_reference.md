@@ -39,14 +39,20 @@
 | GET | `/api/v1/users/me` | JWT | 当前用户资料 |
 | PUT | `/api/v1/users/me` | JWT | 更新用户资料 |
 | DELETE | `/api/v1/users/me` | JWT | 注销账号并清除事件及关联数据 |
+| PUT | `/api/v1/users/me/avatar` | JWT | 上传当前用户头像（JPEG/PNG/WebP，最大 1MB） |
+| DELETE | `/api/v1/users/me/avatar` | JWT | 删除当前用户图片头像，回退 Emoji |
 | GET | `/api/v1/users/{user_id}/profile` | JWT | 查看其他用户公开资料，过往事件服从可见性设置 |
 | GET | `/api/v1/agents/me` | JWT | 当前用户的 AI 搭子经纪人资料 |
 | PUT | `/api/v1/agents/me` | JWT | 更新 AI 名称、Emoji 和性格 |
+| PUT | `/api/v1/agents/me/avatar` | JWT | 上传当前 AI 头像 |
+| DELETE | `/api/v1/agents/me/avatar` | JWT | 删除当前 AI 图片头像 |
 | GET | `/api/v1/agents/me/memories` | JWT | 当前用户 Memory 列表 |
 | PATCH | `/api/v1/agents/me/memories/{memory_id}` | JWT | 更新 Memory |
 | DELETE | `/api/v1/agents/me/memories/{memory_id}` | JWT | 停用 Memory |
 
 Memory 和 Agent 配置不会出现在其他用户的公开主页。
+
+头像文件通过 `/media/avatars/*` 公开读取，文件名包含内容哈希用于缓存刷新；用户 Emoji 使用独立 `avatar_emoji` 字段，不与图片 URL 混用。
 
 ## 4. Agent Chat 与 Clarify
 

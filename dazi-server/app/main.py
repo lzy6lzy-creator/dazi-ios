@@ -19,6 +19,7 @@ from app.services.agent_server import agent_server
 from app.services.embedding_service import embedding_service
 from app.services.scheduler import beta_invite_scheduler, match_scheduler
 from app.services.service_reminder_monitor import service_reminder_monitor
+from app.services.media_storage import UPLOAD_ROOT, ensure_upload_directories
 
 # 导入所有 model 以确保建表时能发现它们
 from app.models.user import User, Agent, AgentMemory, EventMemory, MemoryEvidence, AgentChatMessage, PushDeviceToken  # noqa: F401
@@ -66,6 +67,7 @@ logging.basicConfig(
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.info("Config loaded: DATABASE_URL and JWT_SECRET provided via environment.")
+    ensure_upload_directories()
 
     # 检查 JWT_SECRET 是否有效
     if not settings.JWT_SECRET or len(settings.JWT_SECRET) < 8:
@@ -243,6 +245,8 @@ async def _ensure_runtime_schema(conn) -> None:
         )
     )
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date DATE"))
+    await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_emoji VARCHAR(10) DEFAULT '😊'"))
+    await conn.execute(text("UPDATE users SET avatar_emoji = '😊' WHERE avatar_emoji IS NULL OR BTRIM(avatar_emoji) = ''"))
     await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_event_visibility VARCHAR(20) DEFAULT 'partial'"))
     await conn.execute(text("UPDATE users SET profile_event_visibility = 'partial' WHERE profile_event_visibility IS NULL"))
     await conn.execute(
@@ -370,6 +374,7 @@ app.include_router(location_eligibility_router)
 
 # 静态文件
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/media", StaticFiles(directory=str(UPLOAD_ROOT), check_dir=False), name="media")
 
 
 @app.get("/")

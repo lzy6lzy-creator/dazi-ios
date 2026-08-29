@@ -6,22 +6,35 @@ struct AvatarView: View {
     let imageData: Data?
     let emoji: String
     let size: CGFloat
+    var imageURL: String? = nil
     var backgroundColor: Color = Color.gray.opacity(0.08)
 
     var body: some View {
-        if let imageData, let uiImage = UIImage(data: imageData) {
-            Image(uiImage: uiImage)
-                .resizable()
-                .scaledToFill()
-                .frame(width: size, height: size)
-                .clipShape(Circle())
-        } else {
-            Text(emoji.isEmpty ? "😊" : emoji)
-                .font(.system(size: size * 0.55))
-                .frame(width: size, height: size)
-                .background(backgroundColor)
-                .clipShape(Circle())
+        ZStack {
+            backgroundColor
+            if let imageData, let uiImage = UIImage(data: imageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+            } else if let remoteURL = APIConfig.mediaURL(from: imageURL) {
+                AsyncImage(url: remoteURL) { phase in
+                    if let image = phase.image {
+                        image.resizable().scaledToFill()
+                    } else {
+                        fallbackEmoji
+                    }
+                }
+            } else {
+                fallbackEmoji
+            }
         }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+    }
+
+    private var fallbackEmoji: some View {
+        Text(emoji.isEmpty ? "😊" : emoji)
+            .font(.system(size: size * 0.55))
     }
 }
 
@@ -136,6 +149,7 @@ enum EmojiLibrary {
 /// 带相机图标的头像选择器，支持从相册上传图片或从全量 emoji 中选择
 struct AvatarPickerView: View {
     @Binding var imageData: Data?
+    @Binding var imageURL: String?
     @Binding var emoji: String
     let emojiOptions: [String]
     var size: CGFloat = 88
@@ -157,6 +171,7 @@ struct AvatarPickerView: View {
                         imageData: imageData,
                         emoji: emoji,
                         size: size,
+                        imageURL: imageURL,
                         backgroundColor: accentColor.opacity(0.1)
                     )
 
@@ -204,6 +219,7 @@ struct AvatarPickerView: View {
                             Button {
                                 emoji = emojiOption
                                 imageData = nil
+                                imageURL = nil
                                 selectedPhoto = nil
                             } label: {
                                 Text(emojiOption)
@@ -250,10 +266,12 @@ struct AvatarPickerView: View {
 
                         await MainActor.run {
                             imageData = resizedImage?.jpegData(compressionQuality: 0.7) ?? data
+                            imageURL = nil
                         }
                     } else {
                         await MainActor.run {
                             imageData = data
+                            imageURL = nil
                         }
                     }
                 }

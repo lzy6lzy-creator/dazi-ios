@@ -45,8 +45,9 @@ struct PartnerProfileView: View {
         VStack(spacing: 12) {
             AvatarView(
                 imageData: partner.avatarImageData,
-                emoji: partner.avatarEmoji,
+                emoji: profileData?.avatarEmoji ?? partner.avatarEmoji,
                 size: 88,
+                imageURL: profileData?.avatarUrl ?? partner.avatarURL,
                 backgroundColor: AppTheme.primaryColor.opacity(0.1)
             )
 

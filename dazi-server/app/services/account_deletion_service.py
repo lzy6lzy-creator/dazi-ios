@@ -12,6 +12,7 @@ from app.models.chat import ChatRoom
 from app.models.event import Event, MatchLog
 from app.models.invitation import InvitationLedger, SignupAdmission
 from app.models.user import User
+from app.services.media_storage import delete_user_avatar_files
 
 
 @dataclass(frozen=True)
@@ -73,5 +74,6 @@ async def delete_user_account(
     # loaded ORM object would first try to detach Agent by setting user_id NULL.
     await db.execute(delete(User).where(User.id == user_id))
     await db.flush()
+    delete_user_avatar_files(user_id)
     await ChatHistoryCache.clear_user_state(str(user_id))
     return result

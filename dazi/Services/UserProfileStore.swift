@@ -9,6 +9,7 @@ class UserProfileStore {
         static let userName = "dazi_user_name"
         static let userAvatarEmoji = "dazi_user_avatar_emoji"
         static let userAvatarImageData = "dazi_user_avatar_image_data"
+        static let userAvatarURL = "dazi_user_avatar_url"
         static let userCity = "dazi_user_city"
         static let userBio = "dazi_user_bio"
         static let userGender = "dazi_user_gender"
@@ -22,6 +23,7 @@ class UserProfileStore {
         static let agentName = "dazi_agent_name"
         static let agentEmoji = "dazi_agent_emoji"
         static let agentAvatarImageData = "dazi_agent_avatar_image_data"
+        static let agentAvatarURL = "dazi_agent_avatar_url"
         static let agentPersonality = "dazi_agent_personality"
     }
 
@@ -40,6 +42,7 @@ class UserProfileStore {
             name: name,
             avatarEmoji: defaults.string(forKey: Keys.userAvatarEmoji) ?? "😊",
             avatarImageData: defaults.data(forKey: Keys.userAvatarImageData),
+            avatarURL: defaults.string(forKey: Keys.userAvatarURL),
             city: defaults.string(forKey: Keys.userCity) ?? "",
             bio: defaults.string(forKey: Keys.userBio) ?? "",
             gender: defaults.string(forKey: Keys.userGender) ?? "",
@@ -53,6 +56,7 @@ class UserProfileStore {
             agentName: defaults.string(forKey: Keys.agentName) ?? "点点",
             agentEmoji: defaults.string(forKey: Keys.agentEmoji) ?? "🤖",
             agentAvatarImageData: defaults.data(forKey: Keys.agentAvatarImageData),
+            agentAvatarURL: defaults.string(forKey: Keys.agentAvatarURL),
             agentPersonality: defaults.string(forKey: Keys.agentPersonality) ?? "贴心、有趣"
         )
     }
@@ -63,6 +67,7 @@ class UserProfileStore {
         defaults.set(user.name, forKey: Keys.userName)
         defaults.set(user.avatarEmoji, forKey: Keys.userAvatarEmoji)
         defaults.set(user.avatarImageData, forKey: Keys.userAvatarImageData)
+        defaults.set(user.avatarURL, forKey: Keys.userAvatarURL)
         defaults.set(user.city, forKey: Keys.userCity)
         defaults.set(user.bio, forKey: Keys.userBio)
         defaults.set(user.gender, forKey: Keys.userGender)
@@ -76,6 +81,7 @@ class UserProfileStore {
         defaults.set(user.agentName, forKey: Keys.agentName)
         defaults.set(user.agentEmoji, forKey: Keys.agentEmoji)
         defaults.set(user.agentAvatarImageData, forKey: Keys.agentAvatarImageData)
+        defaults.set(user.agentAvatarURL, forKey: Keys.agentAvatarURL)
         defaults.set(user.agentPersonality, forKey: Keys.agentPersonality)
     }
 
@@ -83,11 +89,13 @@ class UserProfileStore {
         let allKeys = [
             Keys.isRegistered, Keys.userId, Keys.userName, Keys.userAvatarEmoji,
             Keys.userAvatarImageData,
+            Keys.userAvatarURL,
             Keys.userCity, Keys.userBio, Keys.userGender, Keys.userBirthYear, Keys.userBirthDate,
             Keys.userInterests, Keys.userOccupation, Keys.userCustomInterests, Keys.userWelcomeDisturb,
             Keys.userProfileEventVisibility,
             Keys.agentName, Keys.agentEmoji,
             Keys.agentAvatarImageData, Keys.agentPersonality,
+            Keys.agentAvatarURL,
         ]
         for key in allKeys {
             defaults.removeObject(forKey: key)

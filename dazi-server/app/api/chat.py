@@ -338,8 +338,7 @@ def _chat_room_member_response(
         user_id=member.user_id,
         name=user.name if user else "用户",
         role="user",
-        # Backward-compatible: older clients read only emoji.
-        emoji=user.avatar_url if user else None,
+        emoji=user.avatar_emoji if user else None,
         avatar_url=user.avatar_url if user else None,
         gender=getattr(user, "gender", None) if user else None,
         birth_year=getattr(user, "birth_year", None) if user else None,

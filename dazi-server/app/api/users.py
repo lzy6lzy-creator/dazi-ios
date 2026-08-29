@@ -16,12 +16,13 @@ from app.models.user import User, Agent, AgentMemory
 from app.models.event import Event
 from app.services.embedding_service import embedding_service
 from app.services.account_deletion_service import delete_user_account
+from app.services.media_storage import AvatarStorageError, delete_avatar, store_avatar
 from app.api.schemas import (
     UserResponse, UserUpdate,
     AgentResponse, AgentUpdate,
     MemoryResponse, MemoryUpdate,
     PublicProfileEventResponse, PublicUserProfileResponse,
-    AccountDeletionResponse,
+    AccountDeletionResponse, AvatarUploadRequest, AvatarUploadResponse,
 )
 
 router = APIRouter(prefix="/api/v1", tags=["users"])
@@ -92,6 +93,44 @@ async def delete_me(
     )
 
 
+@router.put("/users/me/avatar", response_model=AvatarUploadResponse)
+async def upload_my_avatar(
+    data: AvatarUploadRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    try:
+        user.avatar_url = store_avatar(
+            owner_kind="user",
+            user_id=user_id,
+            image_base64=data.image_base64,
+            mime_type=data.mime_type,
+        )
+    except AvatarStorageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await db.flush()
+    return AvatarUploadResponse(avatar_url=user.avatar_url)
+
+
+@router.delete("/users/me/avatar", response_model=AvatarUploadResponse)
+async def delete_my_avatar(
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    delete_avatar(owner_kind="user", user_id=user_id)
+    user.avatar_url = None
+    await db.flush()
+    return AvatarUploadResponse(avatar_url=None)
+
+
 @router.get("/users/{profile_user_id}/profile", response_model=PublicUserProfileResponse)
 async def get_public_user_profile(
     profile_user_id: UUID,
@@ -146,6 +185,44 @@ async def update_my_agent(
 
     await db.flush()
     return agent
+
+
+@router.put("/agents/me/avatar", response_model=AvatarUploadResponse)
+async def upload_my_agent_avatar(
+    data: AvatarUploadRequest,
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Agent).where(Agent.user_id == user_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+    try:
+        agent.avatar_url = store_avatar(
+            owner_kind="agent",
+            user_id=user_id,
+            image_base64=data.image_base64,
+            mime_type=data.mime_type,
+        )
+    except AvatarStorageError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    await db.flush()
+    return AvatarUploadResponse(avatar_url=agent.avatar_url)
+
+
+@router.delete("/agents/me/avatar", response_model=AvatarUploadResponse)
+async def delete_my_agent_avatar(
+    user_id: UUID = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Agent).where(Agent.user_id == user_id))
+    agent = result.scalar_one_or_none()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent 不存在")
+    delete_avatar(owner_kind="agent", user_id=user_id)
+    agent.avatar_url = None
+    await db.flush()
+    return AvatarUploadResponse(avatar_url=None)
 
 
 # ── Agent Memories ──
@@ -241,6 +318,7 @@ def _build_public_profile_response(
         birth_date=user.birth_date,
         bio=user.bio,
         avatar_url=user.avatar_url,
+        avatar_emoji=user.avatar_emoji or "😊",
         interests=user.interests,
         city=user.city,
         occupation=user.occupation,

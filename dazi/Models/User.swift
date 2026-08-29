@@ -6,6 +6,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
     var avatarSymbol: String
     var avatarEmoji: String
     var avatarImageData: Data?
+    var avatarURL: String?
     var city: String
     var bio: String
     var isAgent: Bool
@@ -21,6 +22,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
     var agentName: String
     var agentEmoji: String
     var agentAvatarImageData: Data?
+    var agentAvatarURL: String?
     var agentPersonality: String
 
     static func normalizedGender(_ value: String) -> String? {
@@ -37,6 +39,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         avatarSymbol: String = "person.circle.fill",
         avatarEmoji: String = "😊",
         avatarImageData: Data? = nil,
+        avatarURL: String? = nil,
         city: String = "",
         bio: String = "",
         isAgent: Bool = false,
@@ -51,6 +54,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         agentName: String = "点点",
         agentEmoji: String = "🤖",
         agentAvatarImageData: Data? = nil,
+        agentAvatarURL: String? = nil,
         agentPersonality: String = "贴心、有趣"
     ) {
         self.id = id
@@ -58,6 +62,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         self.avatarSymbol = avatarSymbol
         self.avatarEmoji = avatarEmoji
         self.avatarImageData = avatarImageData
+        self.avatarURL = avatarURL
         self.city = city
         self.bio = bio
         self.isAgent = isAgent
@@ -72,6 +77,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
         self.agentName = agentName
         self.agentEmoji = agentEmoji
         self.agentAvatarImageData = agentAvatarImageData
+        self.agentAvatarURL = agentAvatarURL
         self.agentPersonality = agentPersonality
     }
 
@@ -90,6 +96,7 @@ struct User: Identifiable, Codable, Hashable, Sendable {
             avatarSymbol: "sparkles",
             avatarEmoji: agentEmoji,
             avatarImageData: agentAvatarImageData,
+            avatarURL: agentAvatarURL,
             bio: agentPersonality,
             isAgent: true
         )

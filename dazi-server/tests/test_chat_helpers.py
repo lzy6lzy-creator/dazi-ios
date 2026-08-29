@@ -23,14 +23,18 @@ class ChatHelperTests(unittest.TestCase):
     def test_chat_room_member_response_includes_user_avatar(self):
         user_id = uuid4()
         member = SimpleNamespace(user_id=user_id, role="user")
-        user = SimpleNamespace(name="阿树", avatar_url="🙂")
+        user = SimpleNamespace(
+            name="阿树",
+            avatar_emoji="🙂",
+            avatar_url="/media/avatars/user-image.jpg",
+        )
 
         response = _chat_room_member_response(member, user=user)
 
         self.assertEqual(response.user_id, user_id)
         self.assertEqual(response.role, "user")
         self.assertEqual(response.emoji, "🙂")
-        self.assertEqual(response.avatar_url, "🙂")
+        self.assertEqual(response.avatar_url, "/media/avatars/user-image.jpg")
 
     def test_chat_room_member_response_includes_agent_avatar(self):
         user_id = uuid4()

@@ -42,6 +42,7 @@ struct AgentChatView: View {
                             imageData: dataStore.currentUser.agentAvatarImageData,
                             emoji: dataStore.currentUser.agentEmoji,
                             size: 26,
+                            imageURL: dataStore.currentUser.agentAvatarURL,
                             backgroundColor: AppTheme.agentColor.opacity(0.12)
                         )
                         Text(dataStore.currentUser.agentName)

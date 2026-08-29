@@ -6,6 +6,7 @@ struct CoinTabBar: View {
     let agentName: String
     let agentEmoji: String
     let agentAvatarImageData: Data?
+    let agentAvatarURL: String?
 
     private var items: [(icon: String, label: String)] {
         let trimmedAgentName = agentName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -26,7 +27,8 @@ struct CoinTabBar: View {
                     isActive: selection == i,
                     showBadge: i == 2 && unreadCount > 0,
                     agentEmoji: i == 0 ? agentEmoji : nil,
-                    agentAvatarImageData: i == 0 ? agentAvatarImageData : nil
+                    agentAvatarImageData: i == 0 ? agentAvatarImageData : nil,
+                    agentAvatarURL: i == 0 ? agentAvatarURL : nil
                 )
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
@@ -56,6 +58,7 @@ private struct CoinTab: View {
     var showBadge: Bool = false
     var agentEmoji: String?
     var agentAvatarImageData: Data?
+    var agentAvatarURL: String?
 
     private var iconSize: CGFloat {
         icon == "ellipsis.bubble" ? 19 : 21
@@ -91,6 +94,7 @@ private struct CoinTab: View {
                         imageData: agentAvatarImageData,
                         emoji: agentEmoji,
                         size: 24,
+                        imageURL: agentAvatarURL,
                         backgroundColor: isActive ? Color.white.opacity(0.92) : AppTheme.agentColor.opacity(0.12)
                     )
                     .overlay {
