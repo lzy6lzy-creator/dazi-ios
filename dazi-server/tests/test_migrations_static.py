@@ -13,7 +13,7 @@ class MigrationStaticTests(unittest.TestCase):
         config = Config(str(ROOT / "alembic.ini"))
         script = ScriptDirectory.from_config(config)
 
-        self.assertEqual(script.get_heads(), ["0002_push_token_lookup_index"])
+        self.assertEqual(script.get_heads(), ["0003_reconcile_legacy_schema"])
         self.assertEqual(script.get_base(), "0001_baseline")
 
     def test_baseline_is_frozen_and_complete(self):
@@ -23,6 +23,7 @@ class MigrationStaticTests(unittest.TestCase):
         self.assertIn("CREATE EXTENSION IF NOT EXISTS vector", sql)
         self.assertIn("CREATE TABLE event_feedbacks", sql)
         self.assertIn("CREATE TABLE event_gallery_items", sql)
+        self.assertIn("USING hnsw (embedding vector_cosine_ops)", sql)
 
     def test_application_startup_does_not_mutate_schema(self):
         source = (ROOT / "app/main.py").read_text(encoding="utf-8")

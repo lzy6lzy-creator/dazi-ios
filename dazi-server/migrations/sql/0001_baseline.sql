@@ -451,6 +451,7 @@ CREATE INDEX ix_agent_memories_user_id ON agent_memories (user_id);
 CREATE INDEX ix_events_activity_type ON events (activity_type);
 CREATE INDEX ix_events_city ON events (city);
 CREATE INDEX ix_events_city_normalized ON events (city_normalized);
+CREATE INDEX ix_events_embedding ON events USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX ix_events_status ON events (status);
 CREATE INDEX ix_events_user_id ON events (user_id);
 CREATE INDEX ix_location_verifications_user_id ON location_verifications (user_id);
