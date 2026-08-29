@@ -177,9 +177,9 @@ async def _ensure_runtime_schema(conn) -> None:
                 ),
                 (
                     gen_random_uuid(), 'idabuda-tls', 'idabuda.com HTTPS 证书', 'certificate',
-                    '阿里云 / DigiCert', 'expiry', DATE '2026-09-02', 'exact', 3,
+                    '阿里云 / DigiCert', 'expiry', DATE '2026-11-27', 'exact', 3,
                     '90,60,30,14,7,1', FALSE, 'https://yundunnext.console.aliyun.com/?p=cas',
-                    '证书实际到期时间为 2026-09-01 23:59:59 UTC，即北京时间 2026-09-02 07:59:59；当前为手工安装，未发现自动续签。',
+                    '证书实际到期时间为 2026-11-26 23:59:59 UTC，即北京时间 2026-11-27 07:59:59；续期机制仍需在证书控制台核实。',
                     'live_tls', 'active', NOW(), NOW(), NOW()
                 ),
                 (

@@ -29,7 +29,7 @@ class ServiceReminderStaticTests(unittest.TestCase):
             self.assertIn(f"'{slug}'", source)
 
         self.assertIn("DATE '2027-06-04'", source)
-        self.assertIn("DATE '2026-09-02'", source)
+        self.assertIn("DATE '2026-11-27'", source)
         self.assertIn("DATE '2027-06-29'", source)
         self.assertIn("DATE '2027-06-30', 'month'", source)
         self.assertIn("余额没有固定到期日", source)

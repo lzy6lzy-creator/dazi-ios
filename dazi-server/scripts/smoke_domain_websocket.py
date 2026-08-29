@@ -60,7 +60,11 @@ def request_json(method: str, path: str, body: dict | None = None, token: str | 
 
 
 async def check_ws(token: str) -> None:
-    async with websockets.connect(f"{WS_URL}?token={token}", open_timeout=15) as ws:
+    async with websockets.connect(
+        WS_URL,
+        additional_headers={"Authorization": f"Bearer {token}"},
+        open_timeout=15,
+    ) as ws:
         await ws.send(json.dumps({"type": "ping"}))
         raw = await asyncio.wait_for(ws.recv(), timeout=10)
         payload = json.loads(raw)
