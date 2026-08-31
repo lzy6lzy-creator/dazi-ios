@@ -173,6 +173,8 @@ docker compose -f docker-compose.prod.yml exec -T api \
 
 worker 日志与 API 进程日志分开；后台匹配详情仍读取数据库 `match_logs`。
 worker 每 15 秒更新心跳，任何调度循环退出都会让 worker 失败退出，由 Compose 重启。
+worker 的 `EMBEDDING_REMOTE_URL` 指向 API 的受保护内部接口，避免 2GB 机器加载两份模型。
+该接口不对公网反代；内部请求使用服务端凭证，不能把凭证交给客户端。
 
 ## 7. 内测白名单
 

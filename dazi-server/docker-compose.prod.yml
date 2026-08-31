@@ -91,7 +91,9 @@ services:
     image: dazi-server-api
     container_name: dazi-worker
     restart: always
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      EMBEDDING_REMOTE_URL: http://api:8000/internal/embeddings
     volumes:
       - .:/code/runtime-config
       - /opt/dazi-secrets:/code/runtime-secrets:ro

@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     # Embedding
     EMBEDDING_MODEL: str = "BAAI/bge-base-zh-v1.5"
     EMBEDDING_DIMENSION: int = 768
+    EMBEDDING_REMOTE_URL: str = ""
 
 
 try:

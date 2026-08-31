@@ -12,6 +12,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
+import httpx
+
 from app.core.config import settings
 from app.services.location_normalizer import align_city_from_catalog, normalize_place, standard_city_names
 
@@ -27,6 +29,7 @@ class EmbeddingService:
     def __init__(self):
         self._model = None
         self._model_lock = Lock()
+        self._remote_client: httpx.AsyncClient | None = None
         self._city_embeddings = None
         # 固定线程池：限制并发推理数量，避免内存问题
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="embedding")
@@ -84,18 +87,43 @@ class EmbeddingService:
 
     async def encode(self, text: str) -> list[float]:
         """异步编码单条文本，通过线程池串行化"""
+        if settings.EMBEDDING_REMOTE_URL:
+            payload = await self._remote_request("", {"texts": [text]})
+            return payload["embeddings"][0]
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, self._encode_sync, text)
 
     async def encode_batch(self, texts: list[str]) -> list[list[float]]:
         """异步批量编码，通过线程池串行化"""
+        if not texts:
+            return []
+        if settings.EMBEDDING_REMOTE_URL:
+            vectors = []
+            for start in range(0, len(texts), 32):
+                payload = await self._remote_request("", {"texts": texts[start:start + 32]})
+                vectors.extend(payload["embeddings"])
+            return vectors
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, self._encode_batch_sync, texts)
 
     async def align_city(self, city_raw: str | None) -> str:
         """异步城市对齐，通过线程池串行化"""
+        if settings.EMBEDDING_REMOTE_URL:
+            payload = await self._remote_request("/align-city", {"city": city_raw})
+            return payload["city"]
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(self._executor, self._align_city_sync, city_raw)
+
+    async def _remote_request(self, suffix: str, payload: dict) -> dict:
+        if self._remote_client is None:
+            self._remote_client = httpx.AsyncClient(timeout=120)
+        response = await self._remote_client.post(
+            settings.EMBEDDING_REMOTE_URL.rstrip("/") + suffix,
+            headers={"Authorization": f"Bearer {settings.ADMIN_TOKEN}"},
+            json=payload,
+        )
+        response.raise_for_status()
+        return response.json()
 
     @staticmethod
     def build_event_text(title: str, activity_type: str,
@@ -135,6 +163,9 @@ class EmbeddingService:
 
     async def close(self):
         """关闭线程池，应在 lifespan 关闭阶段调用"""
+        if self._remote_client is not None:
+            await self._remote_client.aclose()
+            self._remote_client = None
         self._executor.shutdown(wait=False)
         logger.info("Embedding thread pool shut down.")
 

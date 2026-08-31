@@ -80,7 +80,9 @@ services:
   worker:
     image: dazi-server-api:dev
     container_name: dazi-worker
-    environment: *app-environment
+    environment:
+      <<: *app-environment
+      EMBEDDING_REMOTE_URL: http://api:8000/internal/embeddings
     volumes:
       - ./app:/code/app
       - .:/code/runtime-config

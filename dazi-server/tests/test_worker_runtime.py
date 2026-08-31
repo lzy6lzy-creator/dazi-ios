@@ -25,7 +25,9 @@ class WorkerRuntimeTests(unittest.TestCase):
     def test_worker_and_api_share_settings_but_not_ports(self):
         for name in ("docker-compose.yml", "docker-compose.prod.yml"):
             services = yaml.safe_load((ROOT / name).read_text())["services"]
-            self.assertEqual(services["api"]["environment"], services["worker"]["environment"])
+            worker_environment = services["worker"]["environment"].copy()
+            self.assertEqual(worker_environment.pop("EMBEDDING_REMOTE_URL"), "http://api:8000/internal/embeddings")
+            self.assertEqual(services["api"]["environment"], worker_environment)
             self.assertEqual(services["api"]["image"], services["worker"]["image"])
             self.assertNotIn("ports", services["worker"])
             self.assertEqual(services["worker"]["depends_on"]["api"]["condition"], "service_healthy")

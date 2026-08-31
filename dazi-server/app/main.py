@@ -33,6 +33,7 @@ from app.api.ws import manager as ws_manager, router as ws_router
 from app.api.notifications import router as notifications_router
 from app.api.invitations import router as invitations_router
 from app.api.location_eligibility import router as location_eligibility_router
+from app.api.internal import router as internal_router
 
 # 配置日志 + 内存缓冲区
 log_buffer.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
@@ -298,6 +299,7 @@ app.include_router(ws_router)
 app.include_router(notifications_router)
 app.include_router(invitations_router)
 app.include_router(location_eligibility_router)
+app.include_router(internal_router)
 
 # 静态文件
 app.mount("/static", StaticFiles(directory="app/static"), name="static")

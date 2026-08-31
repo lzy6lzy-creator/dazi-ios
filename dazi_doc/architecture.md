@@ -114,6 +114,8 @@ Chat Room -> REST 历史消息 -> WebSocket 实时消息 -> APNs -> 投票/关�
 API 启动前由 Alembic 执行版本化迁移，不再在 lifespan 建表或补列。
 独立 `worker` 运行匹配、内测邀请和到期检查，使用 PostgreSQL advisory lock
 避免与手动触发或另一进程重复运行。worker 启动和每次匹配前刷新数据库 prompt 覆盖。
+当前 2GB 主机上 worker 通过受服务端 token 保护的内部 HTTP 接口复用 API 的向量模型，
+不在 worker 再加载一份模型。`/internal/` 不由公网 Nginx 反代，也不出现在 OpenAPI 中。
 WebSocket 连接仍由各 API 进程持有，跨进程通知经 Redis Pub/Sub 分发，按来源排除重复投递。
 `/health` 检查存活；`/ready` 检查 PostgreSQL、迁移版本、Redis 与 WebSocket 订阅状态。
 
