@@ -73,6 +73,7 @@ services:
       - .:/code/runtime-config
       - /opt/dazi-secrets:/code/runtime-secrets:ro
       - ./uploads:/code/uploads
+      - ./model-cache:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -95,6 +96,7 @@ services:
       - .:/code/runtime-config
       - /opt/dazi-secrets:/code/runtime-secrets:ro
       - ./uploads:/code/uploads
+      - ./model-cache:/root/.cache/huggingface
     depends_on:
       api:
         condition: service_healthy

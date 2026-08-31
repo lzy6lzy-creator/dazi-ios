@@ -10,6 +10,7 @@ import asyncio
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
 
 from app.core.config import settings
 from app.services.location_normalizer import align_city_from_catalog, normalize_place, standard_city_names
@@ -25,16 +26,18 @@ class EmbeddingService:
 
     def __init__(self):
         self._model = None
+        self._model_lock = Lock()
         self._city_embeddings = None
         # 固定线程池：限制并发推理数量，避免内存问题
         self._executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="embedding")
 
     def _load_model(self):
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
-            logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
-            self._model = SentenceTransformer(settings.EMBEDDING_MODEL)
-            logger.info("Embedding model loaded")
+        with self._model_lock:
+            if self._model is None:
+                from sentence_transformers import SentenceTransformer
+                logger.info(f"Loading embedding model: {settings.EMBEDDING_MODEL}")
+                self._model = SentenceTransformer(settings.EMBEDDING_MODEL)
+                logger.info("Embedding model loaded")
         return self._model
 
     def _encode_sync(self, text: str) -> list[float]:

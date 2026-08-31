@@ -48,6 +48,7 @@ __pycache__
 .mypy_cache
 certbot
 uploads
+model-cache
 ```
 
 示例：
@@ -65,6 +66,7 @@ rsync -az --delete \
   --exclude '.mypy_cache' \
   --exclude 'certbot' \
   --exclude 'uploads' \
+  --exclude 'model-cache' \
   /Users/wuxing/Desktop/dazi/dazi/dazi-server/ \
   root@47.103.127.95:/opt/dazi-server/
 ```
@@ -128,6 +130,9 @@ LLM、短信、APNs 不属于 readiness 探针，需单独做业务验证。
 HTTP 会重定向 HTTPS，不能把 301 当作 API 健康成功。
 
 `/opt/dazi-server/uploads` 是用户媒体持久数据，API 和 Nginx 以不同只读/读写挂载共享。部署同步不得删除；备份和恢复时应与 PostgreSQL 一起处理。
+
+`/opt/dazi-server/model-cache` 是 API 与 worker 共用的 Hugging Face 模型缓存，部署时保留，
+Docker 构建上下文排除该目录及环境文件、密钥、白名单和用户媒体。
 
 ## 6. 常用运维命令
 
