@@ -21,6 +21,7 @@ class Settings(BaseSettings):
 
     # Admin — 必须通过环境变量或 .env 提供，无默认值
     ADMIN_TOKEN: str
+    CORS_ALLOWED_ORIGINS: str = "https://idabuda.com,https://www.idabuda.com"
 
     # Alibaba Cloud Phone Number Verification Service (PNVS)
     ALIYUN_DYPNS_ACCESS_KEY_ID: str = ""

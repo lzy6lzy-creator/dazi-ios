@@ -1,27 +1,24 @@
 """
 i搭不搭 - Backend API Server
 """
-import asyncio
 import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from sqlalchemy import text
 
-from app.core.database import async_session, engine
+from app.core.database import engine
 from app.core.config import settings
 from app.core.redis import close_redis
+from app.core.readiness import readiness_report
 from app.core.log_buffer import log_buffer
 from app.services.agent_server import agent_server
 from app.services.embedding_service import embedding_service
-from app.services.scheduler import beta_invite_scheduler, match_scheduler
-from app.services.service_reminder_monitor import service_reminder_monitor
 from app.services.media_storage import UPLOAD_ROOT, ensure_upload_directories
-
-from app.models.prompt import PromptTemplate  # noqa: F401
+from app.services.prompt_overrides import load_prompt_overrides
 
 # 导入路由
 from app.api.auth import router as auth_router
@@ -32,7 +29,7 @@ from app.api.chat import router as chat_router
 from app.api.beta import router as beta_router
 from app.api.feedback import router as feedback_router
 from app.api.admin import router as admin_router
-from app.api.ws import router as ws_router
+from app.api.ws import manager as ws_manager, router as ws_router
 from app.api.notifications import router as notifications_router
 from app.api.invitations import router as invitations_router
 from app.api.location_eligibility import router as location_eligibility_router
@@ -66,29 +63,15 @@ async def lifespan(app: FastAPI):
         await _ensure_runtime_data(conn)
     logging.info("Runtime database data initialized.")
 
-    # 从 DB 加载 prompt 覆盖到内存
-    from sqlalchemy import select as sa_select
-    from app.services.prompt_builder import PromptBuilder
-    async with async_session() as db:
-        result = await db.execute(sa_select(PromptTemplate))
-        for row in result.scalars().all():
-            if row.name in PromptBuilder._TEMPLATES:
-                PromptBuilder.override_template(row.name, row.content)
-                logging.info(f"Loaded prompt override: {row.name}")
+    await load_prompt_overrides()
 
     # 初始化统一 agent server 客户端
     agent_server.start()
-
-    # 启动定时匹配任务（每小时扫描 pending 事件）
-    match_scheduler.start()
-    beta_invite_scheduler.start()
-    service_reminder_monitor.start()
+    await ws_manager.start()
 
     yield
     # 关闭时清理资源
-    await match_scheduler.stop()
-    await beta_invite_scheduler.stop()
-    await service_reminder_monitor.stop()
+    await ws_manager.stop()
     await agent_server.close()
     await embedding_service.close()
     await close_redis()
@@ -296,12 +279,7 @@ app = FastAPI(
 # CORS - 限制允许的来源
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "https://idabuda.com",
-        "https://www.idabuda.com",
-    ],
+    allow_origins=[origin.strip() for origin in settings.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -335,6 +313,15 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/ready")
+async def ready():
+    is_ready, payload = await readiness_report()
+    payload["checks"]["websocket"] = "ok" if ws_manager.is_subscribed else "unavailable"
+    is_ready = is_ready and ws_manager.is_subscribed
+    payload["status"] = "ready" if is_ready else "not_ready"
+    return JSONResponse(payload, status_code=200 if is_ready else 503)
 
 
 @app.get("/admin")

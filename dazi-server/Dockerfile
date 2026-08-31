@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir --timeout 120 \
 COPY app/ /code/app/
 COPY migrations/ /code/migrations/
 COPY alembic.ini /code/alembic.ini
+COPY scripts/ /code/scripts/
 
 EXPOSE 8000
 

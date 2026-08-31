@@ -1,3 +1,38 @@
+x-app-environment: &app-environment
+  DATABASE_URL: postgresql+asyncpg://dazi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/dazi
+  REDIS_URL: redis://redis:6379/0
+  AGENT_MODEL_PROVIDER: ${AGENT_MODEL_PROVIDER:-kimi}
+  AGENT_MODEL: ${AGENT_MODEL:-${LLM_MODEL:-kimi-k2.5}}
+  AGENT_BASE_URL: ${AGENT_BASE_URL:-${LLM_BASE_URL:-https://api.moonshot.cn/v1}}
+  AGENT_API_KEY: ${AGENT_API_KEY:-${LLM_API_KEY:?AGENT_API_KEY or LLM_API_KEY is required}}
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+  ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
+  ALIYUN_DYPNS_ACCESS_KEY_ID: ${ALIYUN_DYPNS_ACCESS_KEY_ID:-}
+  ALIYUN_DYPNS_ACCESS_KEY_SECRET: ${ALIYUN_DYPNS_ACCESS_KEY_SECRET:-}
+  ALIYUN_DYPNS_REGION_ID: ${ALIYUN_DYPNS_REGION_ID:-cn-hangzhou}
+  ALIYUN_DYPNS_SCHEME_NAME: ${ALIYUN_DYPNS_SCHEME_NAME:-默认方案}
+  ALIYUN_DYPNS_SIGN_NAME: ${ALIYUN_DYPNS_SIGN_NAME:-}
+  ALIYUN_DYPNS_TEMPLATE_CODE: ${ALIYUN_DYPNS_TEMPLATE_CODE:-100001}
+  ALIYUN_DYPNS_ENABLED: ${ALIYUN_DYPNS_ENABLED:-false}
+  INTERNAL_TEST_CODE: ${INTERNAL_TEST_CODE:-121212}
+  INTERNAL_TEST_PHONES: ${INTERNAL_TEST_PHONES:-}
+  INTERNAL_TEST_PHONES_FILE: ${INTERNAL_TEST_PHONES_FILE:-/code/runtime-config/internal_test_phones.txt}
+  INVITATION_IOS_DISTRIBUTION_MODE: ${INVITATION_IOS_DISTRIBUTION_MODE:-}
+  INVITATION_TESTFLIGHT_PUBLIC_URL: ${INVITATION_TESTFLIGHT_PUBLIC_URL:-}
+  INVITATION_APP_STORE_URL: ${INVITATION_APP_STORE_URL:-}
+  ASC_KEY_ID: ${ASC_KEY_ID:-}
+  ASC_ISSUER_ID: ${ASC_ISSUER_ID:-}
+  ASC_PRIVATE_KEY_PATH: ${ASC_PRIVATE_KEY_PATH:-}
+  ASC_BUNDLE_ID: ${ASC_BUNDLE_ID:-com.linke.dazi}
+  ASC_APP_ID: ${ASC_APP_ID:-}
+  ASC_INTERNAL_GROUP_NAME: ${ASC_INTERNAL_GROUP_NAME:-搭子test}
+  ASC_INTERNAL_GROUP_ID: ${ASC_INTERNAL_GROUP_ID:-}
+  ASC_INVITE_ROLE: ${ASC_INVITE_ROLE:-MARKETING}
+  APNS_KEY_ID: ${APNS_KEY_ID:-}
+  APNS_TEAM_ID: ${APNS_TEAM_ID:-}
+  APNS_PRIVATE_KEY_PATH: ${APNS_PRIVATE_KEY_PATH:-}
+  APNS_BUNDLE_ID: ${APNS_BUNDLE_ID:-com.linke.dazi}
+
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -28,44 +63,12 @@ services:
 
   api:
     build: .
+    image: dazi-server-api
     container_name: dazi-api
     restart: always
     ports:
       - "127.0.0.1:8000:8000"
-    environment:
-      DATABASE_URL: postgresql+asyncpg://dazi:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@db:5432/dazi
-      REDIS_URL: redis://redis:6379/0
-      AGENT_MODEL_PROVIDER: ${AGENT_MODEL_PROVIDER:-kimi}
-      AGENT_MODEL: ${AGENT_MODEL:-${LLM_MODEL:-kimi-k2.5}}
-      AGENT_BASE_URL: ${AGENT_BASE_URL:-${LLM_BASE_URL:-https://api.moonshot.cn/v1}}
-      AGENT_API_KEY: ${AGENT_API_KEY:-${LLM_API_KEY:?AGENT_API_KEY or LLM_API_KEY is required}}
-      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
-      ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
-      ALIYUN_DYPNS_ACCESS_KEY_ID: ${ALIYUN_DYPNS_ACCESS_KEY_ID:-}
-      ALIYUN_DYPNS_ACCESS_KEY_SECRET: ${ALIYUN_DYPNS_ACCESS_KEY_SECRET:-}
-      ALIYUN_DYPNS_REGION_ID: ${ALIYUN_DYPNS_REGION_ID:-cn-hangzhou}
-      ALIYUN_DYPNS_SCHEME_NAME: ${ALIYUN_DYPNS_SCHEME_NAME:-默认方案}
-      ALIYUN_DYPNS_SIGN_NAME: ${ALIYUN_DYPNS_SIGN_NAME:-}
-      ALIYUN_DYPNS_TEMPLATE_CODE: ${ALIYUN_DYPNS_TEMPLATE_CODE:-100001}
-      ALIYUN_DYPNS_ENABLED: ${ALIYUN_DYPNS_ENABLED:-false}
-      INTERNAL_TEST_CODE: ${INTERNAL_TEST_CODE:-121212}
-      INTERNAL_TEST_PHONES: ${INTERNAL_TEST_PHONES:-}
-      INTERNAL_TEST_PHONES_FILE: ${INTERNAL_TEST_PHONES_FILE:-/code/runtime-config/internal_test_phones.txt}
-      INVITATION_IOS_DISTRIBUTION_MODE: ${INVITATION_IOS_DISTRIBUTION_MODE:-}
-      INVITATION_TESTFLIGHT_PUBLIC_URL: ${INVITATION_TESTFLIGHT_PUBLIC_URL:-}
-      INVITATION_APP_STORE_URL: ${INVITATION_APP_STORE_URL:-}
-      ASC_KEY_ID: ${ASC_KEY_ID:-}
-      ASC_ISSUER_ID: ${ASC_ISSUER_ID:-}
-      ASC_PRIVATE_KEY_PATH: ${ASC_PRIVATE_KEY_PATH:-}
-      ASC_BUNDLE_ID: ${ASC_BUNDLE_ID:-com.linke.dazi}
-      ASC_APP_ID: ${ASC_APP_ID:-}
-      ASC_INTERNAL_GROUP_NAME: ${ASC_INTERNAL_GROUP_NAME:-搭子test}
-      ASC_INTERNAL_GROUP_ID: ${ASC_INTERNAL_GROUP_ID:-}
-      ASC_INVITE_ROLE: ${ASC_INVITE_ROLE:-MARKETING}
-      APNS_KEY_ID: ${APNS_KEY_ID:-}
-      APNS_TEAM_ID: ${APNS_TEAM_ID:-}
-      APNS_PRIVATE_KEY_PATH: ${APNS_PRIVATE_KEY_PATH:-}
-      APNS_BUNDLE_ID: ${APNS_BUNDLE_ID:-com.linke.dazi}
+    environment: *app-environment
     volumes:
       - .:/code/runtime-config
       - /opt/dazi-secrets:/code/runtime-secrets:ro
@@ -76,6 +79,32 @@ services:
       redis:
         condition: service_healthy
     command: sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    image: dazi-server-api
+    container_name: dazi-worker
+    restart: always
+    environment: *app-environment
+    volumes:
+      - .:/code/runtime-config
+      - /opt/dazi-secrets:/code/runtime-secrets:ro
+      - ./uploads:/code/uploads
+    depends_on:
+      api:
+        condition: service_healthy
+    command: python -m app.worker
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; import time; assert time.time() - float(Path('/tmp/dazi-worker-heartbeat').read_text()) < 60"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
   web:
     image: nginx:alpine
@@ -93,7 +122,7 @@ services:
       - ./certbot/conf:/etc/letsencrypt:ro
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
 
 volumes:
   pgdata:

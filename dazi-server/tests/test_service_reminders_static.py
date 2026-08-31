@@ -81,11 +81,11 @@ class ServiceReminderStaticTests(unittest.TestCase):
         self.assertIn("confirmAction", html)
 
     def test_daily_public_date_monitor_is_started_and_stopped(self):
-        main = self.read("app/main.py")
+        worker = self.read("app/worker.py")
         monitor = self.read("app/services/service_reminder_monitor.py")
 
-        self.assertIn("service_reminder_monitor.start()", main)
-        self.assertIn("await service_reminder_monitor.stop()", main)
+        self.assertIn("service_reminder_monitor.start()", worker)
+        self.assertIn("await service_reminder_monitor.stop()", worker)
         self.assertIn("24 * 60 * 60", monitor)
         self.assertIn("rdap.verisign.com", monitor)
         self.assertIn("asyncio.open_connection", monitor)

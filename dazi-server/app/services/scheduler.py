@@ -10,6 +10,9 @@ import asyncio
 import logging
 from datetime import datetime, timedelta
 
+from app.core.distributed_lock import singleton_job
+from app.services.prompt_overrides import load_prompt_overrides
+
 logger = logging.getLogger(__name__)
 
 
@@ -25,6 +28,8 @@ class MatchScheduler:
 
     def start(self):
         """在 app startup 时调用"""
+        if self._task and not self._task.done():
+            return
         self._task = asyncio.create_task(self._run_loop())
         logger.info("Match scheduler started, hourly")
 
@@ -36,6 +41,9 @@ class MatchScheduler:
                 await self._task
             except asyncio.CancelledError:
                 pass
+            except Exception:
+                logger.exception("Matching scheduler exited unexpectedly")
+            self._task = None
         logger.info("Match scheduler stopped")
 
     async def _run_loop(self):
@@ -49,6 +57,7 @@ class MatchScheduler:
             await asyncio.sleep(wait_seconds)
             await self._run_matching()
 
+    @singleton_job("scheduled-matching")
     async def _run_matching(self):
         """扫描所有 pending 事件并逐个匹配"""
         from app.core.database import async_session
@@ -61,6 +70,7 @@ class MatchScheduler:
             return
 
         async with self._run_lock:
+            await load_prompt_overrides()
             logger.info("Starting scheduled matching run...")
             matched_count = 0
             error_count = 0
@@ -122,6 +132,8 @@ class BetaInviteScheduler:
         self._run_lock = asyncio.Lock()
 
     def start(self):
+        if self._task and not self._task.done():
+            return
         self._task = asyncio.create_task(self._run_loop())
         logger.info("Beta invite scheduler started, hourly")
 
@@ -132,6 +144,9 @@ class BetaInviteScheduler:
                 await self._task
             except asyncio.CancelledError:
                 pass
+            except Exception:
+                logger.exception("Beta invite scheduler exited unexpectedly")
+            self._task = None
         logger.info("Beta invite scheduler stopped")
 
     async def _run_loop(self):
@@ -144,6 +159,7 @@ class BetaInviteScheduler:
             await asyncio.sleep(wait_seconds)
             await self._run_invite_all()
 
+    @singleton_job("scheduled-beta-invites")
     async def _run_invite_all(self):
         from app.core.database import async_session
         from app.api.admin import invite_all_beta_signups_internal_task

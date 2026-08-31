@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import async_session
+from app.core.distributed_lock import singleton_job
 from app.models.service_reminder import ServiceReminder
 
 
@@ -130,14 +131,18 @@ class ServiceReminderMonitor:
     async def _run(self) -> None:
         while True:
             try:
-                async with async_session() as db:
-                    await refresh_external_service_reminders(db)
-                    await db.commit()
+                await self._refresh_once()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("Service reminder monitor run failed")
             await asyncio.sleep(self.interval_seconds)
+
+    @singleton_job("service-reminder-refresh")
+    async def _refresh_once(self) -> None:
+        async with async_session() as db:
+            await refresh_external_service_reminders(db)
+            await db.commit()
 
 
 service_reminder_monitor = ServiceReminderMonitor()

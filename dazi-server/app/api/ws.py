@@ -11,12 +11,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from uuid import UUID
+from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from jose import JWTError, jwt
 
 from app.core.config import settings
+from app.core.redis import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +27,32 @@ router = APIRouter(tags=["websocket"])
 class ConnectionManager:
     """管理所有活跃的 WebSocket 连接"""
 
+    CHANNEL_PREFIX = "dazi:ws:user:"
+
     def __init__(self):
         # user_id -> list of WebSocket connections (同一用户可能多设备)
         self._connections: dict[str, list[WebSocket]] = {}
+        self._subscriber_task: asyncio.Task | None = None
+        self._instance_id = uuid4().hex
+        self.is_subscribed = False
+
+    async def start(self) -> None:
+        if self._subscriber_task and not self._subscriber_task.done():
+            return
+        self._subscriber_task = asyncio.create_task(
+            self._subscriber_loop(),
+            name="websocket-redis-subscriber",
+        )
+
+    async def stop(self) -> None:
+        if not self._subscriber_task:
+            return
+        self._subscriber_task.cancel()
+        try:
+            await self._subscriber_task
+        except asyncio.CancelledError:
+            pass
+        self._subscriber_task = None
 
     async def connect(self, user_id: str, ws: WebSocket):
         await ws.accept()
@@ -46,18 +70,80 @@ class ConnectionManager:
                 del self._connections[user_id]
         logger.info(f"WebSocket disconnected: user={user_id}, total={self.count}")
 
-    async def send_to_user(self, user_id: str, data: dict):
-        """向指定用户的所有连接发送消息"""
+    async def _send_local(self, user_id: str, data: dict) -> None:
         conns = self._connections.get(user_id, [])
         dead = []
         for ws in conns:
             try:
-                await ws.send_json(data)
+                await asyncio.wait_for(ws.send_json(data), timeout=5)
             except Exception:
                 dead.append(ws)
         # 清理断开的连接
         for ws in dead:
             self.disconnect(user_id, ws)
+
+    async def send_to_user(self, user_id: str, data: dict):
+        """Publish once so every API replica can deliver to its local sockets."""
+        await self._send_local(user_id, data)
+        try:
+            redis = await get_redis()
+            await redis.publish(
+                f"{self.CHANNEL_PREFIX}{user_id}",
+                json.dumps({"origin": self._instance_id, "data": data}, ensure_ascii=False),
+            )
+        except Exception:
+            logger.exception("Redis WebSocket publish failed; only local delivery succeeded")
+
+    async def _subscriber_loop(self) -> None:
+        while True:
+            pubsub = None
+            try:
+                redis = await get_redis()
+                pubsub = redis.pubsub()
+                await pubsub.psubscribe(f"{self.CHANNEL_PREFIX}*")
+                self.is_subscribed = True
+                logger.info("WebSocket Redis subscriber started")
+                async for message in pubsub.listen():
+                    if message.get("type") not in {"message", "pmessage"}:
+                        continue
+                    await self._handle_pubsub_message(message)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("WebSocket Redis subscriber failed; retrying")
+                await asyncio.sleep(1)
+            finally:
+                self.is_subscribed = False
+                if pubsub is not None:
+                    try:
+                        await pubsub.aclose()
+                    except Exception:
+                        logger.debug("WebSocket Redis subscriber close failed", exc_info=True)
+
+    async def _handle_pubsub_message(self, message: dict) -> None:
+        channel = message.get("channel")
+        payload = message.get("data")
+        if isinstance(channel, bytes):
+            channel = channel.decode("utf-8")
+        if isinstance(payload, bytes):
+            payload = payload.decode("utf-8")
+        if not isinstance(channel, str) or not channel.startswith(self.CHANNEL_PREFIX):
+            return
+
+        user_id = channel[len(self.CHANNEL_PREFIX):]
+        try:
+            envelope = json.loads(payload)
+        except (TypeError, json.JSONDecodeError):
+            logger.warning("Ignored malformed WebSocket Pub/Sub payload")
+            return
+        if not user_id or not isinstance(envelope, dict):
+            return
+        if envelope.get("origin") == self._instance_id:
+            return
+        data = envelope.get("data")
+        if not isinstance(data, dict):
+            return
+        await self._send_local(user_id, data)
 
     async def broadcast_to_users(self, user_ids: list[str], data: dict):
         """向多个用户广播消息"""

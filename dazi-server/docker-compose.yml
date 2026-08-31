@@ -29,24 +29,21 @@ services:
 
   api:
     build: .
+    image: dazi-server-api:dev
     container_name: dazi-api
     ports:
       - "8000:8000"
-    environment:
+    environment: &app-environment
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:8080,https://idabuda.com,https://www.idabuda.com
       DATABASE_URL: postgresql+asyncpg://dazi:dazi_dev_2024@db:5432/dazi
       REDIS_URL: redis://redis:6379/0
       AGENT_MODEL_PROVIDER: ${AGENT_MODEL_PROVIDER:-kimi}
       AGENT_MODEL: ${AGENT_MODEL:-${LLM_MODEL:-kimi-k2.5}}
       AGENT_BASE_URL: ${AGENT_BASE_URL:-${LLM_BASE_URL:-https://api.moonshot.cn/v1}}
       AGENT_API_KEY: ${AGENT_API_KEY:-${LLM_API_KEY:?AGENT_API_KEY or LLM_API_KEY is required}}
-      AGENT_DRAFT_MODEL_PROVIDER: ${AGENT_DRAFT_MODEL_PROVIDER:-}
-      AGENT_DRAFT_MODEL: ${AGENT_DRAFT_MODEL:-}
-      AGENT_DRAFT_BASE_URL: ${AGENT_DRAFT_BASE_URL:-}
-      AGENT_DRAFT_API_KEY: ${AGENT_DRAFT_API_KEY:-}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
       ADMIN_TOKEN: ${ADMIN_TOKEN:?ADMIN_TOKEN is required}
-      INTERNAL_TEST_MODE: ${INTERNAL_TEST_MODE:-false}
-      INTERNAL_TEST_CODE: ${INTERNAL_TEST_CODE:-}
+      INTERNAL_TEST_CODE: ${INTERNAL_TEST_CODE:-121212}
       INTERNAL_TEST_PHONES: ${INTERNAL_TEST_PHONES:-}
       INTERNAL_TEST_PHONES_FILE: /code/runtime-config/internal_test_phones.txt
       ASC_KEY_ID: ${ASC_KEY_ID:-}
@@ -64,12 +61,39 @@ services:
     volumes:
       - ./app:/code/app
       - .:/code/runtime-config
+      - ./migrations:/code/migrations
+      - ./alembic.ini:/code/alembic.ini:ro
+      - ./uploads:/code/uploads
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     command: sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  worker:
+    image: dazi-server-api:dev
+    container_name: dazi-worker
+    environment: *app-environment
+    volumes:
+      - ./app:/code/app
+      - .:/code/runtime-config
+    depends_on:
+      api:
+        condition: service_healthy
+    command: python -m app.worker
+    healthcheck:
+      test: ["CMD", "python", "-c", "from pathlib import Path; import time; assert time.time() - float(Path('/tmp/dazi-worker-heartbeat').read_text()) < 60"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
 
 volumes:
   pgdata:

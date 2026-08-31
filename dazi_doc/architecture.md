@@ -1,6 +1,6 @@
 # i搭不搭 系统架构
 
-最后更新：2026-08-29
+最后更新：2026-08-31
 
 ## 1. 总览
 
@@ -111,10 +111,15 @@ Chat Room -> REST 历史消息 -> WebSocket 实时消息 -> APNs -> 投票/关�
 
 详情见 [部署与运维](ops/deployment.md)。
 
+API 启动前由 Alembic 执行版本化迁移，不再在 lifespan 建表或补列。
+独立 `worker` 运行匹配、内测邀请和到期检查，使用 PostgreSQL advisory lock
+避免与手动触发或另一进程重复运行。worker 启动和每次匹配前刷新数据库 prompt 覆盖。
+WebSocket 连接仍由各 API 进程持有，跨进程通知经 Redis Pub/Sub 分发，按来源排除重复投递。
+`/health` 检查存活；`/ready` 检查 PostgreSQL、迁移版本、Redis 与 WebSocket 订阅状态。
+
 ## 7. 当前技术债
 
-- 聊天室列表存在逐房间/逐成员查询，房间规模增长前应改为批量查询或 eager loading。
-- WebSocket 连接管理仍是单进程内存实现，多 worker 前需要 Redis Pub/Sub 或独立消息层。
-- 定时匹配任务仍在 API 进程内，正式生产建议拆独立 worker。
-- 监控、备份、告警和 DB 迁移流程需要生产化。
-- 当前 `/health` 只表示 API 进程存活，不检查 PostgreSQL、Redis、LLM 或 APNs 可用性。
+- Redis Pub/Sub 不是持久队列；断线期间的聊天数据以 REST 历史记录恢复。
+- LLM、短信、APNs 属于外部依赖，readiness 不发起付费调用；仍需业务回归与真机验证。
+- refresh token 尚未接入会话级轮换与吊销。
+- 加密备份、恢复演练与外部故障告警仍需落实。
