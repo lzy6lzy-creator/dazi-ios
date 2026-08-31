@@ -6,10 +6,29 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXContainerItemProxy section */
+		AA0000000000000000000071 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 107FB7922F59F853006CC05C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 107FB7992F59F853006CC05C;
+			remoteInfo = dazi;
+		};
+		AA0000000000000000000072 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 107FB7922F59F853006CC05C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 107FB7992F59F853006CC05C;
+			remoteInfo = dazi;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		107FB79A2F59F853006CC05C /* dazi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dazi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		107FB79D2F59F853006CC05C /* Config/BundleID.debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/BundleID.debug.xcconfig; sourceTree = "<group>"; };
 		107FB79E2F59F853006CC05C /* Config/BundleID.release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/BundleID.release.xcconfig; sourceTree = "<group>"; };
+		AA0000000000000000000011 /* daziTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = daziTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000012 /* daziUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = daziUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -18,10 +37,34 @@
 			path = dazi;
 			sourceTree = "<group>";
 		};
+		AA0000000000000000000021 /* daziTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = daziTests;
+			sourceTree = "<group>";
+		};
+		AA0000000000000000000022 /* daziUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = daziUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		107FB7972F59F853006CC05C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000032 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000042 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -35,6 +78,8 @@
 			isa = PBXGroup;
 			children = (
 				107FB79C2F59F853006CC05C /* dazi */,
+				AA0000000000000000000021 /* daziTests */,
+				AA0000000000000000000022 /* daziUITests */,
 				107FB79B2F59F853006CC05C /* Products */,
 				34B22B102FDAB723008BBD5F /* Recovered References */,
 			);
@@ -44,6 +89,8 @@
 			isa = PBXGroup;
 			children = (
 				107FB79A2F59F853006CC05C /* dazi.app */,
+				AA0000000000000000000011 /* daziTests.xctest */,
+				AA0000000000000000000012 /* daziUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -82,6 +129,48 @@
 			productReference = 107FB79A2F59F853006CC05C /* dazi.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AA0000000000000000000001 /* daziTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000053 /* Build configuration list for PBXNativeTarget "daziTests" */;
+			buildPhases = (
+				AA0000000000000000000031 /* Sources */,
+				AA0000000000000000000032 /* Frameworks */,
+				AA0000000000000000000033 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA0000000000000000000081 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000021 /* daziTests */,
+			);
+			name = daziTests;
+			productName = daziTests;
+			productReference = AA0000000000000000000011 /* daziTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		AA0000000000000000000002 /* daziUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000063 /* Build configuration list for PBXNativeTarget "daziUITests" */;
+			buildPhases = (
+				AA0000000000000000000041 /* Sources */,
+				AA0000000000000000000042 /* Frameworks */,
+				AA0000000000000000000043 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA0000000000000000000082 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000022 /* daziUITests */,
+			);
+			name = daziUITests;
+			productName = daziUITests;
+			productReference = AA0000000000000000000012 /* daziUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -94,6 +183,14 @@
 				TargetAttributes = {
 					107FB7992F59F853006CC05C = {
 						CreatedOnToolsVersion = 26.3;
+					};
+					AA0000000000000000000001 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 107FB7992F59F853006CC05C;
+					};
+					AA0000000000000000000002 = {
+						CreatedOnToolsVersion = 26.3;
+						TestTargetID = 107FB7992F59F853006CC05C;
 					};
 				};
 			};
@@ -112,12 +209,28 @@
 			projectRoot = "";
 			targets = (
 				107FB7992F59F853006CC05C /* dazi */,
+				AA0000000000000000000001 /* daziTests */,
+				AA0000000000000000000002 /* daziUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		107FB7982F59F853006CC05C /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000033 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000043 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -134,7 +247,34 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000031 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000041 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AA0000000000000000000081 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 107FB7992F59F853006CC05C /* dazi */;
+			targetProxy = AA0000000000000000000071 /* PBXContainerItemProxy */;
+		};
+		AA0000000000000000000082 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 107FB7992F59F853006CC05C /* dazi */;
+			targetProxy = AA0000000000000000000072 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		107FB7A32F59F855006CC05C /* Debug */ = {
@@ -264,7 +404,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = dazi/Entitlements/Debug.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = 96TW3HL4U4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -299,7 +439,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = dazi/Entitlements/Release.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 10;
+				CURRENT_PROJECT_VERSION = 11;
 				DEVELOPMENT_TEAM = 96TW3HL4U4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -326,6 +466,64 @@
 			};
 			name = Release;
 		};
+		AA0000000000000000000051 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 96TW3HL4U4;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.linke.dazi.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/dazi.app/dazi";
+			};
+			name = Debug;
+		};
+		AA0000000000000000000052 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 96TW3HL4U4;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.linke.dazi.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/dazi.app/dazi";
+			};
+			name = Release;
+		};
+		AA0000000000000000000061 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 96TW3HL4U4;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.linke.dazi.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = dazi;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000062 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 96TW3HL4U4;
+				GENERATE_INFOPLIST_FILE = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.linke.dazi.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = dazi;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -343,6 +541,24 @@
 			buildConfigurations = (
 				107FB7A62F59F855006CC05C /* Debug */,
 				107FB7A72F59F855006CC05C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000000000000000000053 /* Build configuration list for PBXNativeTarget "daziTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000051 /* Debug */,
+				AA0000000000000000000052 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000000000000000000063 /* Build configuration list for PBXNativeTarget "daziUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000061 /* Debug */,
+				AA0000000000000000000062 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

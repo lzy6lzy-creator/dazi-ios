@@ -30,6 +30,19 @@ iOS Debug 构建：
 xcodebuild -project dazi.xcodeproj -scheme dazi -configuration Debug -destination 'generic/platform=iOS Simulator' build
 ```
 
+iOS 原生测试（将设备名替换为本机已安装的模拟器）：
+
+```bash
+xcodebuild test -project dazi.xcodeproj -scheme dazi -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+```
+
+Keychain 测试需要模拟器 ad-hoc 签名；不能关闭签名后把存取失败当作业务失败。
+`daziTests` 覆盖数据契约、日期筛选排序和真实 Keychain，`daziUITests` 使用隔离数据验证活动分页与筛选。
+测试不会登录真实账号或修改线上活动；Debug 测试入口不会编译进 Release。
+`.github/workflows/ci.yml` 在 push/PR 时运行后端回归、迁移/跨进程 smoke 和 iOS 测试，并保留测试结果 7 天。
+
 当前发布和文档维护范围是 iOS + FastAPI 后端。`dazi-android` 是独立仓库，除非产品明确重新开启 Android，否则不要把 iOS 改动自动同步过去。
 
 ## iOS 两人协作：Bundle ID 本地私有配置

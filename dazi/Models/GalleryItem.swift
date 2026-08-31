@@ -23,7 +23,7 @@ struct GalleryItem: Identifiable, Sendable {
         addedAt = Self.parseDate(api.addedAt) ?? .now
     }
 
-    private static func parseDate(_ value: String) -> Date? {
+    nonisolated private static func parseDate(_ value: String) -> Date? {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         if let date = formatter.date(from: value) { return date }

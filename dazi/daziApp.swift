@@ -4,9 +4,19 @@ import UIKit
 @main
 struct daziApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @State private var dataStore = DataStore()
+    @State private var dataStore: DataStore
 
     init() {
+        #if DEBUG
+        let store = DataStore(restoringSession: !RuntimeTesting.isTesting)
+        if RuntimeTesting.isUITesting {
+            RuntimeTesting.seedActivities(in: store)
+        }
+        _dataStore = State(initialValue: store)
+        if RuntimeTesting.isTesting { return }
+        #else
+        _dataStore = State(initialValue: DataStore())
+        #endif
         NotificationService.shared.configure()
         preWarmKeyboard()
     }
@@ -22,6 +32,21 @@ struct daziApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if RuntimeTesting.isUITesting {
+                EventListView().environment(dataStore)
+            } else if RuntimeTesting.isTesting {
+                Color.clear
+            } else {
+                applicationRoot
+            }
+            #else
+            applicationRoot
+            #endif
+        }
+    }
+
+    private var applicationRoot: some View {
             ZStack {
                 switch appState {
                 case .login:
@@ -75,7 +100,6 @@ struct daziApp: App {
             .onOpenURL { url in
                 captureInvitationCode(from: url)
             }
-        }
     }
 
     private func captureInvitationCode(from url: URL) {

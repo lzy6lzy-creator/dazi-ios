@@ -33,7 +33,8 @@ class DataStore {
     private static let agentSessionDividerText = "活动已发布。下面为你开启新的对话。"
     private static let agentSessionResetPrefix = "[SESSION_RESET_AFTER_EVENT]"
 
-    init() {
+    init(restoringSession: Bool = true) {
+        guard restoringSession else { return }
         if let savedUser = profileStore.loadUser(), api.isLoggedIn {
             currentUser = savedUser
             User.currentUser = savedUser

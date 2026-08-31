@@ -4,7 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SERVER = ROOT / "app"
-IOS_ROOT = ROOT.parents[1] / "dazi"
+IOS_ROOT = ROOT.parent
 
 
 class A2ANegotiatingChatroomStaticTests(unittest.TestCase):

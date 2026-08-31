@@ -57,6 +57,7 @@ struct EventListView: View {
             Text("活动广场").tag(EventListScope.plaza)
         }
         .pickerStyle(.segmented)
+        .accessibilityIdentifier("eventScope")
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 6)
@@ -164,6 +165,7 @@ struct EventListView: View {
         } label: {
             filterChip(icon: statusFilter.icon, title: statusFilter.title)
         }
+        .accessibilityIdentifier("eventStatusFilter")
     }
 
     private var dateMenu: some View {
@@ -188,6 +190,7 @@ struct EventListView: View {
         } label: {
             filterChip(icon: sortOption.icon, title: sortOption.title)
         }
+        .accessibilityIdentifier("eventSort")
     }
 
     private func filterChip(icon: String, title: String) -> some View {

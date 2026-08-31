@@ -34,8 +34,8 @@
 
 ### 工程保障
 
-1. iOS 目前只有 Python 静态源码回归和编译验证，没有 XCTest/UI Test target，手势、前后台、权限、Keychain、推送和断线重连仍需真机测试。
-2. 仓库没有 GitHub Actions；提交和部署前的测试依赖人工执行。
+1. 已增加 XCTest/UI Test target，本机 16 项通过，另在 iPhone 16e 重跑 2 项 UI 测试通过。前后台、系统权限、APNs 和 WebSocket 长时间断线恢复仍需真机验证。
+2. 已增加 GitHub Actions，覆盖后端回归、迁移、跨进程消息和 iOS 原生测试；是否通过以对应 commit 的 Actions 结果为准。
 3. refresh token 是无服务端会话的 30 天 JWT，普通退出无法撤销已泄露的 refresh token；正式上线前应引入会话 ID、轮换与吊销。
 
 ## 验证命令
@@ -50,6 +50,10 @@ python3 -m unittest discover tests
 xcodebuild -project dazi.xcodeproj -scheme dazi \
   -configuration Debug \
   -destination 'generic/platform=iOS Simulator' build
+
+xcodebuild test -project dazi.xcodeproj -scheme dazi -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 ```
 
 本机没有 Docker CLI，因此 `docker compose config` 和容器级 smoke test 需要在装有 Docker 的环境或生产服务器执行。
