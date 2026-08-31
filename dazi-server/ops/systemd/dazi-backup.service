@@ -1,0 +1,13 @@
+[Unit]
+Description=iDabuda encrypted database and media backup with restore verification
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+WorkingDirectory=/opt/dazi-server
+ExecStart=/bin/bash /opt/dazi-server/scripts/backup_production.sh
+TimeoutStartSec=20min
+Nice=10

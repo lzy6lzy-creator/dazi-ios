@@ -1,6 +1,6 @@
 # 上线清单
 
-最后更新：2026-08-29
+最后更新：2026-08-31
 
 ## 1. 当前状态
 
@@ -39,8 +39,8 @@
 - [ ] 跑登录、创建活动、匹配、聊天室投票的端到端 smoke test。
 - [ ] 跑主动 A2A 成功/失败两轮、候选被锁跳过、被动邀请接受/拒绝测试。
 - [ ] 部署后观察 passive matching 日志，确认旧的直接建房链路不再出现。
-- [ ] 确认生产 DB 中 memory 相关表结构存在。
-- [ ] 明确回滚策略：保留上一个可部署 commit 和数据库备份。
+- [x] 确认生产 DB 中 memory 相关表结构存在，Alembic 检查无结构差异。
+- [x] 明确回滚策略：保留上一个镜像、代码快照和数据库备份；恢复不覆盖生产库做演练。
 
 ## 5. 域名和 HTTPS
 
@@ -54,11 +54,12 @@
 ## 6. 正式上线前 P1
 
 - [x] 接入真实 PNVS 动态验证码；保留白名单固定码仅用于内部测试。
-- [ ] 用 Alembic 正式迁移替代运行时 `create_all()` 依赖。
-- [ ] WebSocket ConnectionManager 改为 Redis Pub/Sub 或独立消息层。
-- [ ] 定时匹配任务从 API 进程拆到独立 worker。
-- [ ] PostgreSQL 定时备份、恢复演练和备份加密。
-- [ ] 基础监控：API 健康、错误日志、磁盘、内存、DB 连接数。
-- [ ] 增加 readiness 检查，区分 API 存活与 PostgreSQL/Redis 可用。
-- [ ] 生产 CORS 白名单收敛到正式域名。
+- [x] 用 Alembic 正式迁移替代运行时 `create_all()` 依赖。
+- [x] WebSocket ConnectionManager 改为 Redis Pub/Sub，跨进程与公网 WSS 验证单次投递。
+- [x] 定时匹配任务从 API 进程拆到独立 worker；数据库锁互斥，复用 API 向量模型。
+- [x] PostgreSQL 定时备份、恢复演练和备份加密，备份只有恢复校验成功才保存为正式文件。
+- [x] 基础监控：API 健康、错误日志、磁盘、内存、DB 连接数。
+- [x] 增加 readiness 检查，区分 API 存活与 PostgreSQL/Redis 可用。
+- [x] 生产 CORS 白名单收敛到正式域名。
+- [ ] 持续异地备份存储和外部故障告警渠道。
 - [ ] 准备 App Store 素材、隐私政策、用户协议和客服反馈入口。

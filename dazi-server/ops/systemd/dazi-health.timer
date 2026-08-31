@@ -1,0 +1,10 @@
+[Unit]
+Description=Check iDabuda health every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=dazi-health.service
+
+[Install]
+WantedBy=timers.target

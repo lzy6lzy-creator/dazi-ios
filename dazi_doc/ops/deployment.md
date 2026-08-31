@@ -217,3 +217,30 @@ python scripts/smoke_internal_test.py
 - WebSocket ping/pong 通过。
 - 匹配日志没有持续异常。
 - 磁盘空间和 Docker 镜像占用正常。
+
+## 10. 备份与巡检
+
+- `dazi-backup.timer` 每天北京时间 03:30 后三分钟内运行，保留至少 14 天加密备份。
+- 备份包含 PostgreSQL custom dump、用户媒体和 SHA-256 清单；使用 GPG AES-256 加密。
+- 密钥在 `/opt/dazi-secrets/backup-passphrase`，必须独立保管且不可提交 Git。
+- 每份备份会自动解密并恢复到 `dazi_restore_*` 临时数据库，检查表数、迁移版本和本地图片引用，再删除临时库。验证失败不产生正式备份文件。
+- 媒体按数据库快照前后的文件并集归档；并发删除导致引用缺失时恢复校验会失败，需重试，不宣称它是 PITR 或原子文件系统快照。
+- `dazi-health.timer` 每五分钟检查本机/公网 readiness、容器、磁盘、可用内存、DB 连接数和最近错误日志，报告在 `/var/lib/dazi-ops/health.json`。
+- 定时器与服务文件在 `dazi-server/ops/systemd/`。失败状态记录于 systemd/journal，不会向用户发送 App 系统通知。
+- 持续异地备份存储和邮件/外部故障通知尚未配置；生产机丢失时不能只依赖同机备份。
+- 2026-08-31 已将一份验证通过的加密备份另存到本机 `重要信息/生产备份/`，密钥单独放在 `重要信息/备份密钥/`，目录 700、文件 600；这不是持续异地同步。
+
+2026-08-31 验证：恢复 27 张业务表到 `0003_reconcile_legacy_schema`，损坏密文被拒绝，
+无临时恢复库遗留。生产当时无自定义图片引用；图片缺失/路径越界另有单测覆盖。
+基础巡检全部通过，DB 连接 9/100，最近五分钟无错误日志。
+
+```bash
+systemctl list-timers 'dazi-*'
+systemctl start dazi-backup.service
+journalctl -u dazi-backup.service -n 40 --no-pager
+systemctl start dazi-health.service
+cat /var/lib/dazi-ops/health.json
+bash /opt/dazi-server/scripts/verify_production_backup.sh /opt/dazi-backups/encrypted/指定备份.tar.gpg
+```
+
+上述验证脚本只创建临时恢复库，不会把备份覆盖到生产。真正恢复生产需要另外确认停机窗口、目标数据库、媒体目录和回滚镜像。

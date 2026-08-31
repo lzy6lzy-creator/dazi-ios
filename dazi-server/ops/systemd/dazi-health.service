@@ -1,0 +1,12 @@
+[Unit]
+Description=iDabuda API, database and host health checks
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+WorkingDirectory=/opt/dazi-server
+ExecStart=/usr/bin/python3 /opt/dazi-server/scripts/check_production_health.py --output /var/lib/dazi-ops/health.json
+TimeoutStartSec=2min
