@@ -15,9 +15,9 @@
 
 ## 2. TestFlight 前 P0
 
-- [ ] 生成并上传 iOS TestFlight 构建。
-- [ ] 确认 iOS 包使用当前公网 API。
-- [ ] 在 App Store Connect 创建或确认 App、Bundle ID、版本号和 Build 号。
+- [x] 生成并上传 iOS TestFlight 1.1 (11)，2026-08-31 已确认 VALID / IN_BETA_TESTING。
+- [x] 确认 iOS Release 包使用 `https://idabuda.com` 公网 API。
+- [x] 确认 App Store Connect App 6776567684、Bundle ID `com.linke.dazi`、版本 1.1、Build 11。
 - [ ] 填写 App 隐私、出口合规、年龄分级等 TestFlight 必填项。
 - [ ] 真机跑主链路：登录、首次注册、编辑资料、创建活动、匹配、聊天室、投票。
 - [ ] 真机跑被动邀请：接受、拒绝、拒绝后不重复推送同一用户对。
@@ -26,6 +26,11 @@
 - [ ] 真机验证 WebSocket 断线重连、前后台切换和 token 刷新后的重连。
 - [ ] 真机确认新聊天室/新消息只有一条 APNs 提醒，无本地通知重复。
 - [ ] 确认文档和代码里没有真实 key、密码、root 登录信息。
+
+自动验收已完成：后端 353 测试 + 26 子测试、iOS 静态 67 测试、XCTest/UI 16 测试；
+iPhone 16e 另跑 2 项 UI 测试通过。GitHub CI 两个作业均成功，见
+[本轮验收记录](../reports/2026-08-31-release-verification.md)。
+这些结果不替代上述真机、权限与 APNs 验收。
 
 ## 3. 当前已知不完整功能
 
